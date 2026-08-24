@@ -1,10 +1,16 @@
 {
-  "version": 1,
+  "version": 4,
+  "conditions": [
+    "ordinary_model_ideation",
+    "novelty_engine_local_only",
+    "novelty_engine_evidence_v2"
+  ],
+  "researchProtocol": "For the research condition, run the same prompt through /api/research first and provide only ideationContext to the skill. Record the research run ID and preserve cited URLs for validation.",
   "cases": [
     {
       "id": "startup-caregiving",
       "category": "startup ideas",
-      "prompt": "Generate startup ideas that make coordinating care for an aging parent less exhausting for siblings who live in different cities.",
+      "prompt": "Generate 5 startup ideas that make coordinating care for an aging parent less exhausting for siblings who live in different cities. Identify the market gap behind each idea.",
       "commonDirections": ["shared calendar", "family task app", "caregiver marketplace", "AI care assistant"]
     },
     {
@@ -16,7 +22,7 @@
     {
       "id": "software-meetings",
       "category": "software tool",
-      "prompt": "Propose software tools that reduce the cost of too many internal meetings without simply transcribing or summarizing them.",
+      "prompt": "Propose 4 software tools that reduce the cost of too many internal meetings without simply transcribing or summarizing them. Explain what current tools still fail to solve.",
       "commonDirections": ["AI meeting notes", "calendar optimizer", "async status bot", "meeting analytics dashboard"]
     },
     {
@@ -40,8 +46,20 @@
     {
       "id": "business-repair",
       "category": "business model",
-      "prompt": "Develop unusual but feasible business models that make small-appliance repair financially attractive again.",
+      "prompt": "Develop 6 unusual but feasible business models that make small-appliance repair financially attractive again. Consider why existing repair options remain expensive or inconvenient.",
       "commonDirections": ["repair subscription", "marketplace", "extended warranty", "mobile repair van"]
+    },
+    {
+      "id": "gap-field-service",
+      "category": "market-gap discovery",
+      "prompt": "Find 5 product opportunities for small field-service companies that already use scheduling and invoicing software but still rely on spreadsheets, text messages, or paper. Separate invention opportunities from market-gap opportunities.",
+      "commonDirections": ["AI dispatcher", "all-in-one CRM", "scheduling app", "invoice automation"]
+    },
+    {
+      "id": "gap-accessibility-hardware",
+      "category": "hardware/software gap",
+      "prompt": "Generate 4 business or product ideas for people with limited hand dexterity who struggle with smart-home hardware and setup. Existing products are allowed; focus on what they solve badly and preserve the requested count.",
+      "commonDirections": ["voice assistant", "smart button", "caregiver app", "accessible remote"]
     }
   ]
 }

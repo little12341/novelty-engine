@@ -12,7 +12,6 @@
 .DS_Store
 *.pem
 .env*
-!.env.example
 
 # debug
 npm-debug.log*
@@ -30,3 +29,6 @@ next-env.d.ts
 # evaluation runs (keep the directory)
 /evals/results/*.json
 !/evals/results/.gitkeep
+
+# local research run history and cache
+/.research-runs/

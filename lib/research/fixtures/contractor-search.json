@@ -1,0 +1,44 @@
+[
+  {
+    "url": "https://fieldflow.example/pricing?utm_source=test",
+    "title": "Pricing | FieldFlow",
+    "snippet": "Scheduling, invoicing, payments, and reporting for contractors. Plans start at $89 per month.",
+    "publishedAt": "2026-01-12"
+  },
+  {
+    "url": "https://fieldflow.example/pricing#plans",
+    "title": "FieldFlow pricing plans",
+    "snippet": "Contractor CRM and scheduling plans start at $89 per month."
+  },
+  {
+    "url": "https://reddit.com/r/Contractor/comments/alpha/too_many_tools",
+    "title": "Still copying job details between three tools",
+    "snippet": "Our small business uses a spreadsheet plus text messages because the scheduling app doesn't integrate with our estimating tool. The duplicate entry is frustrating."
+  },
+  {
+    "url": "https://reddit.com/r/smallbusiness/comments/beta/field_software_cost",
+    "title": "Field service software price increase",
+    "snippet": "The software is too expensive for a two-person company, so we are back to Google Sheets and text messages."
+  },
+  {
+    "url": "https://community.trades.example/discussions/mobile-sync",
+    "title": "Mobile sync issues on site",
+    "snippet": "Field workers have to manually re-enter notes because the mobile app sync fails and there is no API for our inventory system."
+  },
+  {
+    "url": "https://github.com/example/contractor-bridge/issues/41",
+    "title": "Feature request: FieldFlow webhook integration",
+    "snippet": "Missing integration forces copy and paste between the CRM and accounting workflow."
+  },
+  {
+    "url": "https://fieldflow.example/features/scheduling",
+    "title": "Contractor Scheduling — FieldFlow",
+    "snippet": "Dispatch, scheduling, payments and mobile reporting for growing home service companies."
+  },
+  {
+    "url": "https://industry.example/2026/trades-mobile-regulation",
+    "title": "New 2026 recordkeeping rules affect mobile trade businesses",
+    "snippet": "New regulation requires digital job records for some licensed contractors beginning in 2026.",
+    "publishedAt": "2026-03-04"
+  }
+]

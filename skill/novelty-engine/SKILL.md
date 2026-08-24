@@ -1,129 +1,232 @@
 ---
 name: novelty-engine
-description: Generate differentiated ideas for startups, products, inventions, features, business models, creative solutions, and other open-ended ideation tasks.
+description: Discover market gaps and generate differentiated ideas for startups, products, inventions, features, business models, creative solutions, and other open-ended ideation tasks.
 ---
 
 # Novelty Engine
 
-Use this process when the user asks for ideas, inventions, startup or business concepts, products, features, creative solutions, new approaches, or other ideation. The goal is useful differentiation: concepts with meaningfully different mechanisms, not merely unusual names or decorative twists.
+Use this process when the user asks for ideas, inventions, startup or business concepts, products, features, creative solutions, new approaches, or other ideation. The goal is useful differentiation grounded in an underserved need: concepts with meaningfully different mechanisms, credible market gaps, or ideally both.
 
 Do not use the full process for factual questions, editing, summarization, implementation of an already-chosen solution, or requests where the user explicitly wants conventional best practices only.
 
 ## Operating principles
 
 - Optimize for the user's actual objective, not novelty in isolation.
-- Treat novelty as a hypothesis until evidence supports it. Never claim that an idea is globally new, never invented, patentable, or completely unique without adequate evidence.
-- Distinguish **unusual** (departs from defaults), **differentiated** (has a specific contrast with alternatives), **apparently uncommon** (few close analogues found in a limited check), and **verified novel** (supported by an appropriate, documented search). Most outputs should use the first two labels.
-- Create diversity in the core mechanism. Renaming, changing the audience cosmetically, or adding AI to a familiar category does not create a new candidate.
-- Do the divergent search, scoring, and similarity checks internally. Do not expose chain-of-thought, private scratchwork, or an exhaustive candidate list. Return concise conclusions and useful comparison summaries.
+- Treat novelty and market demand as hypotheses. Never claim an idea is globally new, never invented, patentable, completely unique, or a proven business opportunity without adequate evidence.
+- Distinguish **unusual** (departs from defaults), **differentiated** (has a specific contrast), **apparently uncommon** (few close analogues found in a limited check), and **verified novel** (supported by an appropriate documented search). Most outputs should use the first two labels.
+- Distinguish an **invention opportunity** (a new mechanism or technical capability), a **market-gap opportunity** (existing options leave important demand poorly served), and an **overlap opportunity** (a differentiated mechanism directly closes an evidenced gap). Prefer overlap opportunities when they are credible; do not force an invention where distribution, pricing, integration, or service design is the real gap.
+- Existing competitors can validate demand. Finding no competitor is not evidence of a good opportunity; it may indicate weak demand, hidden constraints, bad economics, regulation, or ineffective search.
+- Create diversity in both the core mechanism and the gap addressed. Renaming, cosmetic audience changes, or adding AI to a familiar category does not create a new candidate.
+- Do the divergent search, scoring, and similarity checks internally. Do not expose chain-of-thought, private scratchwork, detailed scores, or an exhaustive candidate list. Return concise conclusions, evidence summaries, and decision-relevant comparisons.
+
+## Research-first operating mode
+
+For commercial ideation, market-gap discovery, startup ideas, business ideas, or requests that ask for market evidence, use the Novelty Engine research backend before generating any final ideas when the backend is available. Do not brainstorm first and retrofit evidence afterward.
+
+The preferred integration is the bundled helper:
+
+```bash
+node scripts/research.mjs "<the user's complete research or ideation request>"
+```
+
+The helper calls `NOVELTY_RESEARCH_API_URL`, which should point to the deployed `/api/research` endpoint (or defaults to `http://localhost:3000/api/research`). It prints the structured research JSON. If direct HTTP tools are available instead, send `POST {"query":"..."}` to that endpoint.
+
+Treat the backend as the evidence and invention system, not merely a source finder. Read `ideationContext.finalOpportunities` first, then its `graphHoles`, `contradictions`, `stitchingPatterns`, `weakSignals`, `resurrectionOpportunities`, `competitors`, and `evidence`. The backend has already created structured candidates, rejected near-duplicates, run falsification, bounded survivor mutations, ranked factor-level scores, and generated validation experiments. Present and, when needed, concisely adapt those survivors; do not silently resurrect a rejected candidate or replace its evidence lineage with an unsupported story.
+
+Resolve every evidence ID to a record in `ideationContext.evidence` and then to its `sourceUrl`. Never invent a competitor, price, complaint, capability, failure reason, trend, source, or citation to fill a `null`, empty, or missing field. Treat `counterEvidenceIds`, falsification arguments, penalties, warnings, low confidence, approximate weak-signal acceleration, and exhausted budgets as decision-relevant evidence. Novelty fingerprints and opportunity scores are explicitly heuristic: explain their useful factor-level meaning, never present them as proof of uniqueness, demand, or success.
+
+Preserve the requested count from the backend whenever it returned that many survivors. If it returned fewer, say why based on the recorded rejection/budget state. Do not pad the answer with failed concepts. You may ask for a larger backend run only if doing so remains within the user's scope and configured budgets.
+
+For every final survivor, preserve the concrete **24–72 hour** validation experiment when that timeframe is practical, including its success and failure thresholds.
+
+If the backend reports missing configuration, cannot be reached, or returns no supported gaps, continue with the graceful fallback in “When web or search access is unavailable.” Explicitly label the result as hypothesis-led rather than research-backed and make external validation the first next step. Never substitute fabricated research or imply that fixture/test data is live evidence.
 
 ## 1. Frame the real problem
 
 Extract or infer:
 
 - the underlying problem and desired outcome;
-- intended user or beneficiary;
+- intended user, beneficiary, buyer, and other affected participants;
 - constraints and non-negotiables;
 - available resources, capabilities, and unfair advantages;
-- context of use and current alternatives;
-- success criteria and time horizon.
+- context of use and current alternatives, including doing nothing;
+- success criteria, time horizon, and requested number of ideas.
 
 Ask focused clarification only when a missing answer would materially change the search space. Otherwise state one or two important assumptions and proceed.
 
 Translate a solution-shaped request into a mechanism-neutral challenge. For example, turn “an app that reminds people to use groceries” into “reduce edible household food discarded because attention and meal timing do not match decay.” Preserve explicit user constraints.
 
-## 2. Build an exclusion map
+## 2. Map existing solution categories before ideating
 
-Construct an internal map of the most obvious, common, default, and frequently suggested solution families for this challenge. Include:
+Build an internal landscape of how the problem is currently addressed. Identify:
 
-- standard product categories and incumbent workflows;
-- first associations and common brainstorm answers;
-- “marketplace for X,” “AI assistant for X,” dashboards, reminder apps, generic subscriptions, and gamification when they are predictable defaults;
-- variants that change only branding, audience wording, or surface features.
+- direct products, services, and incumbent categories;
+- indirect substitutes, adjacent tools, and bundled features;
+- professional or enterprise workflows;
+- open-source and do-it-yourself approaches;
+- spreadsheets, messaging, labor, consultants, and other manual workarounds;
+- the option to tolerate, avoid, or postpone the problem.
 
-Temporarily exclude these directions. A default mechanism may return only if it is transformed by a non-obvious mechanism and the final explanation makes that transformation concrete.
+For each important category, note the typical customer, value proposition, delivery model, pricing or business model, strengths, limitations, and why users choose it. This is a compact category map, not an exhaustive market report.
 
-## 3. Search distant domains for transferable mechanisms
+Also construct an exclusion map of obvious brainstorm defaults: first associations, common prompt answers, “marketplace for X,” “AI assistant for X,” dashboards, reminder apps, generic subscriptions, and gamification when they are predictable. Temporarily exclude them unless a later candidate changes their mechanism or market structure in a consequential way.
 
-Explore a varied subset of distant domains that fit the problem. Consider unrelated industries, scientific fields, technologies, physical mechanisms, biological systems, historical systems, behavioral patterns, economic models, distribution models, user interfaces, cultural behaviors, manufacturing techniques, logistics, ecology, games, governance, insurance, performance art, materials science, and other remote sources.
+## 3. Search deliberately for unmet demand and structural gaps
 
-Transfer a causal mechanism, not a metaphor. For each useful source, ask:
+Before generating candidates, look for evidence that current solutions leave demand poorly served. Test for multiple gap types:
+
+- underserved customer segments or edge cases;
+- repeated complaints, low-rated experiences, and abandoned workflows;
+- incumbents that are too expensive, complex, slow, risky, or hard to adopt;
+- fragmented workflows and context switching;
+- recurring manual workarounds, shadow tools, and spreadsheet glue;
+- missing integrations or incompatible hardware and software;
+- geographic, language, accessibility, or distribution gaps;
+- pricing, packaging, procurement, ownership, or incentive structures that exclude users;
+- regulatory changes that create new obligations or remove old constraints;
+- technologies that incumbents have not adapted to;
+- behavior changes that alter when, where, or how the problem occurs;
+- hardware/software combinations that are served poorly;
+- established markets where products exist but solve the job badly.
+
+Ask why each apparent gap persists. Possible causes include low willingness to pay, high acquisition cost, regulation, liability, difficult support, unfavorable unit economics, rare frequency, fragmented buyers, technical constraints, or incumbent incentives. A durable reason can make a gap defensible or make it a trap.
+
+### When the research backend or web search is available
+
+Prefer the structured research backend described above. If it is unavailable but legitimate web search is available, research the landscape directly. Use focused, mechanism- and problem-based queries rather than only proposed names. Search a useful mix of:
+
+- competitor and incumbent product pages, pricing, documentation, and integration lists;
+- Reddit, specialist forums, community discussions, and support threads;
+- product reviews, app-store reviews, comparison pages, and cancellation complaints;
+- GitHub repositories, issues, feature requests, and abandoned projects;
+- startup directories, launch platforms, accelerators, and company databases;
+- procurement pages, job posts, regulatory sources, research, and industry publications when relevant.
+
+Look for repeated patterns across independent sources. Separate observed evidence from inference, record the search scope and date when useful, and calibrate conclusions to source quality. A complaint is a clue, not proof of a market. Search for counterevidence such as adequate existing solutions, weak purchasing intent, or failed prior attempts.
+
+If no close competitor is found, do not label the space attractive by default. Try broader category, substitute, workflow, and outcome queries, then state that the landscape check was limited and test whether the absence reflects low demand or a hidden constraint.
+
+### When web or search access is unavailable
+
+Continue using known categories and plausible gap hypotheses. Label them as hypotheses based on known or obvious alternatives, and make validation the first next step rather than presenting them as verified market findings.
+
+## 4. Build an opportunity brief
+
+Summarize internally before ideating:
+
+- who is underserved and the job they are trying to complete;
+- what they use now and what repeatedly fails;
+- the strongest evidence or signal of unmet demand;
+- why the gap may exist;
+- what changed, if anything, that makes a new approach timely;
+- whether the opening is primarily invention, market gap, or both.
+
+Do not assume every prompt contains a viable market. If evidence contradicts the initial premise, adapt the opportunity brief and say so concisely in the final answer.
+
+When structured V2 output exists, use its compact idea lineage as the opportunity brief: for example, `repeated complaint → manual workaround → underserved segment → contradiction → enabling technology → mutated concept`. This is provenance, not hidden chain-of-thought. Do not expand it into private scratchwork.
+
+## 5. Search distant domains for transferable mechanisms
+
+Explore a varied subset of distant domains that fit the opportunity brief. Consider unrelated industries, scientific fields, technologies, physical mechanisms, biological systems, historical systems, behavioral patterns, economic and distribution models, user interfaces, cultural behaviors, manufacturing, logistics, ecology, games, governance, insurance, performance art, and materials science.
+
+Transfer a causal mechanism, not a metaphor. For each useful source, ask internally:
 
 1. What does this system reliably accomplish?
 2. What mechanism causes that result?
 3. What is the structural analogue in the user's problem?
-4. What would have to change for the mechanism to work here?
+4. Which evidenced gap would the transfer close?
+5. What would have to change for the mechanism to work here?
 
 Use multiple transfer patterns: inversion, recombination, removal, decentralization, temporal shift, environmental embedding, incentive redesign, and turning a product into a protocol or vice versa.
 
-## 4. Generate a broad candidate field
+## 6. Generate a broad candidate field
 
-Generate at least 15 substantially different candidates internally before selecting. Spread candidates across different mechanisms, ownership models, interfaces, channels, scales, and degrees of technical ambition.
+Generate at least 15 substantially different candidates internally before selecting. If the user asks for more than five final ideas, increase the candidate pool enough to support meaningful rejection and replacement.
 
-A candidate is not distinct if its one-sentence causal explanation is substantially the same as another candidate. Merge duplicates early. Include some low-tech or non-software mechanisms when the problem permits them; do not default to apps or generative AI.
+Spread candidates across different mechanisms, gap types, ownership models, interfaces, channels, scales, and degrees of technical ambition. Include a mix of invention opportunities, market-gap opportunities, and overlap opportunities. Include low-tech, service, distribution, business-model, or non-software mechanisms when appropriate; do not default to apps or generative AI.
 
-## 5. Apply the first selection pressure
+A candidate is not distinct if its one-sentence causal explanation and target gap are substantially the same as another candidate. Merge duplicates early.
 
-Evaluate each candidate internally on these dimensions:
+## 7. Apply selection pressure
 
-- useful novelty for this user's objective;
-- specificity and clarity of mechanism;
+Evaluate each candidate internally on:
+
+- novelty and mechanism-level differentiation;
+- usefulness and severity or frequency of the job addressed;
+- market-gap strength: clarity of the underserved user, failure of current alternatives, supporting signal, and plausible willingness to adopt or pay;
 - feasibility under stated constraints;
-- similarity to obvious directions and known existing ideas;
-- potential user value and strength of the pain addressed;
 - defensibility or cumulative advantage where relevant;
-- simplicity relative to the value created;
-- whether the core mechanism is actually different.
+- similarity to obvious directions, incumbents, and known existing ideas;
+- specificity and clarity of the mechanism;
+- simplicity relative to value created;
+- the persistence risk: whether the gap exists for a reason that defeats the idea.
 
-Reject candidates that are generic, derivative, vague, impractical without a reason to accept that risk, novelty theater, or surface variants. A technically dramatic idea with no credible user behavior is weak. A feasible idea that reproduces the default category is also weak.
+Treat similarity as a risk to investigate, not a positive score. Reject candidates that are generic, derivative, vague, novelty theater, unsupported demand stories, impractical without a reason to accept that risk, or solutions whose economics and user behavior do not fit the gap.
 
-## 6. Mutate the strongest survivors
+With the V2 backend, honor each structured falsification outcome. Separate `argumentsFor` from `argumentsAgainst`, surface the hardest surviving hypothesis, and penalize strong counterevidence. An unknown falsification dimension remains unknown; absence of counterevidence is not evidence that the risk is cleared.
+
+## 8. Mutate the strongest survivors
 
 Take the best survivors and deliberately change several assumptions. Useful mutation axes include:
 
-- target user or beneficiary;
+- target user, buyer, or beneficiary;
+- which complaint or workflow failure is addressed;
 - interface and interaction model;
-- who pays, ownership, and economic model;
+- who pays, ownership, pricing, and economic model;
 - timing, frequency, and duration;
 - scale and unit of coordination;
 - distribution channel and point of intervention;
 - physical mechanism or material;
 - software architecture and degree of automation;
+- integrations and hardware/software boundary;
 - incentive structure and source of trust;
-- underlying technology;
 - what is removed, made invisible, or performed by the environment.
 
-Prefer mutations that improve both distinction and usefulness. Do not keep a mutation merely because it is stranger.
+Prefer mutations that improve both distinction and market-gap fit. Do not keep a mutation merely because it is stranger.
 
-## 7. Attack similarity again
+## 9. Attack similarity and gap quality again
 
 For each mutated survivor, ask internally:
 
 - What familiar product, company, research direction, patent class, open-source project, or historical concept is closest?
-- If described without branding, does this collapse into an existing category?
-- Is the claimed difference a real mechanism, or only positioning?
-- Which single feature could be removed without changing the idea? If the “novel” feature can be removed, it is probably superficial.
-- What evidence would disprove the differentiation claim?
+- If described without branding, does it collapse into an existing category?
+- Is the claimed difference a real mechanism, underserved segment, delivery advantage, or only positioning?
+- Do current alternatives truly fail for the named user, and what evidence would disprove that?
+- Why has the gap not already been filled? Does the idea address that reason?
+- Which single feature could be removed without changing the idea? If the “novel” or “gap-closing” feature can be removed, it is probably superficial.
 
-If search or web access is available and the task benefits from stronger novelty claims, check for close analogues using mechanism-based queries, not just the proposed name. Search products, companies, research, patents, and repositories as appropriate. Summarize the search scope and its limits. A limited search can support “apparently uncommon,” never absolute novelty.
+When search is available, run targeted follow-up searches for close analogues and counterevidence. A limited search can support “apparently uncommon” or “evidence suggests an underserved segment,” never absolute novelty or proven demand.
 
-If search is unavailable, continue without it and label comparisons as based on known or obvious alternatives rather than a verified landscape review.
+## 10. Replenish rejected candidates
 
-## 8. Return only the strongest ideas
+Preserve the user's requested number of final ideas whenever reasonably possible. If a candidate is rejected or collapses into another, generate or mutate a replacement, evaluate it with the same criteria, and repeat until the requested count survives.
 
-Usually return 3–5 ideas. Use fewer if only a few survive; do not lower the threshold to fill a list. Start with a one-sentence framing of the problem and any consequential assumption.
+Return fewer only when the constraints, evidence, safety, or available search make additional ideas misleading or materially below the quality threshold. State the reason briefly; do not silently substitute the skill's default count for an explicit request.
 
-For each final idea include:
+## 11. Return the strongest ideas
 
-### Idea name — calibrated label
+If the user does not specify a count, usually return 3–5 ideas. Start with a one-sentence framing of the opportunity and any consequential assumption. When research was used, give a compact landscape summary with representative sources or evidence and the limits of the check; do not narrate every query.
 
-- **What it is:** A concrete explanation of the mechanism and user experience.
-- **Why someone would care:** The user value or behavior change.
-- **Different from the obvious:** A specific contrast with the default alternatives.
-- **Closest existing category:** The nearest familiar category or analogue; say when this is an informed comparison rather than a search result.
-- **Main weakness:** The most important risk, tradeoff, or reason it could fail.
-- **Validate first:** The cheapest decisive test or unknown to resolve.
+For each final idea include every field below. Cite the supporting public pages inline when research was used. If the research does not support a field, say “unknown” or describe it as a hypothesis instead of guessing.
 
-End with a brief comparison table when it helps the user choose, using relevant dimensions such as mechanism, ambition, feasibility, and differentiation. Optionally mention one or two rejected directions and why only when that teaches the user something important about the selection boundary.
+### Idea name — invention, market gap, or overlap
 
-Do not dump the 15+ internal candidates, detailed scores, hidden reasoning, or a narrated chain of thought. The user should see the selected concepts and the decision-relevant evidence, not the private search trace.
+- **Concept:** A concrete explanation of the mechanism and user experience.
+- **Target customer:** The specific user and, when different, buyer.
+- **Exact market gap:** The named structured gap this exploits and whether it is an **evidence-backed market gap**, **plausible gap**, or **speculative opportunity**.
+- **Evidence the gap exists:** The strongest factual support and inline citation links. Include counterevidence or material limits.
+- **Closest competitors:** Supported competitor names and links; say “unknown from retrieved evidence” when appropriate.
+- **What alternatives fail to do:** The evidenced limitation, not a generic contrast.
+- **Product wedge:** The proposed mechanism, delivery model, integration, pricing, distribution, or other point of entry.
+- **Why meaningfully different:** A mechanism- or market-structure contrast that survives the similarity attack.
+- **Likely business model:** A plausible model, clearly labeled as a proposal unless pricing evidence supports it.
+- **Hardest risk:** The most important risk, tradeoff, hidden constraint, or reason the gap may be a trap.
+- **Evidence lineage:** The concise, user-facing provenance summary from the structured lineage record.
+- **Falsification survived:** The strongest argument against, the recorded outcome, and the decisive unresolved risk.
+- **Why it ranked here:** The two or three strongest and weakest factor-level score components; call the score heuristic.
+- **First validation experiment:** Use the structured experiment's exact target, action, success threshold, failure threshold, cost, time, and decision. Keep any ethics note. Fake doors must not deceptively charge for unavailable products.
+- **Confidence:** One of **evidence-backed**, **plausible**, or **speculative**, with a brief reason.
+
+End with a brief comparison table when it helps the user choose. Useful columns include opportunity type, mechanism, underserved user, market-gap strength, feasibility, and decisive unknown. Use qualitative language rather than fabricated precision.
+
+Do not dump the internal candidate pool, detailed scores, hidden reasoning, raw research JSON, or a narrated chain of thought. The user should see selected concepts, calibrated evidence, citation links, and decision-relevant comparisons—not the private search trace.

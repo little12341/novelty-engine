@@ -1,0 +1,50 @@
+[
+  {
+    "url": "https://dispatchsuite.example/pricing",
+    "title": "DispatchSuite pricing for contractors",
+    "snippet": "Scheduling, CRM, reporting, and invoicing software for contractors. Plans start at $129 per month per user.",
+    "publishedAt": "2026-05-10"
+  },
+  {
+    "url": "https://reddit.com/r/fieldservice/comments/workflow-one",
+    "title": "Why are we still copying data between tools?",
+    "snippet": "Our small business uses a spreadsheet plus text messages and a scheduling app. We manually re-enter every estimate into accounting; errors cost us hours each week.",
+    "publishedAt": "2026-06-02"
+  },
+  {
+    "url": "https://community.trades.example/discussions/workflow-two",
+    "title": "Three tools for one completed job",
+    "snippet": "Field workers copy and paste from the CRM to email and accounting because mobile sync fails. The duplicate entry is too expensive for a two-person company.",
+    "publishedAt": "2026-06-18"
+  },
+  {
+    "url": "https://github.com/example/unofficial-dispatch-bridge/issues/88",
+    "title": "Feature request: unofficial webhook integration",
+    "snippet": "A missing integration and no API forces repeated exports and imports between scheduling and inventory.",
+    "publishedAt": "2026-07-03"
+  },
+  {
+    "url": "https://records.gov/new-2026-mobile-job-rule",
+    "title": "New regulation requires portable digital job records",
+    "snippet": "Beginning in 2026, licensed mobile trade businesses must retain digital job records under the new recordkeeping rule.",
+    "publishedAt": "2026-04-01"
+  },
+  {
+    "url": "https://industry.example/legacy-sync-shutdown",
+    "title": "LegacySync shut down after infrastructure costs blocked adoption",
+    "snippet": "The startup failed in 2019 because its integration technology and cloud infrastructure were too expensive for the small market.",
+    "publishedAt": "2020-01-15"
+  },
+  {
+    "url": "https://developers.example/new-edge-api",
+    "title": "New API makes local-first event bridges available",
+    "snippet": "A new API and cheaper edge hardware now support local event automation and webhooks without a centralized database.",
+    "publishedAt": "2026-07-22"
+  },
+  {
+    "url": "https://opensource.example/reports/bridge-growth",
+    "title": "Open-source workflow bridges see repository growth",
+    "snippet": "Open-source event bridge projects and GitHub repositories are gaining stars as mobile-first field teams request integration automation.",
+    "publishedAt": "2026-07-30"
+  }
+]

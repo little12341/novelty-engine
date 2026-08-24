@@ -30,7 +30,24 @@ for (let index = 0; index < count; index += 1) {
     const localExtraLength = archive.readUInt16LE(localOffset + 28);
     const dataStart = localOffset + 30 + localNameLength + localExtraLength;
     const text = inflateRawSync(archive.subarray(dataStart, dataStart + compressedSize)).toString("utf8");
-    if (!text.includes("name: novelty-engine") || !text.includes("at least 15 substantially different candidates")) {
+    const requiredMethodology = [
+      "name: novelty-engine",
+      "Map existing solution categories before ideating",
+      "Search deliberately for unmet demand and structural gaps",
+      "at least 15 substantially different candidates",
+      "market-gap strength",
+      "Replenish rejected candidates",
+      "Research-first operating mode",
+      "NOVELTY_RESEARCH_API_URL",
+      "**Exact market gap:**",
+      "**evidence-backed market gap**",
+      "ideationContext.finalOpportunities",
+      "**Evidence lineage:**",
+      "**Falsification survived:**",
+      "24–72",
+      "Do not expose chain-of-thought"
+    ];
+    if (requiredMethodology.some((phrase) => !text.includes(phrase))) {
       throw new Error("Packaged SKILL.md is missing required methodology");
     }
   }
@@ -38,4 +55,5 @@ for (let index = 0; index < count; index += 1) {
 }
 
 if (!names.includes("novelty-engine/SKILL.md")) throw new Error("ZIP does not contain novelty-engine/SKILL.md");
+if (!names.includes("novelty-engine/scripts/research.mjs")) throw new Error("ZIP does not contain the research backend helper");
 console.log(`Verified installable ZIP: ${details.size} bytes; entries: ${names.join(", ")}`);

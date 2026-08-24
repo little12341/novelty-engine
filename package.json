@@ -1,8 +1,9 @@
 {
   "name": "novelty-engine",
-  "version": "1.0.0",
+  "type": "module",
+  "version": "2.1.0",
   "private": true,
-  "description": "A free Claude Skill for generating more differentiated ideas.",
+  "description": "A free Claude Skill for discovering market gaps and generating differentiated ideas.",
   "scripts": {
     "dev": "npm run package:skill && next dev",
     "build": "npm run package:skill && next build",
@@ -12,7 +13,9 @@
     "package:skill": "node scripts/package-skill.mjs",
     "verify:package": "node scripts/verify-package.mjs",
     "verify:links": "node scripts/verify-links.mjs",
-    "test": "npm run verify:package && npm run verify:links && node scripts/evaluate.mjs",
+    "test": "npm run test:unit && npm run verify:package && npm run verify:links && node scripts/evaluate.mjs",
+    "test:unit": "node --test lib/research/research.test.ts lib/research/v2.test.ts",
+    "validate:skill": "node scripts/validate-skill.mjs",
     "eval": "node scripts/evaluate.mjs",
     "eval:init": "node scripts/evaluate.mjs --init evals/results/local.json",
     "eval:score": "node scripts/evaluate.mjs --score"

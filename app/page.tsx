@@ -1,20 +1,6 @@
+import { InstallPanel } from "./install-panel";
+
 const githubUrl = "https://github.com/little12341/novelty-engine";
-
-function ArrowIcon({ down = false }: { down?: boolean }) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={down ? "icon icon-down" : "icon"}>
-      <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="icon">
-      <path d="M10 3v9m0 0 3.5-3.5M10 12 6.5 8.5M4 15.5h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 function Mark() {
   return (
@@ -26,208 +12,243 @@ function Mark() {
 }
 
 const pipeline = [
-  ["01", "Obvious ideas", "Map the defaults"],
-  ["02", "Reject", "Create distance"],
-  ["03", "Cross-domain", "Borrow mechanisms"],
-  ["04", "Candidates", "Generate 15+"],
-  ["05", "Similarity attack", "Find the lookalikes"],
-  ["06", "Mutate", "Change assumptions"],
-  ["07", "Final ideas", "Keep only survivors"],
+  ["01", "Map", "Competitors, complaints, workarounds, shifts"],
+  ["02", "Find", "Structural holes and underserved workflows"],
+  ["03", "Challenge", "Defaults, assumptions, and constraints"],
+  ["04", "Generate", "Candidates with a traceable lineage"],
+  ["05", "Falsify", "Demand, economics, trust, and feasibility"],
+  ["06", "Return", "Survivors with a measurable first test"],
+];
+
+const phases = [
+  {
+    number: "01",
+    title: "Build the landscape",
+    description: "Map competitors, products, complaints, workarounds, technologies, and rules into an opportunity graph.",
+    detail: "Look for repeated friction, sparse combinations, underserved segments, failed attempts, and early change signals.",
+  },
+  {
+    number: "02",
+    title: "Contradict the category",
+    description: "Extract the assumptions a market treats as fixed, then systematically invert or remove the consequential ones.",
+    detail: "Transfer mechanisms from distant domains without simply borrowing their language or aesthetics.",
+  },
+  {
+    number: "03",
+    title: "Generate with lineage",
+    description: "Create a broad candidate field from evidence-backed holes, then reject ideas that collapse into familiar products.",
+    detail: "Every candidate keeps a compact record of the evidence, contradiction, and mutation that produced it.",
+  },
+  {
+    number: "04",
+    title: "Try to kill the ideas",
+    description: "Pressure-test demand, economics, distribution, feasibility, behavior, trust, regulation, and defensibility.",
+    detail: "Promising failures get at most two bounded mutations. Survivors leave with a 24–72 hour validation test.",
+  },
 ];
 
 export default function Home() {
   return (
-    <main>
-      <header className="site-header shell">
-        <a className="brand" href="#top" aria-label="Novelty Engine home">
-          <Mark />
-          <span>Novelty Engine</span>
-        </a>
-        <nav aria-label="Main navigation">
-          <a href="#comparison">Example</a>
-          <a href="#how-it-works">Method</a>
-          <a href="#install">Install</a>
-        </nav>
-        <a className="github-link" href={githubUrl} target="_blank" rel="noreferrer">
-          GitHub <ArrowIcon />
-        </a>
+    <main id="top">
+      <header className="site-header-wrap">
+        <div className="site-header page-width">
+          <a className="brand" href="#top" aria-label="Novelty Engine home">
+            <Mark />
+            <span>Novelty Engine</span>
+          </a>
+          <nav aria-label="Main navigation">
+            <a href="#comparison">Example</a>
+            <a href="#method">Method</a>
+            <a href="#install">Install</a>
+          </nav>
+          <a className="header-github" href={githubUrl} target="_blank" rel="noreferrer">
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+        </div>
       </header>
 
-      <section className="hero shell" id="top">
+      <section className="hero page-width">
         <div className="hero-copy">
-          <div className="eyebrow fade-up"><span className="status-dot" /> A free skill for Claude</div>
-          <h1 className="fade-up delay-1">
-            Stop getting the<br />
-            <span>same AI ideas.</span>
-          </h1>
-          <p className="hero-lede fade-up delay-2">
-            Novelty Engine pushes Claude past the obvious—rejecting defaults, crossing distant domains, mutating the strongest candidates, and attacking similarity before you see a result.
+          <p className="eyebrow"><span>V2.1</span> Open-source Claude Skill</p>
+          <h1>Find the ideas the market has <em>not made obvious.</em></h1>
+          <p className="hero-lede">
+            Novelty Engine maps what exists, looks for structural gaps, and tries to disprove each candidate before it reaches you.
           </p>
-          <div className="hero-actions fade-up delay-3">
-            <a className="button button-primary" href="/novelty-engine.zip" download="novelty-engine.zip">
-              <DownloadIcon /> Download Skill <span className="button-meta">.ZIP</span>
+          <div className="hero-actions">
+            <a className="button button-primary" href="#install">
+              Install the skill <span aria-hidden="true">↓</span>
             </a>
             <a className="button button-secondary" href={githubUrl} target="_blank" rel="noreferrer">
-              View on GitHub <ArrowIcon />
+              Read the source <span aria-hidden="true">↗</span>
             </a>
           </div>
-          <p className="compatibility fade-up delay-3">No account · No API key · Works without web access</p>
+          <ul className="hero-facts" aria-label="Product facts">
+            <li>Free and open source</li>
+            <li>Works locally</li>
+            <li>No account required</li>
+          </ul>
         </div>
 
-        <div className="engine-visual fade-up delay-2" aria-label="Novelty Engine process visualization">
-          <div className="visual-grid" />
-          <div className="visual-topline">
-            <span>NE / PROCESS 01</span><span>RUNNING</span>
+        <aside className="research-card" aria-label="Novelty Engine research flow">
+          <div className="research-card-header">
+            <span>Research model</span>
+            <span className="status-pill"><i /> Evidence first</span>
           </div>
-          <div className="idea-stream stream-muted">
-            <span>meal planner</span><span>recipe generator</span><span>expiry tracker</span>
+          <div className="research-question">
+            <span>Question</span>
+            <p>Where is the market poorly served—and what mechanism could change that?</p>
           </div>
-          <div className="reject-line"><span>DEFAULT CLUSTER</span><i /><strong>REJECTED ×</strong></div>
-          <div className="domain-orbit">
-            <span className="orbit-label orbit-a">ecology</span>
-            <span className="orbit-label orbit-b">logistics</span>
-            <span className="orbit-label orbit-c">behavior</span>
-            <span className="orbit-label orbit-d">materials</span>
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <div className="engine-core"><Mark /><small>MUTATE</small></div>
+          <ol className="mini-flow">
+            <li><span>Landscape</span><strong>What exists?</strong></li>
+            <li><span>Gap</span><strong>What remains hard?</strong></li>
+            <li><span>Candidate</span><strong>What is meaningfully different?</strong></li>
+            <li><span>Test</span><strong>What would prove it wrong?</strong></li>
+          </ol>
+          <div className="survivor-note">
+            <span>Output</span>
+            <p><strong>Surviving opportunities</strong> with evidence lineage, decisive risks, and a measurable next test.</p>
           </div>
-          <div className="output-card">
-            <span className="output-index">01</span>
-            <div><small>SURVIVOR</small><strong>Ripeness Relay</strong><p>Food storage that sequences meals from biological decay signals—not expiry dates.</p></div>
-            <span className="score">8.7</span>
-          </div>
-        </div>
+        </aside>
       </section>
 
-      <div className="proof-strip">
-        <div className="shell proof-inner">
-          <span>Not a bigger brainstorm.</span>
-          <span className="proof-emphasis">A better selection pressure.</span>
-          <span className="proof-rule" />
-          <span>15+ candidates in</span>
-          <span>3–5 survivors out</span>
+      <div className="principle-strip">
+        <div className="page-width principle-grid">
+          <p><span>01</span> Novelty without demand is a curiosity.</p>
+          <p><span>02</span> Demand without differentiation is a crowded category.</p>
+          <p><span>03</span> Evidence without falsification is just a story.</p>
         </div>
       </div>
 
-      <section className="section shell" id="comparison">
-        <div className="section-heading">
-          <div><span className="section-index">01</span><span className="kicker">The difference</span></div>
-          <h2>Familiar in.<br /><span>Familiar out.</span></h2>
-          <p>Ask the same question. Change the process between prompt and answer.</p>
-        </div>
-
-        <div className="prompt-bar">
-          <span>PROMPT</span>
-          <p>“Give me product ideas that reduce food waste at home.”</p>
-        </div>
-
-        <div className="comparison-grid">
-          <article className="comparison-card baseline-card">
-            <div className="card-label"><span className="card-dot gray" /> NORMAL CLAUDE <span>FIRST-PASS ANSWERS</span></div>
-            <div className="baseline-list">
-              <div><span>01</span><p><strong>AI Recipe Generator</strong>Suggest recipes from ingredients you already have.</p></div>
-              <div><span>02</span><p><strong>Expiry Date Tracker</strong>Scan groceries and get reminders before food expires.</p></div>
-              <div><span>03</span><p><strong>Food Donation App</strong>Connect households with nearby people who need food.</p></div>
+      <section className="install-section" id="install">
+        <div className="page-width">
+          <div className="section-heading install-heading">
+            <p className="eyebrow">Install</p>
+            <div>
+              <h2>From download to Claude in three small steps.</h2>
+              <p>Download the ZIP, extract it, then copy the complete <code>novelty-engine</code> folder into Claude’s local skills directory.</p>
             </div>
-            <div className="card-verdict"><span>Pattern</span><strong>Existing category + AI</strong></div>
-          </article>
-
-          <article className="comparison-card novelty-card">
-            <div className="card-label"><span className="card-dot green" /> WITH NOVELTY ENGINE <span>AFTER SELECTION</span></div>
-            <div className="novel-idea">
-              <div className="novel-title"><span>01</span><div><small>BIOLOGY × QUEUEING</small><h3>Ripeness Relay</h3></div><span className="survivor-tag">SURVIVOR</span></div>
-              <p>A countertop sensor listens for tiny acoustic and gas changes from produce, then builds a meal sequence around what is biologically turning—not what an expiry label predicts.</p>
-              <div className="novel-meta"><span><small>DIFFERENT BECAUSE</small>Schedules behavior from decay signals</span><span><small>FIRST TEST</small>Signal accuracy across 10 foods</span></div>
-            </div>
-            <div className="novel-idea compact">
-              <div className="novel-title"><span>02</span><div><small>COMMITMENT DESIGN × RETAIL</small><h3>Leftover Futures</h3></div></div>
-              <p>Households pre-commit tomorrow’s leftovers to a specific lunch format at the moment they cook—before “unclaimed food” exists.</p>
-            </div>
-          </article>
+          </div>
+          <InstallPanel />
+          <ol className="install-flow" aria-label="Installation steps">
+            <li><span>1</span><div><strong>Download</strong><p>Save the skill ZIP.</p></div></li>
+            <li><span>2</span><div><strong>Extract</strong><p>Keep the folder intact.</p></div></li>
+            <li><span>3</span><div><strong>Copy</strong><p>Move it to <code>~/.claude/skills/</code>.</p></div></li>
+          </ol>
         </div>
       </section>
 
-      <section className="section method-section" id="how-it-works">
-        <div className="shell">
-          <div className="section-heading horizontal">
-            <div><span className="section-index">02</span><span className="kicker">The method</span></div>
-            <h2>Novelty is a<br /><span>process, not a vibe.</span></h2>
-            <p>The skill creates distance from predictable answers, then applies pressure until only useful differentiation remains.</p>
+      <section className="pipeline-section page-width" aria-labelledby="pipeline-title">
+        <div className="section-heading pipeline-heading">
+          <p className="eyebrow">The evidence loop</p>
+          <div>
+            <h2 id="pipeline-title">A research method, not a longer prompt.</h2>
+            <p>The engine makes the search process inspectable from first source to final experiment.</p>
+          </div>
+        </div>
+        <ol className="pipeline-list">
+          {pipeline.map(([number, title, description]) => (
+            <li key={number}>
+              <span>{number}</span>
+              <strong>{title}</strong>
+              <p>{description}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="comparison-section" id="comparison">
+        <div className="page-width">
+          <div className="section-heading comparison-heading">
+            <p className="eyebrow">A worked example</p>
+            <div>
+              <h2>From a common prompt to a specific opening.</h2>
+              <p>V2.1 records how an idea was derived, what resembles it, what could kill it, and the cheapest test that should come next.</p>
+            </div>
           </div>
 
-          <div className="pipeline" role="list" aria-label="Novelty Engine pipeline">
-            {pipeline.map(([number, title, note], index) => (
-              <div className={`pipeline-step step-${index + 1}`} role="listitem" key={number}>
-                <div className="pipeline-number">{number}</div>
-                <div className="pipeline-node"><span>{index === 1 || index === 4 ? "×" : index === 6 ? "✓" : "·"}</span></div>
-                <strong>{title}</strong>
-                <small>{note}</small>
-              </div>
+          <blockquote className="example-prompt">
+            <span>Prompt</span>
+            <p>“Find opportunities for small field-service teams that still move job data between tools.”</p>
+          </blockquote>
+
+          <div className="comparison-grid">
+            <article className="baseline-card">
+              <header><p className="card-label">First-pass brainstorming</p><h3>Familiar answers</h3></header>
+              <ol>
+                <li><span>01</span><div><strong>All-in-one CRM</strong><p>Replace every current tool with one larger system.</p></div></li>
+                <li><span>02</span><div><strong>AI dispatcher</strong><p>Add a chat assistant on top of the existing workflow.</p></div></li>
+                <li><span>03</span><div><strong>Scheduling dashboard</strong><p>Show another view of data workers already maintain.</p></div></li>
+              </ol>
+              <p className="card-note">The subject changed. The underlying mechanisms did not.</p>
+            </article>
+
+            <article className="survivor-card">
+              <header>
+                <div><p className="card-label">With Novelty Engine</p><h3>Exception Bridge</h3></div>
+                <span className="survivor-badge">Survivor</span>
+              </header>
+              <p className="idea-summary">A local-first event bridge keeps existing systems authoritative and asks a worker to intervene only when their records disagree—without introducing another CRM.</p>
+              <dl>
+                <div><dt>Evidence lineage</dt><dd>Duplicate entry → spreadsheets and messages → small-team pricing mismatch → remove the central database → local event capability.</dd></div>
+                <div><dt>Decisive risk</dt><dd>It fails if connectors are expensive to maintain, exceptions are too rare, or teams will not grant source-system access.</dd></div>
+                <div><dt>Validate first</dt><dd>Manually bridge ten real jobs for three teams in 72 hours. Continue only if errors fall by half and one team commits to a paid pilot.</dd></div>
+              </dl>
+              <p className="fixture-note">Illustrative, fixture-backed pipeline walkthrough—not a claim about a live market.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="method-section" id="method">
+        <div className="page-width">
+          <div className="section-heading method-heading">
+            <p className="eyebrow">The method</p>
+            <div>
+              <h2>Research. Structure. Contradict. Falsify.</h2>
+              <p>Compact provenance and visible tradeoffs replace vague claims of uniqueness.</p>
+            </div>
+          </div>
+          <ol className="method-grid">
+            {phases.map((phase) => (
+              <li key={phase.number}>
+                <span>{phase.number}</span>
+                <h3>{phase.title}</h3>
+                <p>{phase.description}</p>
+                <p className="phase-detail">{phase.detail}</p>
+              </li>
             ))}
-          </div>
-
-          <div className="method-notes">
-            <div><span>A</span><p><strong>Map the obvious</strong>The usual answers become an exclusion zone, not a starting menu.</p></div>
-            <div><span>B</span><p><strong>Transfer mechanisms</strong>Borrow how distant systems work—not merely how their language sounds.</p></div>
-            <div><span>C</span><p><strong>Attack resemblance</strong>If an idea collapses into a familiar product, mutate it or remove it.</p></div>
+          </ol>
+          <div className="research-positioning">
+            <div>
+              <p className="eyebrow">Built for honest research</p>
+              <h3>No competitor found does not mean a good opportunity was found.</h3>
+            </div>
+            <div>
+              <p>When web access is configured, the backend searches competitors, reviews, forums, GitHub, directories, regulations, failed attempts, and counterevidence.</p>
+              <p>Missing evidence stays unknown. Novel proposals are hypotheses until a real market test says otherwise.</p>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="section shell why-section" id="why">
-        <div className="why-index">03 / WHY IT EXISTS</div>
-        <div className="why-copy">
-          <p className="why-lede">Language models are trained to predict what comes next.</p>
-          <h2>The statistically likely answer is often the one <span>you have already heard.</span></h2>
-          <div className="why-body">
-            <p>Novelty Engine adds a deliberate structure between the first association and the final answer. It identifies default patterns, steps outside them, generates broadly, and then selects ruthlessly.</p>
-            <p>It does not promise globally new ideas. It produces concepts that are more unusual, more specific, and easier to compare against what already exists.</p>
+      <section className="final-cta">
+        <div className="page-width final-cta-inner">
+          <div>
+            <p className="eyebrow">Novelty Engine V2.1</p>
+            <h2>Make the next idea earn its place.</h2>
           </div>
-        </div>
-        <div className="probability-visual" aria-hidden="true">
-          <div className="curve-label"><span>LIKELIHOOD</span><span>ORIGINALITY</span></div>
-          <svg viewBox="0 0 440 220" preserveAspectRatio="none">
-            <path className="curve-grid" d="M0 180H440M0 135H440M0 90H440M0 45H440M88 0V220M176 0V220M264 0V220M352 0V220" />
-            <path className="curve-main" d="M0 187 C55 186 68 172 96 109 C126 40 168 24 205 93 C239 158 263 177 440 187" />
-            <path className="curve-tail" d="M250 170 C298 142 343 133 428 128" />
-          </svg>
-          <span className="default-label">DEFAULT<br />CLUSTER</span>
-          <span className="novelty-label">SEARCH<br />HERE →</span>
-        </div>
-      </section>
-
-      <section className="section install-section" id="install">
-        <div className="shell install-grid">
-          <div className="install-copy">
-            <div><span className="section-index">04</span><span className="kicker">Get the skill</span></div>
-            <h2>Install once.<br /><span>Ideate differently.</span></h2>
-            <p>One small folder. No dependencies, API key, account, or configuration.</p>
-            <a className="button button-primary button-large" href="/novelty-engine.zip" download="novelty-engine.zip">
-              <DownloadIcon /> Download novelty-engine.zip <span>↓</span>
-            </a>
-            <div className="file-proof"><span>PACKAGE</span><code>novelty-engine/SKILL.md</code><strong>READY</strong></div>
-          </div>
-
-          <div className="install-steps">
-            <div className="install-step">
-              <span>01</span><div><h3>Download and unzip</h3><p>The ZIP contains the complete <code>novelty-engine</code> skill folder.</p></div>
-            </div>
-            <div className="install-step">
-              <span>02</span><div><h3>Add it to Claude</h3><p>Upload the skill in Claude settings, or copy the folder into your Claude Code skills directory:</p><pre><code>mkdir -p ~/.claude/skills{`\n`}cp -R novelty-engine ~/.claude/skills/</code></pre></div>
-            </div>
-            <div className="install-step">
-              <span>03</span><div><h3>Ask for ideas</h3><p>Use a normal prompt. Claude activates the skill automatically when the task calls for ideation.</p><blockquote>“Design unusual ways for apartment buildings to share tools without a staffed library.”</blockquote></div>
-            </div>
+          <div className="final-actions">
+            <a className="button button-light" href="#install">Install locally <span aria-hidden="true">↓</span></a>
+            <a className="text-link-light" href={githubUrl} target="_blank" rel="noreferrer">View on GitHub <span aria-hidden="true">↗</span></a>
           </div>
         </div>
       </section>
 
       <footer className="site-footer">
-        <div className="shell footer-inner">
+        <div className="page-width footer-inner">
           <a className="brand" href="#top"><Mark /><span>Novelty Engine</span></a>
-          <p>Better ideas need better selection pressure.</p>
-          <div><a href={githubUrl} target="_blank" rel="noreferrer">GitHub <ArrowIcon /></a><span>Free &amp; open source</span></div>
+          <p>V2.1 · Free and open source under the MIT License.</p>
+          <a href={githubUrl} target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
         </div>
       </footer>
     </main>
