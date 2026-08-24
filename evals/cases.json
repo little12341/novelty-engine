@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "startup-caregiving",
+      "category": "startup ideas",
+      "prompt": "Generate startup ideas that make coordinating care for an aging parent less exhausting for siblings who live in different cities.",
+      "commonDirections": ["shared calendar", "family task app", "caregiver marketplace", "AI care assistant"]
+    },
+    {
+      "id": "invention-heat",
+      "category": "physical invention",
+      "prompt": "Invent practical ways for renters in old apartment buildings to stay cool during heat waves without installing central air.",
+      "commonDirections": ["portable AC", "smart fan", "reflective curtains", "cooling vest"]
+    },
+    {
+      "id": "software-meetings",
+      "category": "software tool",
+      "prompt": "Propose software tools that reduce the cost of too many internal meetings without simply transcribing or summarizing them.",
+      "commonDirections": ["AI meeting notes", "calendar optimizer", "async status bot", "meeting analytics dashboard"]
+    },
+    {
+      "id": "consumer-food-waste",
+      "category": "consumer product",
+      "prompt": "Create consumer product ideas that reduce edible food waste in a two-person household.",
+      "commonDirections": ["expiry tracker", "recipe generator", "smart fridge", "food donation app"]
+    },
+    {
+      "id": "science-microplastics",
+      "category": "scientific concept",
+      "prompt": "Suggest testable, resource-conscious research concepts for detecting microplastic accumulation in urban soil.",
+      "commonDirections": ["spectroscopy survey", "citizen science samples", "satellite mapping", "machine-learning classifier"]
+    },
+    {
+      "id": "feature-language-learning",
+      "category": "product feature",
+      "prompt": "Design differentiated features for a language-learning product used during a daily commute.",
+      "commonDirections": ["streaks", "flashcards", "AI conversation partner", "personalized lessons"]
+    },
+    {
+      "id": "business-repair",
+      "category": "business model",
+      "prompt": "Develop unusual but feasible business models that make small-appliance repair financially attractive again.",
+      "commonDirections": ["repair subscription", "marketplace", "extended warranty", "mobile repair van"]
+    }
+  ]
+}

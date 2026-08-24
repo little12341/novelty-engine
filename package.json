@@ -1,0 +1,38 @@
+{
+  "name": "novelty-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A free Claude Skill for generating more differentiated ideas.",
+  "scripts": {
+    "dev": "npm run package:skill && next dev",
+    "build": "npm run package:skill && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "package:skill": "node scripts/package-skill.mjs",
+    "verify:package": "node scripts/verify-package.mjs",
+    "verify:links": "node scripts/verify-links.mjs",
+    "test": "npm run verify:package && npm run verify:links && node scripts/evaluate.mjs",
+    "eval": "node scripts/evaluate.mjs",
+    "eval:init": "node scripts/evaluate.mjs --init evals/results/local.json",
+    "eval:score": "node scripts/evaluate.mjs --score"
+  },
+  "dependencies": {
+    "next": "16.3.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
