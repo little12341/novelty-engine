@@ -77,28 +77,46 @@ export function HeroInstallPanel() {
     };
   }, []);
 
-  const heroCopyText = `${installCommands}\n${productionMcpEndpoint}`;
-
   return (
-    <aside className="hero-install-panel liquid-glass" aria-label="Quick installation commands">
-      <section>
-        <div className="hero-install-heading">
-          <span className="terminal-glyph liquid-glass" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" focusable="false">
-              <path d="m6.2 7.4 4.1 4.1-4.1 4.1M12.7 16.1h5.1" />
-            </svg>
-          </span>
-          <pre><code>{installCommands}{"\n"}<span className="hero-mcp-url">{productionMcpEndpoint}</span></code></pre>
-          <button className="liquid-glass" type="button" onClick={() => copyText("commands", heroCopyText)} aria-label="Copy installation commands and MCP endpoint">
-            <svg className="copy-glyph" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <rect x="6.2" y="6.2" width="10.2" height="10.2" rx="1.4" />
-              <path d="M13.8 6.2V4.8c0-.8-.6-1.4-1.4-1.4H4.8c-.8 0-1.4.6-1.4 1.4v7.6c0 .8.6 1.4 1.4 1.4h1.4" />
-            </svg>
-            {label("commands")}
-          </button>
+    <aside className="hero-install-panel liquid-glass" aria-label="Install Novelty Engine">
+      <section className="hero-install-row hero-skill-row" aria-labelledby="hero-skill-title">
+        <span className="terminal-glyph liquid-glass" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" focusable="false">
+            <path d="m6.2 7.4 4.1 4.1-4.1 4.1M12.7 16.1h5.1" />
+          </svg>
+        </span>
+        <div className="hero-install-content">
+          <h2 id="hero-skill-title">Install as a Claude Skill</h2>
+          <p>Creates the skills folder and copies Novelty Engine into it.</p>
+          <pre><code>{installCommands}</code></pre>
         </div>
+        <button className="hero-copy-button liquid-glass" type="button" onClick={() => copyText("commands", installCommands)} aria-label="Copy both Claude Skill setup commands">
+          <svg className="copy-glyph" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect x="6.2" y="6.2" width="10.2" height="10.2" rx="1.4" />
+            <path d="M13.8 6.2V4.8c0-.8-.6-1.4-1.4-1.4H4.8c-.8 0-1.4.6-1.4 1.4v7.6c0 .8.6 1.4 1.4 1.4h1.4" />
+          </svg>
+          {label("commands")}
+        </button>
         <span className="sr-only" role="status" aria-live="polite">
-          {copyState.target === "commands" && copyState.status === "copied" ? "Install commands copied to clipboard." : copyState.target === "commands" && copyState.status === "error" ? "Could not copy the install commands." : ""}
+          {copyState.target === "commands" && copyState.status === "copied" ? "Both install commands copied to clipboard." : copyState.target === "commands" && copyState.status === "error" ? "Could not copy the install commands." : ""}
+        </span>
+      </section>
+
+      <section className="hero-install-row hero-mcp-row" aria-labelledby="hero-mcp-title">
+        <div className="hero-install-content">
+          <h2 id="hero-mcp-title">Connect through MCP</h2>
+          <p>Connects your AI client directly to the Novelty Engine MCP server.</p>
+          <code className="hero-mcp-url">{productionMcpEndpoint}</code>
+        </div>
+        <button className="hero-copy-button liquid-glass" type="button" onClick={() => copyText("mcp", productionMcpEndpoint)} aria-label="Copy MCP endpoint">
+          <svg className="copy-glyph" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect x="6.2" y="6.2" width="10.2" height="10.2" rx="1.4" />
+            <path d="M13.8 6.2V4.8c0-.8-.6-1.4-1.4-1.4H4.8c-.8 0-1.4.6-1.4 1.4v7.6c0 .8.6 1.4 1.4 1.4h1.4" />
+          </svg>
+          {label("mcp")}
+        </button>
+        <span className="sr-only" role="status" aria-live="polite">
+          {copyState.target === "mcp" && copyState.status === "copied" ? "MCP endpoint copied to clipboard." : copyState.target === "mcp" && copyState.status === "error" ? "Could not copy the MCP endpoint." : ""}
         </span>
       </section>
     </aside>
@@ -116,25 +134,12 @@ export function InstallPanel() {
 
   return (
     <div className="install-options">
-      <article className="install-option download-option">
+      <article className="install-option manual-option">
         <div className="option-number">Option 01</div>
         <div>
-          <p className="option-kicker">Skill package</p>
-          <h3>Get the complete skill folder.</h3>
-          <p>Upload the ZIP from <strong>Customize → Skills → + → Create skill</strong>, or extract it for Claude Code.</p>
-        </div>
-        <a className="button button-primary download-button" href="/novelty-engine.zip" download="novelty-engine.zip">
-          Download novelty-engine.zip <span aria-hidden="true">↓</span>
-        </a>
-        <p className="archive-contents"><span>Includes</span><code>novelty-engine/SKILL.md</code></p>
-      </article>
-
-      <article className="install-option manual-option">
-        <div className="option-number">Option 02</div>
-        <div>
-          <p className="option-kicker">Claude Code</p>
+          <p className="option-kicker">Claude Skill</p>
           <h3>Install the local Skill.</h3>
-          <p>Run these commands beside the extracted folder. The direct API helper remains available as a fallback.</p>
+          <p>Run both commands beside the Novelty Engine folder to add it to Claude’s local skills directory.</p>
         </div>
         <div className="command-block">
           <div className="command-header">
@@ -152,7 +157,7 @@ export function InstallPanel() {
       </article>
 
       <article className="install-option browser-option">
-        <div className="option-number">Option 03</div>
+        <div className="option-number">Option 02</div>
         <div>
           <p className="option-kicker">Claude browser</p>
           <h3>Connect live research once.</h3>

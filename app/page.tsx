@@ -6,9 +6,38 @@ const githubUrl = "https://github.com/little12341/novelty-engine";
 function Mark() {
   return (
     <span className="mark" aria-hidden="true">
-      <svg viewBox="0 0 52 46" fill="none" focusable="false">
-        <path d="M19.8 39.5C12 36.4 7 30.1 6.2 22.1M16.4 36.6l-6.1.6M12.3 32.2l-5.9-1.1M9.5 27l-5-2.6M8.1 21.4l-3.8-4.1M8.6 16l-2.1-4.7M10.8 11.3l-.4-4.6M32.2 39.5c7.8-3.1 12.8-9.4 13.6-17.4M35.6 36.6l6.1.6M39.7 32.2l5.9-1.1M42.5 27l5-2.6M43.9 21.4l3.8-4.1M43.4 16l2.1-4.7M41.2 11.3l.4-4.6" />
-        <path d="M18.7 40.5c2.2 1.2 4.6 1.8 7.3 1.8s5.1-.6 7.3-1.8" />
+      <svg viewBox="0 0 64 64" fill="none" focusable="false">
+        <defs>
+          <path id="laurel-stem" d="M30.6 57.2C19.2 55.4 10.4 47.6 7.8 37.1 5.2 26.6 8.8 15.5 17.4 7.8" />
+          <path id="laurel-leaf-1" d="M10.1 42.9C5.4 43 2.3 40.3 1.6 36.1c4.5-.2 7.5 1.9 8.5 6.8Z" />
+          <path id="laurel-leaf-2" d="M7.7 35.2C3.4 33.9 1.3 30.5 2.1 26.4c4.2 1.2 6.4 4.1 5.6 8.8Z" />
+          <path id="laurel-leaf-3" d="M7.4 27.2C3.7 24.7 2.8 20.8 4.8 17.1c3.7 2.3 4.9 5.8 2.6 10.1Z" />
+          <path id="laurel-leaf-4" d="M9.5 19.4c-2.8-3.4-2.6-7.4.4-10.3 3 3.2 3.1 6.9-.4 10.3Z" />
+          <path id="laurel-leaf-5" d="M13.9 12.6c-1.6-4.1-.2-7.8 3.6-9.7 1.7 4 .6 7.5-3.6 9.7Z" />
+          <path id="laurel-leaf-6" d="M14.4 48.9c-4.5 1.3-8-.6-9.8-4.5 4.3-1.3 7.7.1 9.8 4.5Z" />
+          <path id="laurel-leaf-7" d="M20.5 53.7c-4.1 2.3-8 1.3-10.7-2 3.9-2.3 7.6-1.8 10.7 2Z" />
+        </defs>
+        <g className="laurel-half">
+          <use href="#laurel-stem" />
+          <use href="#laurel-leaf-1" />
+          <use href="#laurel-leaf-2" />
+          <use href="#laurel-leaf-3" />
+          <use href="#laurel-leaf-4" />
+          <use href="#laurel-leaf-5" />
+          <use href="#laurel-leaf-6" />
+          <use href="#laurel-leaf-7" />
+        </g>
+        <g className="laurel-half" transform="translate(64 0) scale(-1 1)">
+          <use href="#laurel-stem" />
+          <use href="#laurel-leaf-1" />
+          <use href="#laurel-leaf-2" />
+          <use href="#laurel-leaf-3" />
+          <use href="#laurel-leaf-4" />
+          <use href="#laurel-leaf-5" />
+          <use href="#laurel-leaf-6" />
+          <use href="#laurel-leaf-7" />
+        </g>
+        <path d="M22.2 55.2c3 2.6 6.3 4 9.8 4s6.8-1.4 9.8-4" />
       </svg>
     </span>
   );
@@ -114,7 +143,7 @@ export default function Home() {
         <div className="hero page-width">
           <div className="hero-copy">
             <p className="eyebrow">Find what others miss</p>
-            <h1 id="hero-title">Discover the gaps.<br />Build what’s next.</h1>
+            <h1 id="hero-title"><span>Discover the gaps.</span><span>Build what’s next.</span></h1>
             <p className="hero-lede">
               Novelty Engine uses research, signals, and reasoning to uncover real market gaps and generate opportunities worth building.
             </p>
@@ -151,12 +180,12 @@ export default function Home() {
             <p className="eyebrow">Install</p>
             <div>
               <h2>Install once. Connect the research path that fits.</h2>
-              <p>Keep the ZIP and Claude Code workflow, or connect the deployed <code>/api/mcp</code> endpoint in Claude browser for live research without local configuration.</p>
+              <p>Install the Claude Skill locally, or connect the deployed <code>/api/mcp</code> endpoint for live research without local configuration.</p>
             </div>
           </div>
           <InstallPanel />
           <ol className="install-flow" aria-label="Research connection steps">
-            <li><span>1</span><div><strong>Install the Skill</strong><p>Upload the ZIP or copy the folder locally.</p></div></li>
+            <li><span>1</span><div><strong>Install the Skill</strong><p>Copy the folder into Claude’s local skills directory.</p></div></li>
             <li><span>2</span><div><strong>Connect research</strong><p>Add the MCP URL in Claude browser, or set the direct helper URL in Claude Code.</p></div></li>
             <li><span>3</span><div><strong>Ask normally</strong><p>Invoke <code>/novelty-engine</code> or request market-gap research.</p></div></li>
           </ol>

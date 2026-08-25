@@ -144,11 +144,14 @@ If Upstash Redis REST is configured, run retrieval, exact-query cache records, c
 
 ## Claude Skill
 
-### Install from the website ZIP
+### Install as a local Claude Skill
 
-1. Download `novelty-engine.zip` from the website.
-2. Ensure code execution is enabled in **Settings → Capabilities** (or **Organization settings → Skills** for Team/Enterprise).
-3. Open **Customize → Skills**, click **+ → Create skill → Upload a skill**, upload the ZIP, and enable it.
+From beside the repository folder, run:
+
+```bash
+mkdir -p ~/.claude/skills
+cp -R novelty-engine ~/.claude/skills/
+```
 
 See [Claude's current custom Skill instructions](https://support.claude.com/en/articles/12512180-use-skills-in-claude) for plan-specific organization controls.
 
@@ -156,7 +159,7 @@ See [Claude's current custom Skill instructions](https://support.claude.com/en/a
 
 After deployment:
 
-1. Install the Novelty Engine Skill from the site ZIP.
+1. Install the Novelty Engine Skill with the local setup commands above.
 2. In Claude, open **Settings → Connectors**. On Team/Enterprise, an Owner or Primary Owner first uses the **Organization connectors** view.
 3. Choose **Add custom connector**, name it `Novelty Engine`, and paste `https://novelty-engine.vercel.app/api/mcp`.
 4. In a chat, open **Search and tools**, enable the Novelty Engine connector/tools, then invoke `/novelty-engine` or ask for market-gap/invention research normally.

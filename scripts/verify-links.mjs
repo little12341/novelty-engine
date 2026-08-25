@@ -15,7 +15,8 @@ for (const href of hrefs) {
   if (href.startsWith("/") && !href.includes("${")) await access(path.join(root, "public", href.slice(1)));
 }
 
-for (const expected of ["#comparison", "#method", "#install", "/novelty-engine.zip"]) {
+for (const expected of ["#comparison", "#method", "#install"]) {
   if (!hrefs.includes(expected)) throw new Error(`Required internal link missing: ${expected}`);
 }
+if (source.includes("/novelty-engine.zip")) throw new Error("Removed ZIP download must not be linked from the website");
 console.log(`Verified ${hrefs.length} static internal links and downloadable assets.`);
