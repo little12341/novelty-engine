@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Evidence, ProviderSearchResult, SearchAngle, SourceType } from "./types.ts";
+import { sanitizeUntrustedResearchText } from "./governance.ts";
 
 const TRACKING_PARAMS = new Set([
   "fbclid", "gclid", "mc_cid", "mc_eid", "ref", "ref_src", "source",
@@ -95,6 +96,31 @@ function directnessScore(sourceType: SourceType): number {
   return .5;
 }
 
+function trustMetadata(sourceType: SourceType, angleKind: SearchAngle["kind"]): Pick<Evidence["sourceAssessment"], "sourceFamily" | "provenance" | "commercialBiasRisk" | "observationKind"> {
+  const sourceFamily: Evidence["sourceAssessment"]["sourceFamily"] =
+    ["reddit", "forum", "review", "app_marketplace"].includes(sourceType) ? "user_voice"
+      : ["documentation", "github", "research", "patent"].includes(sourceType) ? "technical"
+        : ["regulator", "industry_publication"].includes(sourceType) ? "institutional"
+          : ["pricing", "job_posting", "marketplace"].includes(sourceType) ? "commercial"
+            : angleKind === "failed_attempts" ? "failed_attempt"
+              : ["official_company", "product_directory"].includes(sourceType) ? "competitor" : "general";
+  const provenance: Evidence["sourceAssessment"]["provenance"] =
+    sourceType === "regulator" ? "government"
+      : sourceType === "research" ? "research"
+        : ["reddit", "forum", "review", "github", "app_marketplace"].includes(sourceType) ? "user_generated"
+          : ["official_company", "pricing", "documentation", "job_posting"].includes(sourceType) ? "company_controlled"
+            : ["marketplace", "product_directory"].includes(sourceType) ? "marketplace" : "independent_secondary";
+  const commercialBiasRisk: Evidence["sourceAssessment"]["commercialBiasRisk"] =
+    provenance === "company_controlled" || provenance === "marketplace" ? "high"
+      : sourceType === "industry_publication" ? "medium"
+        : provenance === "government" || provenance === "research" ? "low" : "unknown";
+  const observationKind: Evidence["sourceAssessment"]["observationKind"] =
+    provenance === "company_controlled" ? "company_claim"
+      : provenance === "user_generated" ? "opinion_experience"
+        : ["regulator", "pricing", "job_posting", "patent"].includes(sourceType) ? "factual_market_observation" : "mixed";
+  return { sourceFamily, provenance, commercialBiasRisk, observationKind };
+}
+
 function claimTokens(value: string): Set<string> {
   return new Set(canonicalizeQuery(value).split(" ").filter((token) => token.length > 3));
 }
@@ -138,8 +164,10 @@ export function normalizeResults(
         existing.sourceAssessment.repetitionRisk = "likely";
         continue;
       }
-      const summary = cleanText(result.snippet);
-      const title = cleanText(result.title, 200);
+      const screenedSummary = sanitizeUntrustedResearchText(cleanText(result.snippet));
+      const screenedTitle = sanitizeUntrustedResearchText(cleanText(result.title, 200));
+      const summary = screenedSummary.text;
+      const title = screenedTitle.text;
       if (!summary || !title) continue;
       const claimKey = createHash("sha256").update(canonicalizeQuery(`${title} ${summary}`)).digest("hex");
       const existingClaim = claimRepresentatives.find((item) => item.claimFingerprint === claimKey
@@ -163,6 +191,11 @@ export function normalizeResults(
       const directness = directnessScore(sourceType);
       const independence = .9;
       const overallWeight = Math.round((quality * .35 + directness * .3 + recency * .2 + independence * .15) * 100) / 100;
+      const trust = trustMetadata(sourceType, angle.kind);
+      const ignoredDirectiveCategories = [...new Set([
+        ...screenedTitle.ignoredDirectiveCategories,
+        ...screenedSummary.ignoredDirectiveCategories,
+      ])];
       const normalized: Evidence = {
         id: evidenceId(normalizedUrl),
         sourceUrl: result.url,
@@ -178,11 +211,17 @@ export function normalizeResults(
         claimFingerprint: claimKey,
         duplicateSourceUrls: [],
         duplicateSourceTypes: [],
+        security: {
+          treatedAsUntrustedData: true,
+          promptInjectionDetected: ignoredDirectiveCategories.length > 0,
+          ignoredDirectiveCategories,
+        },
         sourceAssessment: {
           quality, directness, recency, independence, overallWeight,
           independenceGroup: independenceGroup(normalizedUrl, sourceType),
           isPrimary: ["official_company", "pricing", "documentation", "regulator", "research", "patent", "job_posting"].includes(sourceType),
           repetitionRisk: "none",
+          ...trust,
           rationale: `Weighted by ${sourceType} quality, claim directness, publication recency, and publisher independence; search rank is not treated as truth.`,
         },
       };

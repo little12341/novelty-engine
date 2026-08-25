@@ -20,7 +20,10 @@ export function scoreOpportunity(candidate: IdeaCandidate, input: {
     competitorWeakness: gap?.scoreFactors.currentSolutionWeakness ?? 3, saturation: gap ? 10 - ({ low: 2, medium: 5, high: 8, unknown: 6 }[gap.competitiveDensity]) : 3,
     noveltyDistance: competitorCheckComplete ? clamp((1 - nearest) * 10) : 2, weakSignalStrength: signal ? clamp((signal.recency + signal.recurrence) / 2) : 2,
     feasibility: /hardware|sensor|robot/i.test(candidate.technology ?? "") ? 5 : 7,
-    distributionAccessibility: gap?.scoreFactors.distributionAccessibility ?? 4, defensibility: gap?.scoreFactors.defensibility ?? 4,
+    distributionAccessibility: gap?.scoreFactors.distributionAccessibility ?? 4,
+    defensibility: competitorCheckComplete
+      ? Math.min(gap?.scoreFactors.defensibility ?? 4, clamp((1 - nearest) * 10))
+      : gap?.scoreFactors.defensibility ?? 4,
     timing: signal ? clamp((signal.recency + (hole?.strength ?? 4)) / 2) : gap?.scoreFactors.timing ?? 3,
     falsificationSurvival: input.falsification.survivalScore / 10,
   };
@@ -32,7 +35,7 @@ export function scoreOpportunity(candidate: IdeaCandidate, input: {
   const penalties: OpportunityScore["penalties"] = [];
   if (candidate.evidenceIds.length === 0) penalties.push({ code: "no_evidence", points: 20, reason: "No retrieved evidence supports the candidate lineage." });
   if (!competitorCheckComplete) penalties.push({ code: "competitor_check_unresolved", points: 12, reason: "No competitor fingerprint could be compared; absence of a retrieved competitor is not novelty evidence." });
-  if (nearest >= 0.72) penalties.push({ code: "near_duplicate", points: 18, reason: "The transparent fingerprint heuristic found a near-duplicate." });
+  if (nearest >= 0.72) penalties.push({ code: "near_duplicate", points: 18, reason: "A close competitor fingerprint reduces differentiation and defensibility; it is decisive only if the residual-demand assessment also shows the same job is already adequately solved for the same user." });
   if (input.falsification.outcome === "rejected") penalties.push({ code: "failed_falsification", points: 30, reason: input.falsification.reason });
   let score = Object.entries(weights).reduce((sum, [key, weight]) => sum + factors[key as keyof OpportunityScoreFactors] * weight, 0) * 10;
   score -= penalties.reduce((sum, penalty) => sum + penalty.points, 0);
@@ -48,11 +51,11 @@ export function scoreOpportunity(candidate: IdeaCandidate, input: {
   const decisionFactors: OpportunityScore["decisionFactors"] = {
     evidenceStrength: factor(evidenceStrength, candidate.evidenceIds, "Combines quality-weighted evidence with independent provenance groups; syndicated copies do not add independent strength."),
     demandSignal: factor((factors.complaintRecurrence + factors.severity + factors.willingnessToPay) / 3, demandIds, "Uses repeated pain, severity, and explicit payment/cost signals; complaints alone are not treated as validated demand."),
-    noveltyDifferentiation: factor(factors.noveltyDistance, competitorCheckComplete ? gap?.counterEvidenceIds ?? [] : [], competitorCheckComplete ? "Mechanism-level distance from retrieved competitors and substitutes; this is not a patent or exhaustive uniqueness opinion." : "UNKNOWN: no competitor fingerprint was available, so missing results receive no novelty credit.", competitorCheckComplete ? "INFERRED" : "UNKNOWN"),
+    noveltyDifferentiation: factor(factors.noveltyDistance, competitorCheckComplete ? gap?.counterEvidenceIds ?? [] : [], competitorCheckComplete ? `Mechanism-level distance from retrieved competitors and substitutes, interpreted alongside the explicit residual-demand conclusion (${input.falsification.residualUnmetDemand.conclusion}); this is not a patent or exhaustive uniqueness opinion.` : "UNKNOWN: no competitor fingerprint was available, so missing results receive no novelty credit.", competitorCheckComplete ? "INFERRED" : "UNKNOWN"),
     feasibility: factor(factors.feasibility, hypothesis("technical_feasibility")?.supportingEvidenceIds ?? [], "Reflects the proposed mechanism and retrieved technical evidence; untested implementation details remain unknown."),
     economics: factor(economic ? 10 - economic.risk : 3, [...(economic?.supportingEvidenceIds ?? []), ...(economic?.counterEvidenceIds ?? [])], "Higher means the economics case survived better; acquisition, support, and delivery costs are explicitly challenged."),
     distribution: factor(factors.distributionAccessibility, [...(hypothesis("distribution")?.supportingEvidenceIds ?? []), ...(hypothesis("distribution")?.counterEvidenceIds ?? [])], "Assesses whether a specific, trusted, affordable channel is evidenced rather than assumed."),
-    defensibility: factor(factors.defensibility, [...(hypothesis("defensibility")?.supportingEvidenceIds ?? []), ...(hypothesis("defensibility")?.counterEvidenceIds ?? [])], "Considers incumbent bundling and copy response; a wedge without a compounding advantage scores weakly."),
+    defensibility: factor(factors.defensibility, [...(hypothesis("defensibility")?.supportingEvidenceIds ?? []), ...(hypothesis("defensibility")?.counterEvidenceIds ?? [])], "Considers incumbent bundling, copy response, and proximity to close substitutes; competition can lower this score without automatically rejecting an evidenced residual gap."),
     regulatoryRisk: factor(regulatory?.risk ?? 6, [...(regulatory?.supportingEvidenceIds ?? []), ...(regulatory?.counterEvidenceIds ?? [])], "Risk scale: 0 is low and 10 is high. UNKNOWN is never silently converted into low risk.", regulatory?.claimStatus ?? "UNKNOWN"),
     confidence: factor(confidenceLabel === "evidence-backed" ? 8 : confidenceLabel === "plausible" ? 6 : 3, candidate.evidenceIds, "Overall calibration label derived from evidence provenance and gap support, not the aggregate opportunity score."),
   };

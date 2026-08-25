@@ -32,6 +32,7 @@ export function traceableClaim(claim: string, evidenceIds: string[], evidence: E
 
 export function assessCoverage(input: {
   angles: SearchAngle[]; successfulAngleIds: string[]; evidence: Evidence[]; regulatedMarket: boolean;
+  counterevidenceBudgetExhausted?: boolean;
 }): ResearchCoverage {
   const types = [...new Set(input.evidence.map((item) => item.sourceType))];
   const familyCoverage = Object.fromEntries(Object.entries(SOURCE_FAMILIES).map(([family, accepted]) => [
@@ -46,6 +47,22 @@ export function assessCoverage(input: {
   const successRatio = input.angles.length ? input.successfulAngleIds.length / input.angles.length : 0;
   const weighted = input.evidence.reduce((sum, item) => sum + item.sourceAssessment.overallWeight, 0);
   const duplicateClaimsCollapsed = input.evidence.reduce((sum, item) => sum + item.duplicateSourceUrls.length, 0);
+  const kindsForFamily: Record<keyof ResearchCoverage["sourceFamilyCoverage"], SearchAngle["kind"][]> = {
+    competitor: ["direct_competitors", "adjacent_categories", "substitutes", "active_falsification_competition"],
+    user_voice: ["customer_complaints", "manual_workarounds", "pricing_complaints", "customer_language"],
+    technical: ["poor_integrations", "open_source_patents", "research_regulation", "active_falsification_constraints"],
+    institutional: ["research_regulation", "open_source_patents", "active_falsification_constraints"],
+    failed_attempt: ["failed_attempts", "active_falsification_constraints"],
+    commercial: ["direct_competitors", "pricing_complaints", "jobs_procurement"],
+  };
+  const successful = new Set(input.successfulAngleIds);
+  const sourceFamilyAttempts = Object.fromEntries(Object.entries(kindsForFamily).map(([family, kinds]) => {
+    const requested = input.angles.filter((angle) => kinds.includes(angle.kind));
+    const state = familyCoverage[family as keyof typeof familyCoverage] > 0 ? "covered"
+      : requested.length === 0 ? "not_attempted"
+        : requested.some((angle) => successful.has(angle.id)) ? "attempted_unavailable" : "attempted_unavailable";
+    return [family, state];
+  })) as ResearchCoverage["sourceFamilyAttempts"];
   const coverageStatus = input.evidence.length < 4 || independent < 3 || familyCoverage.user_voice < 2 || successRatio < .4
     ? "insufficient" : missing.length || successRatio < .75 || types.length < 3 ? "partial" : "adequate";
   return {
@@ -53,6 +70,9 @@ export function assessCoverage(input: {
     failedAngles: Math.max(0, input.angles.length - input.successfulAngleIds.length), usableSourceCount: input.evidence.length,
     independentSourceCount: independent, sourceTypeCount: types.length, sourceTypes: types,
     sourceFamilyCoverage: familyCoverage, missingCriticalSourceFamilies: missing,
+    sourceFamilyAttempts,
+    commercialEvidenceThin: familyCoverage.commercial < 2,
+    counterevidenceBudgetExhausted: input.counterevidenceBudgetExhausted === true,
     duplicateClaimsCollapsed, qualityWeightedEvidence: Math.round(weighted * 100) / 100, coverageStatus,
   };
 }
@@ -71,7 +91,7 @@ export function decideStop(input: { coverage: ResearchCoverage; gaps: CandidateG
   if (status === "proceed") reasons.push("At least one structural gap cleared the positive-evidence gate and the landscape includes user voice plus competitor/substitute coverage.");
   return {
     status, canGenerateCandidates: canGenerate, reasons,
-    distinction: "A validated opportunity requires positive demand evidence and a surviving falsification case; merely finding no competitor never qualifies.",
+    distinction: "Competitor existence can validate that a job or market may exist, but it is not a rejection by itself. A validated opportunity requires positive residual-demand evidence and a surviving falsification case; merely finding no competitor never qualifies.",
   };
 }
 

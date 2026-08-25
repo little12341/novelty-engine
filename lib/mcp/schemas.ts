@@ -27,8 +27,30 @@ export const getResearchRunInput = z.object({
   include_full: z.boolean().default(false).describe("Return the complete internal ResearchResult instead of its concise MCP summary."),
 }).strict();
 
+const researchMode = z.enum(["find_business", "research_market", "research_company", "find_competitors", "find_gaps", "falsify", "validate_idea"]);
+
+export const runResearchModeInput = z.object({
+  mode: researchMode.describe("Intent corresponding to /find-business, /research-market, /research-company, /find-competitors, /find-gaps, /falsify, or /validate-idea."),
+  query: z.string().trim().min(8).max(500),
+}).strict();
+
+export const compareIdeasInput = z.object({
+  ideas: z.array(z.string().trim().min(8).max(500)).min(2).max(5).describe("Two to five ideas researched independently under one shared provider-call budget."),
+}).strict();
+
+export const exportResearchRunInput = z.object({
+  run_id: runId,
+  format: z.enum(["json", "markdown", "print"]).default("markdown"),
+}).strict();
+
+export const compareResearchRunsInput = z.object({
+  baseline_run_id: runId,
+  comparison_run_id: runId,
+}).strict().refine((value) => value.baseline_run_id !== value.comparison_run_id, { message: "Run IDs must be different." });
+
 export const MCP_TOOL_NAMES = [
   "research_market", "find_market_gaps", "inspect_competitors", "falsify_opportunity", "get_research_run",
+  "run_research_mode", "compare_ideas", "export_research_run", "compare_research_runs",
 ] as const;
 
 export const MCP_TOOL_CATALOG = [
@@ -37,4 +59,8 @@ export const MCP_TOOL_CATALOG = [
   { name: "inspect_competitors", arguments: { run_id: "string", limit: "optional integer 1-15" }, cost: "stored-run lookup" },
   { name: "falsify_opportunity", arguments: { opportunity: "string (8-1000 characters)", run_id: "optional string", candidate_id: "optional string" }, cost: "up to 4 focused provider searches" },
   { name: "get_research_run", arguments: { run_id: "string", include_full: "optional boolean" }, cost: "stored-run lookup" },
+  { name: "run_research_mode", arguments: { mode: "supported intent mode", query: "string (8-500 characters)" }, cost: "up to configured provider-call cap" },
+  { name: "compare_ideas", arguments: { ideas: "array of 2-5 strings" }, cost: "shared bounded comparison budget" },
+  { name: "export_research_run", arguments: { run_id: "string", format: "json, markdown, or print" }, cost: "stored-run lookup" },
+  { name: "compare_research_runs", arguments: { baseline_run_id: "string", comparison_run_id: "string" }, cost: "two stored-run lookups" },
 ] as const;

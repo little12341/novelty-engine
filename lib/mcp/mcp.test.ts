@@ -93,6 +93,25 @@ test("MCP run tools route to gaps and competitors with explicit unknowns", async
   });
 });
 
+test("MCP intent mode reuses the canonical pipeline and preserves mode-specific company output", async () => {
+  const result = { ...await getFixtureRun(), mode: "research_company" as const, companyProfile: {
+    identity: { id: "claim_company", claim: "FixtureCo", status: "INFERRED" as const, evidenceIds: [], rationale: "Fixture." },
+    productsServices: [], targetUsers: [], apparentPositioning: { id: "claim_position", claim: "UNKNOWN", status: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture." },
+    pricingBusinessModel: { id: "claim_price", claim: "UNKNOWN", status: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture." },
+    directCompetitorIds: [], indirectSubstitutes: [], companyComplaints: [], categoryComplaints: [], competitorStrengthsWeaknesses: [],
+    underservedSegments: [], threats: [], differentiationOpportunities: [], adjacentMarkets: [], validationActions: [],
+    factsFromCompanyControlledSources: [], thirdPartyEvidenceIds: [], unknowns: ["Fixture unknown."],
+  } };
+  let receivedMode = "";
+  await withClient({ research: async (_query, options) => { receivedMode = options?.mode ?? ""; return result; } }, async (client) => {
+    const called = await client.callTool({ name: "run_research_mode", arguments: { mode: "research_company", query: "Research a sufficiently specific company" } });
+    assert.equal(called.isError, undefined);
+    assert.equal(receivedMode, "research_company");
+    assert.equal((called.structuredContent as { mode: string }).mode, "research_company");
+    assert.ok((called.structuredContent as { companyProfile: object }).companyProfile);
+  });
+});
+
 test("falsify_opportunity routes the validated candidate to focused falsification", async () => {
   let received = "";
   await withClient({ falsify: async (input) => {
@@ -101,7 +120,28 @@ test("falsify_opportunity routes the validated candidate to focused falsificatio
       candidate: { id: "candidate_test", name: "Test", summary: input.opportunity, targetCustomer: null, mechanism: "test mechanism" },
       priorRunId: null, provider: { id: "fixture", displayName: "Fixture" },
       activeSearch: { requestedQueries: 4, successfulQueries: 4, sourceCount: 4, errors: [] },
-      falsification: { candidateId: "candidate_test", hypotheses: [], argumentsFor: [], argumentsAgainst: [], survivalScore: 40, outcome: "mutate" as const, reason: "Test counterevidence requires mutation.", decisiveRisks: [], unknownCriticalCount: 1 },
+      falsification: {
+        candidateId: "candidate_test", hypotheses: [], argumentsFor: [], argumentsAgainst: [], survivalScore: 40,
+        outcome: "mutate" as const, reason: "Test counterevidence requires mutation.", decisiveRisks: [], unknownCriticalCount: 1,
+        residualUnmetDemand: {
+          competitorsPresent: true, closestCompetitorSimilarity: .5, sameJobSameUserSubstitute: false,
+          signals: {
+            repeated_unresolved_complaints: { criterion: "repeated_unresolved_complaints" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+            workaround_prevalence: { criterion: "workaround_prevalence" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+            switching_behavior: { criterion: "switching_behavior" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+            underserved_segments: { criterion: "underserved_segments" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+            price_performance_gaps: { criterion: "price_performance_gaps" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+            trust_failures: { criterion: "trust_failures" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+            distribution_gaps: { criterion: "distribution_gaps" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+            missing_integrations: { criterion: "missing_integrations" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+            procurement_friction: { criterion: "procurement_friction" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+            tolerated_bad_solutions: { criterion: "tolerated_bad_solutions" as const, present: null, claimStatus: "UNKNOWN" as const, evidenceIds: [], rationale: "Fixture unknown." },
+          },
+          mechanismMateriallyChangesOutcome: { present: null, claimStatus: "UNKNOWN", evidenceIds: [], rationale: "Fixture unknown." },
+          meaningfulResidualGap: false, adequateSameJobSameUserSolution: false,
+          conclusion: "residual_gap_uncertain" as const, rationale: "Fixture assessment.", evidenceIds: [],
+        },
+      },
       citations: [{ id: "ev_test", title: "Counterevidence", url: "https://example.test/counterevidence", confidence: 0.7 }],
       explicitUnknowns: ["economics" as const], warning: "Fixture falsification response.",
     };
@@ -180,6 +220,29 @@ test("global daily/monthly budgets and concurrent research permits are enforced"
     const restore = (name: string, value: string | undefined) => value === undefined ? delete process.env[name] : process.env[name] = value;
     restore("MCP_RATE_LIMIT_PER_HOUR", previous.hourly); restore("MCP_GLOBAL_DAILY_RESEARCH_LIMIT", previous.daily);
     restore("MCP_GLOBAL_MONTHLY_RESEARCH_LIMIT", previous.monthly); restore("MCP_MAX_CONCURRENT_RESEARCH", previous.concurrent);
+    clearMemoryProtection();
+  }
+});
+
+test("per-user daily research quotas are distinct from global budgets", async () => {
+  const previous = { user: process.env.RESEARCH_PER_USER_DAILY_LIMIT, daily: process.env.MCP_GLOBAL_DAILY_RESEARCH_LIMIT, monthly: process.env.MCP_GLOBAL_MONTHLY_RESEARCH_LIMIT };
+  process.env.RESEARCH_PER_USER_DAILY_LIMIT = "1";
+  process.env.MCP_GLOBAL_DAILY_RESEARCH_LIMIT = "20";
+  process.env.MCP_GLOBAL_MONTHLY_RESEARCH_LIMIT = "20";
+  clearMemoryProtection();
+  try {
+    const first = await acquireProtection("quota-user-a", true);
+    assert.equal(first.allowed, true);
+    if (first.allowed) await first.release();
+    const denied = await acquireProtection("quota-user-a", true);
+    assert.equal(denied.allowed, false);
+    if (!denied.allowed) assert.equal(denied.reason, "user_daily_budget");
+    const differentUser = await acquireProtection("quota-user-b", true);
+    assert.equal(differentUser.allowed, true);
+    if (differentUser.allowed) await differentUser.release();
+  } finally {
+    const restore = (name: string, value: string | undefined) => value === undefined ? delete process.env[name] : process.env[name] = value;
+    restore("RESEARCH_PER_USER_DAILY_LIMIT", previous.user); restore("MCP_GLOBAL_DAILY_RESEARCH_LIMIT", previous.daily); restore("MCP_GLOBAL_MONTHLY_RESEARCH_LIMIT", previous.monthly);
     clearMemoryProtection();
   }
 });

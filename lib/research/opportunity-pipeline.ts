@@ -15,6 +15,7 @@ import type { CandidateGap, ComplaintCluster, Competitor, Evidence, FinalOpportu
 export function runOpportunityPipeline(input: {
   query: string; sources: Evidence[]; competitors: Competitor[]; complaints: ComplaintCluster[];
   segments: UnderservedSegment[]; gaps: CandidateGap[]; limits: ResearchLimits; now?: Date; allowGeneration?: boolean;
+  excludedMechanisms?: string[];
 }) {
   const initialGraph = buildOpportunityGraph(input.sources, input.competitors, input.complaints, input.segments, input.gaps);
   const graphHoles = detectGraphHoles(initialGraph);
@@ -40,12 +41,18 @@ export function runOpportunityPipeline(input: {
     reason: "Collapsed because another candidate uses the same core mechanism for the same evidenced gap; naming or cosmetic variation is not distinct.",
     evidenceIds: candidate.evidenceIds, decisiveRisks: [], mutatedFrom: null,
   });
-  const pool = deduplicated.filter((candidate) => {
-    const nearestCompetitor = similarities.filter((item) => item.leftId === candidate.id && competitorFingerprints.some((fingerprint) => fingerprint.candidateId === item.rightId)).reduce((max, item) => Math.max(max, item.score), 0);
-    if (nearestCompetitor >= 0.78) rejectedIdeas.push({ candidateId: candidate.id, name: candidate.name, phase: "competitor_check", reason: "The mechanism-level fingerprint is too close to a retrieved competitor or substitute to call differentiated.", evidenceIds: candidate.evidenceIds, decisiveRisks: ["competition"], mutatedFrom: null });
-    return nearestCompetitor < 0.78;
+  const excluded = (input.excludedMechanisms ?? []).map((item) => item.toLowerCase().trim()).filter(Boolean);
+  const pool = deduplicated.filter((candidate) => !excluded.some((item) => candidate.mechanismFamily.toLowerCase().includes(item)
+    || candidate.mechanism.toLowerCase().includes(item)));
+  for (const candidate of deduplicated.filter((item) => !pool.some((accepted) => accepted.id === item.id))) rejectedIdeas.push({
+    candidateId: candidate.id, name: candidate.name, phase: "deduplication",
+    reason: "Excluded by explicit user memory/context because this mechanism was previously rejected; current instructions did not request reconsideration.",
+    evidenceIds: candidate.evidenceIds, decisiveRisks: [], mutatedFrom: null,
   });
-  const falsificationResults = pool.map((candidate) => falsifyCandidate(candidate, { evidence: input.sources, gaps: input.gaps, similarities }));
+  const competitorIds = input.competitors.map((item) => item.id);
+  const falsificationResults = pool.map((candidate) => falsifyCandidate(candidate, {
+    evidence: input.sources, gaps: input.gaps, similarities, competitorIds,
+  }));
   const survivors = pool.filter((candidate) => falsificationResults.find((item) => item.candidateId === candidate.id)?.outcome === "survived");
   for (const candidate of pool.filter((item) => falsificationResults.find((result) => result.candidateId === item.id)?.outcome === "rejected")) {
     const result = falsificationResults.find((item) => item.candidateId === candidate.id)!;
@@ -65,7 +72,9 @@ export function runOpportunityPipeline(input: {
     allCandidates.push(...mutated.candidates);
     fingerprints = allCandidates.map(fingerprintCandidate);
     similarities = similarityMatrix(fingerprints, competitorFingerprints);
-    const results = mutated.candidates.map((candidate) => falsifyCandidate(candidate, { evidence: input.sources, gaps: input.gaps, similarities }));
+    const results = mutated.candidates.map((candidate) => falsifyCandidate(candidate, {
+      evidence: input.sources, gaps: input.gaps, similarities, competitorIds,
+    }));
     falsificationResults.push(...results);
     for (const mutation of mutated.mutations) mutation.result = results.find((item) => item.candidateId === mutation.resultCandidateId)?.outcome === "survived" ? "survived" : "rejected";
     survivors.push(...mutated.candidates.filter((candidate) => results.find((item) => item.candidateId === candidate.id)?.outcome === "survived"));
@@ -110,8 +119,10 @@ export function runOpportunityPipeline(input: {
     });
   }
   const budgetUsage: PipelineBudgetUsage = {
-    providerCalls: 0, modelIterations: 0, candidatesGenerated: allCandidates.length, survivorIterations,
+    providerCalls: 0, counterevidenceSearches: 0, agentCalls: 0, modelIterations: 0, estimatedProviderCredits: 0,
+    candidatesGenerated: allCandidates.length, survivorIterations,
     sourceCount: input.sources.length, exhausted: allCandidates.length >= input.limits.maxCandidates || survivorIterations >= input.limits.maxSurvivorIterations,
+    gracefulDegradation: "none",
   };
   return {
     opportunityGraph, graphHoles, assumptions, contradictions, stitchingPatterns, weakSignals, failedAttempts,

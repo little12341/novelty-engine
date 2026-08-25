@@ -1,4 +1,4 @@
-# Novelty Engine V2.1 architecture
+# Novelty Engine V2.1+ platform architecture
 
 ## Design contract
 
@@ -41,7 +41,7 @@ request
        ├─ mine failed attempts and compare historical blockers
        ├─ extract market assumptions and generate contradictions
        ├─ generate only from gaps that clear positive-evidence and independence gates
-       ├─ fingerprint candidates and competitors; reject lookalikes
+       ├─ fingerprint candidates and competitors; penalize lookalikes and test whether the residual gap is actually solved
        ├─ falsify each candidate across 11 risk dimensions
        ├─ mutate/retest only promising `mutate` outcomes, one constraint and once per root
        ├─ build concise evidence lineage
@@ -52,6 +52,12 @@ request
 
 `pipeline.ts` owns request/search/cache orchestration, the active counterevidence search, research coverage, and the stop decision. `opportunity-pipeline.ts` composes the deterministic post-research stages. Individual engines do not perform network calls, persistence, or UI work.
 
+## Intent and deterministic role orchestration
+
+`/find-business`, `/research-market`, `/research-company`, `/find-competitors`, `/find-gaps`, `/falsify`, and `/validate-idea` map to the same `runResearch` path; `/compare-ideas` invokes 2–5 bounded runs behind one shared comparison cap. The role records are deterministic orchestration boundaries, not independent free-form agents: Source Verification normalizes once, then Market Mapping, Competitor Analysis, Complaint/Workaround Mining, Structural Gap Detection, Company Analysis, Adversarial Falsification, and Opportunity Synthesis exchange record IDs over the shared evidence set. Only Adversarial Falsification may request bounded extra search. No role receives repository, deployment, user-data mutation, secret, or arbitrary tool permissions.
+
+Every run records enforced checkpoints for source validation/deduplication, competitor/substitute coverage, residual-gap assessment, candidate mechanism deduplication, falsification, citation validation, and final persistence. A survivor cannot pass the final gate without resolvable evidence lineage and a `survived` falsification outcome.
+
 ## MCP boundary
 
 `app/api/mcp/route.ts` mounts one endpoint and registers five tools through `lib/mcp/tools.ts`:
@@ -61,6 +67,10 @@ request
 - `inspect_competitors({ run_id, limit? })` returns the evidence-carrying competitor map and a list of unsupported fields.
 - `falsify_opportunity({ opportunity, run_id?, candidate_id? })` makes at most four focused counterevidence searches, then reuses the existing falsification engine.
 - `get_research_run({ run_id, include_full? })` returns a concise summary or the preserved full record when explicitly requested.
+- `run_research_mode({ mode, query })` exposes the supported intent modes without duplicating the pipeline.
+- `compare_ideas({ ideas })` compares 2–5 ideas qualitatively under a shared call budget.
+- `export_research_run({ run_id, format })` emits JSON, Markdown, or print-ready data.
+- `compare_research_runs({ baseline_run_id, comparison_run_id })` reports material snapshot deltas.
 
 All input schemas are strict Zod objects with bounded strings and list limits. MCP tool results include both text content and `structuredContent`; the default summaries bound sources and survivors rather than dumping every internal stage. Provider/configuration failures return tool errors with `fabricatedEvidence: false`. Transport-level request, rate, budget, and concurrency denials use HTTP `4xx`/`429` plus JSON-RPC errors and `Retry-After` where applicable.
 
@@ -84,6 +94,10 @@ Authless cost-bearing MCP calls fail closed on Vercel when no distributed store 
 
 Source IDs are stable hashes of normalized URLs. Normalized duplicate URLs merge their search-angle IDs. Exact and high-overlap claim copies at different URLs collapse into one evidence record whose `duplicateSourceUrls` and repetition risk remain visible. Each evidence record includes a source assessment for quality, directness, recency, independence, primary-source status, and overall weight. Community posts use post/repository-level independence groups while publisher material uses publisher-level groups. Engines union evidence IDs rather than copying source claims into new unsupported text. Fixture assertions verify that every referenced ID exists in the source set.
 
+The trust layer also records source family, provenance/control, commercial-bias risk, whether content is a factual observation, company claim, mixed record, or user experience, and prompt-injection screening results. Retrieved text is always untrusted data. Instruction overrides, secret requests, tool instructions, system-style directives, and repository/data mutations are removed before analysis while ordinary complaint facts remain. Provider keys and internal prompts never enter provider queries or evidence output.
+
+Every completed run embeds an immutable `EvidenceSnapshot` containing normalized claims, retrieval timestamps, source assessments, claim statuses, syndication warnings, and missing-family warnings. Later comparisons use the two stored snapshots rather than reinterpreting an old run against today's web.
+
 ## Opportunity Graph
 
 Supported node types include competitors, products, customer segments, complaints, workarounds, jobs-to-be-done, technologies, regulations, pricing models, distribution channels, failed attempts, behaviors, and gaps. A run contains only types supported or inferred by its retrieved evidence; the schema does not manufacture placeholder nodes.
@@ -96,7 +110,7 @@ Candidate generation combines gaps, graph holes, contradictions, stitching patte
 
 Fingerprints compare target customer, job, mechanism, interface, technology, business model, distribution, data source, ownership, workflow position, and differentiator. Similarity is a declared heuristic: 55% token Jaccard overlap plus 45% matching-dimension share. It is useful for duplicate rejection, not a patent or uniqueness search.
 
-Falsification tests demand, competition/incumbent response, economics, distribution, technical feasibility, regulation, behavior, trust, liability, switching cost, and defensibility. The main run spends available search budget on explicit competitor/demand and structural-constraint counterqueries after a provisional gap pass. Each dimension records evidence for and against, a `VERIFIED`/`INFERRED`/`UNKNOWN` status, written rationale, and whether it is decisive. Missing evidence never clears risk. Only a candidate with an evidence-backed core and `mutate` outcome can receive one tightly bounded one-dimension mutation; a failed mutation is terminal.
+Falsification tests demand, competition/incumbent response, economics, distribution, technical feasibility, regulation, behavior, trust, liability, switching cost, and defensibility. The main run spends available search budget on explicit competitor/demand and structural-constraint counterqueries after a provisional gap pass. Each candidate with competitors also receives a structured residual-unmet-demand assessment across repeated unresolved complaints, workaround prevalence, switching behavior, underserved segments, price/performance gaps, trust failures, distribution gaps, and mechanism-level outcome change. Competitor existence validates a possible job rather than vetoing it: similarity lowers differentiation and defensibility when appropriate, while competition becomes decisive only when close substitutes adequately solve the same job for the same user and no meaningful residual gap remains. Each dimension records evidence for and against, a `VERIFIED`/`INFERRED`/`UNKNOWN` status, written rationale, and whether it is decisive. Missing evidence never clears risk. Only a candidate with an evidence-backed core and `mutate` outcome can receive one tightly bounded one-dimension mutation; a failed mutation is terminal.
 
 ## Scoring and confidence
 
@@ -116,6 +130,10 @@ Hard caps are enforced in `researchLimits()` even if environment values are larg
 MCP adds a 16 KiB protocol-body cap, a configurable per-IP/client hourly call limit, global daily/monthly research-call budgets, maximum concurrent research runs, and a four-query hard cap for focused falsification. The direct `/api/research` route shares the same global budgets and semaphore, so it cannot bypass public cost controls.
 
 Exact cache keys hash provider plus canonical query. Similar warm-process queries can reuse results at a token-set threshold of 0.88. Local runs persist immutable and cache JSON files. When Upstash Redis REST credentials are present, exact cache entries, full run-ID records, request counters, global budgets, and the concurrency semaphore are distributed and TTL-bound. Without Redis, local files preserve runs locally while counters remain memory-only; Vercel falls back to warm-instance memory and reports that limitation through health/debug output.
+
+Run history uses a separate long retention from the short query cache. Opt-in memory, feedback, watch configurations, and change reports extend the same local-file/Upstash boundary under typed namespaces; no new database vendor is required. User identifiers are one-way hashed. Memory accepts only bounded research preferences/constraints and never overrides a current-run field. Feedback is stored as `USER_PROVIDED_CONTEXT_NOT_PUBLIC_EVIDENCE`. Watchlists are persisted configurations plus explicit re-check operations—there is no background loop.
+
+JSON, Markdown, and print/PDF-ready exports preserve Research Landscape, Signals, Structural Gaps, Candidate Ideas, Rejected Ideas + Why, Survivors, Evidence Lineage, Decisive Risks, Coverage/Confidence, and 24–72 Hour Validation Tests. Print HTML escapes all retrieved strings.
 
 ## Live and fixture-backed capabilities
 

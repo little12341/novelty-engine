@@ -2,6 +2,36 @@ export const RESEARCH_SCHEMA_VERSION = "2.1.0" as const;
 
 export type ClaimStatus = "VERIFIED" | "INFERRED" | "UNKNOWN";
 
+export type ResearchMode =
+  | "find_business" | "research_market" | "research_company" | "find_competitors"
+  | "find_gaps" | "falsify" | "validate_idea" | "compare_ideas";
+
+export type ResearchRole =
+  | "market_mapping" | "competitor_analysis" | "complaint_workaround_mining"
+  | "structural_gap_detection" | "adversarial_falsification" | "source_verification"
+  | "company_analysis" | "opportunity_synthesis";
+
+export type PipelineCheckpointName =
+  | "source_validation_deduplication" | "competitor_substitute_check"
+  | "residual_gap_test" | "candidate_mechanism_deduplication" | "falsification"
+  | "citation_validation" | "final_persistence";
+
+export interface PipelineCheckpoint {
+  name: PipelineCheckpointName;
+  status: "passed" | "failed" | "not_applicable";
+  completedAt: string;
+  details: string;
+}
+
+export interface ResearchRoleOutput {
+  role: ResearchRole;
+  inputEvidenceIds: string[];
+  outputRecordIds: string[];
+  status: "complete" | "partial" | "skipped";
+  permissions: Array<"read_retrieved_evidence" | "derive_structured_records" | "request_bounded_search">;
+  notes: string[];
+}
+
 export type SearchAngleKind =
   | "direct_competitors"
   | "adjacent_categories"
@@ -98,6 +128,11 @@ export interface Evidence {
   claimFingerprint: string;
   duplicateSourceUrls: string[];
   duplicateSourceTypes: SourceType[];
+  security: {
+    treatedAsUntrustedData: true;
+    promptInjectionDetected: boolean;
+    ignoredDirectiveCategories: string[];
+  };
   sourceAssessment: {
     quality: number;
     directness: number;
@@ -107,6 +142,10 @@ export interface Evidence {
     independenceGroup: string;
     isPrimary: boolean;
     repetitionRisk: "none" | "possible" | "likely";
+    sourceFamily: "competitor" | "user_voice" | "technical" | "institutional" | "failed_attempt" | "commercial" | "general";
+    provenance: "company_controlled" | "government" | "research" | "user_generated" | "independent_secondary" | "marketplace";
+    commercialBiasRisk: "low" | "medium" | "high" | "unknown";
+    observationKind: "factual_market_observation" | "opinion_experience" | "company_claim" | "mixed";
     rationale: string;
   };
 }
@@ -210,6 +249,11 @@ export interface ResearchLimits {
   maxModelIterations: number;
   maxSurvivorIterations: number;
   maxProviderCalls: number;
+  maxCounterevidenceSearches: number;
+  maxAgentCalls: number;
+  maxProviderSpendCredits: number;
+  maxConcurrency: number;
+  maxRetriesPerSearch: number;
   timeoutMs: number;
 }
 
@@ -443,6 +487,37 @@ export interface FalsificationHypothesis {
   decisive: boolean;
 }
 
+export type ResidualDemandCriterion =
+  | "repeated_unresolved_complaints" | "workaround_prevalence" | "switching_behavior"
+  | "underserved_segments" | "price_performance_gaps" | "trust_failures" | "distribution_gaps"
+  | "missing_integrations" | "procurement_friction" | "tolerated_bad_solutions";
+
+export interface ResidualDemandSignalAssessment {
+  criterion: ResidualDemandCriterion;
+  present: boolean | null;
+  claimStatus: ClaimStatus;
+  evidenceIds: string[];
+  rationale: string;
+}
+
+export interface ResidualUnmetDemandAssessment {
+  competitorsPresent: boolean;
+  closestCompetitorSimilarity: number | null;
+  sameJobSameUserSubstitute: boolean;
+  signals: Record<ResidualDemandCriterion, ResidualDemandSignalAssessment>;
+  mechanismMateriallyChangesOutcome: {
+    present: boolean | null;
+    claimStatus: ClaimStatus;
+    evidenceIds: string[];
+    rationale: string;
+  };
+  meaningfulResidualGap: boolean;
+  adequateSameJobSameUserSolution: boolean;
+  conclusion: "meaningful_residual_gap" | "adequately_solved" | "residual_gap_uncertain" | "no_competitor_evaluated";
+  rationale: string;
+  evidenceIds: string[];
+}
+
 export interface FalsificationResult {
   candidateId: string;
   hypotheses: FalsificationHypothesis[];
@@ -453,6 +528,7 @@ export interface FalsificationResult {
   reason: string;
   decisiveRisks: Array<{ dimension: FalsificationDimension; risk: number; status: ClaimStatus; reason: string; evidenceIds: string[] }>;
   unknownCriticalCount: number;
+  residualUnmetDemand: ResidualUnmetDemandAssessment;
 }
 
 export interface OpportunityScoreFactors {
@@ -533,7 +609,10 @@ export interface ResearchCoverage {
   sourceTypeCount: number;
   sourceTypes: SourceType[];
   sourceFamilyCoverage: Record<"competitor" | "user_voice" | "technical" | "institutional" | "failed_attempt" | "commercial", number>;
+  sourceFamilyAttempts: Record<"competitor" | "user_voice" | "technical" | "institutional" | "failed_attempt" | "commercial", "covered" | "attempted_unavailable" | "not_attempted">;
   missingCriticalSourceFamilies: string[];
+  commercialEvidenceThin: boolean;
+  counterevidenceBudgetExhausted: boolean;
   duplicateClaimsCollapsed: number;
   qualityWeightedEvidence: number;
   coverageStatus: "adequate" | "partial" | "insufficient";
@@ -543,7 +622,7 @@ export interface StopDecision {
   status: "proceed" | "partial_research" | "insufficient_evidence";
   canGenerateCandidates: boolean;
   reasons: string[];
-  distinction: "A validated opportunity requires positive demand evidence and a surviving falsification case; merely finding no competitor never qualifies.";
+  distinction: "Competitor existence can validate that a job or market may exist, but it is not a rejection by itself. A validated opportunity requires positive residual-demand evidence and a surviving falsification case; merely finding no competitor never qualifies.";
 }
 
 export interface FinalOutputSchema {
@@ -565,11 +644,45 @@ export interface FinalOutputSchema {
 
 export interface PipelineBudgetUsage {
   providerCalls: number;
+  counterevidenceSearches: number;
+  agentCalls: number;
   modelIterations: number;
+  estimatedProviderCredits: number;
   candidatesGenerated: number;
   survivorIterations: number;
   sourceCount: number;
   exhausted: boolean;
+  gracefulDegradation: "none" | "partial_provider_failure" | "counterevidence_budget_exhausted" | "insufficient_evidence";
+}
+
+export interface EvidenceSnapshot {
+  schemaVersion: "1.0";
+  capturedAt: string;
+  evidence: Evidence[];
+  normalizedClaims: Array<{ evidenceId: string; claim: string; status: ClaimStatus; sourceAssessment: Evidence["sourceAssessment"] }>;
+  duplicateWarnings: Array<{ evidenceId: string; duplicateSourceUrls: string[] }>;
+  missingSourceFamilyWarnings: string[];
+}
+
+export interface CompanyProfile {
+  identity: TraceableClaim;
+  productsServices: TraceableClaim[];
+  targetUsers: TraceableClaim[];
+  apparentPositioning: TraceableClaim;
+  pricingBusinessModel: TraceableClaim;
+  directCompetitorIds: string[];
+  indirectSubstitutes: TraceableClaim[];
+  companyComplaints: TraceableClaim[];
+  categoryComplaints: TraceableClaim[];
+  competitorStrengthsWeaknesses: TraceableClaim[];
+  underservedSegments: TraceableClaim[];
+  threats: TraceableClaim[];
+  differentiationOpportunities: TraceableClaim[];
+  adjacentMarkets: TraceableClaim[];
+  validationActions: ValidationExperiment[];
+  factsFromCompanyControlledSources: string[];
+  thirdPartyEvidenceIds: string[];
+  unknowns: string[];
 }
 
 export interface IdeationContext {
@@ -591,6 +704,7 @@ export interface ResearchResult {
   schemaVersion: typeof RESEARCH_SCHEMA_VERSION;
   id: string;
   query: string;
+  mode: Exclude<ResearchMode, "compare_ideas">;
   canonicalQuery: string;
   status: "complete" | "partial";
   startedAt: string;
@@ -625,6 +739,10 @@ export interface ResearchResult {
   stopDecision: StopDecision;
   output: FinalOutputSchema;
   budgetUsage: PipelineBudgetUsage;
+  roleOutputs: ResearchRoleOutput[];
+  checkpoints: PipelineCheckpoint[];
+  evidenceSnapshot: EvidenceSnapshot;
+  companyProfile: CompanyProfile | null;
   ideationContext: IdeationContext;
   warnings: string[];
 }
@@ -634,4 +752,103 @@ export interface ResearchRequestOptions {
   now?: () => Date;
   bypassCache?: boolean;
   persist?: boolean;
+  mode?: Exclude<ResearchMode, "compare_ideas">;
+  userContext?: ResearchUserContext;
+}
+
+export interface ResearchUserContext {
+  profileId?: string;
+  preferredIndustries?: string[];
+  geography?: string;
+  budget?: string;
+  technicalSkills?: string[];
+  availableCapital?: string;
+  businessModelPreferences?: string[];
+  resources?: string[];
+  previouslyResearchedMarkets?: string[];
+  previouslyRejectedMechanisms?: string[];
+}
+
+export interface ResearchMemoryProfile extends ResearchUserContext {
+  id: string;
+  userId: string;
+  optedIn: boolean;
+  createdAt: string;
+  updatedAt: string;
+  previousRunIds: string[];
+}
+
+export type FeedbackKind =
+  | "useful" | "wrong" | "irrelevant" | "already_known" | "missing_competitor"
+  | "competitor_does_not_solve_job" | "opportunity_already_exists" | "source_is_weak"
+  | "validation_result_success" | "validation_result_failure";
+
+export interface ResearchFeedback {
+  id: string;
+  runId: string;
+  userId: string | null;
+  kind: FeedbackKind;
+  targetId: string | null;
+  note: string | null;
+  createdAt: string;
+  evidenceStatus: "USER_PROVIDED_CONTEXT_NOT_PUBLIC_EVIDENCE";
+}
+
+export interface WatchlistConfig {
+  id: string;
+  userId: string | null;
+  label: string;
+  query: string;
+  mode: "opportunity" | "company" | "market";
+  baselineRunId: string;
+  candidateId: string | null;
+  signals: Array<"competitors" | "products_features" | "pricing" | "funding_hiring" | "regulation" | "patents_research" | "complaints" | "substitutes" | "platform_policy" | "demand">;
+  createdAt: string;
+  lastCheckedAt: string | null;
+  enabled: boolean;
+}
+
+export interface MaterialChange {
+  category: WatchlistConfig["signals"][number] | "coverage";
+  severity: "low" | "medium" | "high";
+  summary: string;
+  beforeEvidenceIds: string[];
+  afterEvidenceIds: string[];
+  statusBefore: ClaimStatus;
+  statusAfter: ClaimStatus;
+}
+
+export interface ChangeDetectionResult {
+  baselineRunId: string;
+  comparisonRunId: string;
+  comparedAt: string;
+  materialChanges: MaterialChange[];
+  ignoredTrivialChanges: number;
+  summary: string;
+}
+
+export interface IdeaComparisonDimension {
+  name: "evidence_strength" | "demand" | "residual_gap" | "differentiation" | "feasibility" | "economics" | "distribution" | "switching_cost" | "trust" | "regulation_liability" | "defensibility" | "incumbent_response" | "decisive_risks";
+  assessment: string;
+  status: ClaimStatus;
+  evidenceIds: string[];
+}
+
+export interface ComparedIdea {
+  idea: string;
+  runId: string;
+  dimensions: IdeaComparisonDimension[];
+  recommendation: "advance" | "validate_first" | "hold" | "reject";
+  rationale: string;
+}
+
+export interface IdeaComparisonResult {
+  schemaVersion: typeof RESEARCH_SCHEMA_VERSION;
+  mode: "compare_ideas";
+  id: string;
+  createdAt: string;
+  ideas: ComparedIdea[];
+  recommendation: string;
+  runIds: string[];
+  budgetUsage: PipelineBudgetUsage;
 }

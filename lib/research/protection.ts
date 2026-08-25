@@ -6,13 +6,16 @@ type ProtectionState = {
   hourly: Map<string, Counter>;
   daily: Map<string, Counter>;
   monthly: Map<string, Counter>;
+  userDaily: Map<string, Counter>;
+  userMonthly: Map<string, Counter>;
   concurrent: number;
 };
 
 const globalState = globalThis as typeof globalThis & { __noveltyProtection?: ProtectionState };
 const state = globalState.__noveltyProtection ??= {
-  hourly: new Map(), daily: new Map(), monthly: new Map(), concurrent: 0,
+  hourly: new Map(), daily: new Map(), monthly: new Map(), userDaily: new Map(), userMonthly: new Map(), concurrent: 0,
 };
+state.userDaily ??= new Map(); state.userMonthly ??= new Map();
 
 const boundedInt = (value: string | undefined, fallback: number, min: number, max: number) => {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -22,6 +25,8 @@ const boundedInt = (value: string | undefined, fallback: number, min: number, ma
 export function protectionConfiguration(env: NodeJS.ProcessEnv = process.env) {
   return {
     perClientPerHour: boundedInt(env.MCP_RATE_LIMIT_PER_HOUR ?? env.RESEARCH_RATE_LIMIT_PER_HOUR, 20, 1, 200),
+    perClientDailyResearch: boundedInt(env.RESEARCH_PER_USER_DAILY_LIMIT, 10, 1, 1_000),
+    perClientMonthlyResearch: boundedInt(env.RESEARCH_PER_USER_MONTHLY_LIMIT, 100, 1, 10_000),
     globalDailyResearch: boundedInt(env.MCP_GLOBAL_DAILY_RESEARCH_LIMIT, 50, 1, 10_000),
     globalMonthlyResearch: boundedInt(env.MCP_GLOBAL_MONTHLY_RESEARCH_LIMIT, 500, 1, 100_000),
     maxConcurrentResearch: boundedInt(env.MCP_MAX_CONCURRENT_RESEARCH, 2, 1, 20),
@@ -29,7 +34,7 @@ export function protectionConfiguration(env: NodeJS.ProcessEnv = process.env) {
   };
 }
 
-export type ProtectionDenial = "rate_limit" | "daily_budget" | "monthly_budget" | "concurrency";
+export type ProtectionDenial = "rate_limit" | "user_daily_budget" | "user_monthly_budget" | "daily_budget" | "monthly_budget" | "concurrency";
 export type ProtectionPermit = {
   allowed: true;
   remaining: number;
@@ -47,6 +52,10 @@ local hourly = tonumber(redis.call('GET', KEYS[1]) or '0')
 if hourly >= tonumber(ARGV[1]) then return {'rate_limit', redis.call('TTL', KEYS[1])} end
 local costly = ARGV[9] == '1'
 if costly then
+  local userDaily = tonumber(redis.call('GET', KEYS[5]) or '0')
+  if userDaily >= tonumber(ARGV[10]) then return {'user_daily_budget', redis.call('TTL', KEYS[5])} end
+  local userMonthly = tonumber(redis.call('GET', KEYS[6]) or '0')
+  if userMonthly >= tonumber(ARGV[11]) then return {'user_monthly_budget', redis.call('TTL', KEYS[6])} end
   local daily = tonumber(redis.call('GET', KEYS[2]) or '0')
   if daily >= tonumber(ARGV[2]) then return {'daily_budget', redis.call('TTL', KEYS[2])} end
   local monthly = tonumber(redis.call('GET', KEYS[3]) or '0')
@@ -57,6 +66,8 @@ end
 local h = redis.call('INCR', KEYS[1])
 if h == 1 then redis.call('EXPIRE', KEYS[1], ARGV[5]) end
 if costly then
+  local ud = redis.call('INCR', KEYS[5]); if ud == 1 then redis.call('EXPIRE', KEYS[5], ARGV[6]) end
+  local um = redis.call('INCR', KEYS[6]); if um == 1 then redis.call('EXPIRE', KEYS[6], ARGV[7]) end
   local d = redis.call('INCR', KEYS[2]); if d == 1 then redis.call('EXPIRE', KEYS[2], ARGV[6]) end
   local m = redis.call('INCR', KEYS[3]); if m == 1 then redis.call('EXPIRE', KEYS[3], ARGV[7]) end
   local c = redis.call('INCR', KEYS[4]); if c == 1 then redis.call('EXPIRE', KEYS[4], ARGV[8]) end
@@ -113,12 +124,15 @@ export async function acquireProtection(identifier: string, costly: boolean, now
       `novelty:budget:day:${window.dayKey}`,
       `novelty:budget:month:${window.monthKey}`,
       "novelty:concurrent:research",
+      `novelty:budget:user-day:${window.dayKey}:${identity}`,
+      `novelty:budget:user-month:${window.monthKey}:${identity}`,
     ];
     try {
       const raw = await redis.eval(redisAcquireScript, keys, [
         config.perClientPerHour, config.globalDailyResearch, config.globalMonthlyResearch,
         config.maxConcurrentResearch, window.hourSeconds, window.daySeconds, window.monthSeconds,
         config.concurrencyLeaseSeconds, costly ? 1 : 0,
+        config.perClientDailyResearch, config.perClientMonthlyResearch,
       ]) as [string, number];
       if (raw[0] !== "ok") {
         return { allowed: false, reason: raw[0] as ProtectionDenial, retryAfterSeconds: Math.max(1, Number(raw[1]) || 1), backend: "upstash-redis-rest" };
@@ -138,10 +152,14 @@ export async function acquireProtection(identifier: string, costly: boolean, now
   if (!hourly.allowed) return { allowed: false, reason: "rate_limit", retryAfterSeconds: window.hourSeconds, backend: "memory" };
   if (costly) {
     if (state.concurrent >= config.maxConcurrentResearch) return { allowed: false, reason: "concurrency", retryAfterSeconds: 30, backend: "memory" };
+    if (!available(state.userDaily, `${window.dayKey}:${identity}`, config.perClientDailyResearch, now)) return { allowed: false, reason: "user_daily_budget", retryAfterSeconds: window.daySeconds, backend: "memory" };
+    if (!available(state.userMonthly, `${window.monthKey}:${identity}`, config.perClientMonthlyResearch, now)) return { allowed: false, reason: "user_monthly_budget", retryAfterSeconds: window.monthSeconds, backend: "memory" };
     if (!available(state.daily, window.dayKey, config.globalDailyResearch, now)) return { allowed: false, reason: "daily_budget", retryAfterSeconds: window.daySeconds, backend: "memory" };
     if (!available(state.monthly, window.monthKey, config.globalMonthlyResearch, now)) return { allowed: false, reason: "monthly_budget", retryAfterSeconds: window.monthSeconds, backend: "memory" };
     consume(state.daily, window.dayKey, config.globalDailyResearch, window.dayEnd, now);
     consume(state.monthly, window.monthKey, config.globalMonthlyResearch, window.monthEnd, now);
+    consume(state.userDaily, `${window.dayKey}:${identity}`, config.perClientDailyResearch, window.dayEnd, now);
+    consume(state.userMonthly, `${window.monthKey}:${identity}`, config.perClientMonthlyResearch, window.monthEnd, now);
     state.concurrent += 1;
   }
   let released = false;
@@ -154,5 +172,5 @@ export async function acquireProtection(identifier: string, costly: boolean, now
 }
 
 export function clearMemoryProtection(): void {
-  state.hourly.clear(); state.daily.clear(); state.monthly.clear(); state.concurrent = 0;
+  state.hourly.clear(); state.daily.clear(); state.monthly.clear(); state.userDaily.clear(); state.userMonthly.clear(); state.concurrent = 0;
 }

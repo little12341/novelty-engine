@@ -122,6 +122,67 @@ test("falsification separates evidence for and against and penalizes unknown ris
   assert.ok(falsification.survivalScore <= 100);
 });
 
+test("crowded competition does not reject an evidenced residual structural gap", () => {
+  const closeCompetitor = {
+    leftId: baseCandidate.id, rightId: "competitor_close", score: .96,
+    matchingDimensions: ["targetCustomer", "jobToBeDone", "mechanism", "workflowPosition"],
+    explanation: "Test fixture close substitute.", heuristic: true as const,
+  };
+  const falsification = falsifyCandidate(baseCandidate, {
+    evidence: sources, gaps, similarities: [closeCompetitor], competitorIds: ["competitor_close"],
+  });
+  const competition = falsification.hypotheses.find((item) => item.dimension === "competition")!;
+  assert.equal(falsification.residualUnmetDemand.competitorsPresent, true);
+  assert.equal(falsification.residualUnmetDemand.sameJobSameUserSubstitute, true);
+  assert.equal(falsification.residualUnmetDemand.meaningfulResidualGap, true);
+  assert.equal(falsification.residualUnmetDemand.adequateSameJobSameUserSolution, false);
+  assert.equal(falsification.residualUnmetDemand.conclusion, "meaningful_residual_gap");
+  assert.equal(competition.decisive, false);
+  assert.notEqual(falsification.outcome, "rejected");
+});
+
+test("close competition lowers differentiation and defensibility without becoming an automatic veto", () => {
+  const comparison = (id: string, score: number) => ({
+    leftId: baseCandidate.id, rightId: id, score,
+    matchingDimensions: ["targetCustomer", "jobToBeDone"],
+    explanation: "Test fixture similarity.", heuristic: true as const,
+  });
+  const farSimilarity = [comparison("competitor_far", .1)];
+  const closeSimilarity = [comparison("competitor_close", .9)];
+  const farFalsification = falsifyCandidate(baseCandidate, { evidence: sources, gaps, similarities: farSimilarity, competitorIds: ["competitor_far"] });
+  const closeFalsification = falsifyCandidate(baseCandidate, { evidence: sources, gaps, similarities: closeSimilarity, competitorIds: ["competitor_close"] });
+  const farScore = scoreOpportunity(baseCandidate, { gaps, holes, stitching, signals, similarities: farSimilarity, falsification: farFalsification, evidence: sources, competitorIds: ["competitor_far"] });
+  const closeScore = scoreOpportunity(baseCandidate, { gaps, holes, stitching, signals, similarities: closeSimilarity, falsification: closeFalsification, evidence: sources, competitorIds: ["competitor_close"] });
+  assert.ok(closeScore.factors.noveltyDistance < farScore.factors.noveltyDistance);
+  assert.ok(closeScore.factors.defensibility < farScore.factors.defensibility);
+  assert.notEqual(closeFalsification.outcome, "rejected");
+});
+
+test("competition is decisive only when close substitutes adequately solve the same job and user without a residual gap", () => {
+  const adequateEvidence = normalizeResults([{ angle, results: [
+    { url: "https://adequate-one.example/review", title: "Complete solution for small businesses", snippet: "Independent customers report it fully solves the same job for the same user." },
+    { url: "https://adequate-two.example/comparison", title: "Requirements comparison", snippet: "The close substitute meets all requirements for the same customer and leaves no meaningful gap." },
+  ] }], "2026-08-24T12:00:00.000Z", 10);
+  const solvedGap = {
+    ...gaps[0], supportingEvidenceIds: [], counterEvidenceIds: adequateEvidence.map((item) => item.id),
+    currentWorkaround: null, affectedSegment: null, whySolutionsFail: "No unresolved failure was retrieved.",
+  };
+  const candidate = { ...baseCandidate, sourceGapIds: [solvedGap.id], evidenceIds: [] };
+  const exactSubstitute = {
+    leftId: candidate.id, rightId: "competitor_adequate", score: .96,
+    matchingDimensions: ["targetCustomer", "jobToBeDone", "mechanism", "workflowPosition"],
+    explanation: "Test fixture adequate substitute.", heuristic: true as const,
+  };
+  const falsification = falsifyCandidate(candidate, {
+    evidence: adequateEvidence, gaps: [solvedGap], similarities: [exactSubstitute], competitorIds: ["competitor_adequate"],
+  });
+  const competition = falsification.hypotheses.find((item) => item.dimension === "competition")!;
+  assert.equal(falsification.residualUnmetDemand.adequateSameJobSameUserSolution, true);
+  assert.equal(falsification.residualUnmetDemand.conclusion, "adequately_solved");
+  assert.equal(competition.decisive, true);
+  assert.equal(falsification.outcome, "rejected");
+});
+
 test("survivor loop respects iteration, candidate, and requested-count budgets", () => {
   const limits = { ...researchLimits({ NODE_ENV: "test" }), maxCandidates: 18, maxSurvivorIterations: 1 };
   const output = runOpportunityPipeline({ query: "Find 4 opportunities for small field service teams", sources, competitors, complaints, segments, gaps, limits, now: new Date("2026-08-24") });

@@ -35,12 +35,7 @@ for (const item of cases) test(`regression: ${item.id} clears the disciplined pi
   assert.ok(result.coverage.sourceFamilyCoverage.user_voice >= 2);
   assert.ok(result.gaps.some((gap) => gap.confidenceLabel !== "speculative opportunity"));
   assert.ok(result.candidates.length > 0);
-  if (item.id === "crowded_consumer" && result.finalOpportunities.length === 0) {
-    assert.ok(result.rejectedIdeas.length > 0);
-    assert.ok(result.warnings.some((warning) => /no candidate survived/i.test(warning)));
-  } else {
-    assert.ok(result.finalOpportunities.length > 0);
-  }
+  assert.ok(result.finalOpportunities.length > 0, "an established market with an evidenced structural gap must not be rejected merely because competitors exist");
   assert.ok(result.rejectedIdeas.length > 0, "selection pressure should leave an auditable rejected set");
   assert.deepEqual(Object.keys(result.output), [
     "researchLandscape", "signals", "structuralGaps", "candidateIdeas", "rejectedIdeas", "survivors",
@@ -54,6 +49,17 @@ for (const item of cases) test(`regression: ${item.id} clears the disciplined pi
     assert.ok(survivor.score.writtenReasoning.length > 80);
     assert.match(survivor.validationExperiment.estimatedTime, /24–72 hours/);
     assert.ok(survivor.lineage.steps.every((step) => ["VERIFIED", "INFERRED", "UNKNOWN"].includes(step.claimStatus)));
+    assert.equal(survivor.falsification.residualUnmetDemand.competitorsPresent, true);
+    assert.deepEqual(Object.keys(survivor.falsification.residualUnmetDemand.signals), [
+      "repeated_unresolved_complaints", "workaround_prevalence", "switching_behavior", "underserved_segments",
+      "price_performance_gaps", "trust_failures", "distribution_gaps", "missing_integrations", "procurement_friction", "tolerated_bad_solutions",
+    ]);
+  }
+  if (item.id === "crowded_consumer") {
+    assert.ok(result.finalOpportunities.some((survivor) => survivor.falsification.residualUnmetDemand.conclusion === "meaningful_residual_gap"));
+    assert.ok(result.finalOpportunities.some((survivor) => survivor.falsification.residualUnmetDemand.signals.workaround_prevalence.present));
+    assert.ok(result.finalOpportunities.some((survivor) => survivor.falsification.residualUnmetDemand.signals.switching_behavior.present));
+    assert.ok(result.finalOpportunities.some((survivor) => survivor.falsification.residualUnmetDemand.mechanismMateriallyChangesOutcome.present));
   }
   if (item.id === "regulated_market") {
     assert.ok(result.coverage.sourceFamilyCoverage.institutional > 0);

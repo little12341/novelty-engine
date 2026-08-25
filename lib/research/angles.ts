@@ -43,8 +43,8 @@ export function deriveFalsificationAngles(query: string, candidateSummaries: str
   const angles: Array<{ kind: SearchAngleKind; suffix: string; purpose: string }> = [
     {
       kind: "active_falsification_competition",
-      suffix: `closest competitor substitute already exists failed demand would not pay switching cost ${focus}`,
-      purpose: "Active counterevidence: adequate substitutes, failed demand, incumbent response, switching cost, and distribution barriers",
+      suffix: `closest competitor same user same job adequately solved unresolved complaints workaround switched cancelled underserved too expensive unreliable trust unavailable ${focus}`,
+      purpose: "Active competition test: adequate same-job substitutes versus residual complaints, workarounds, switching, underserved segments, price/performance, trust, and distribution gaps",
     },
     {
       kind: "active_falsification_constraints",

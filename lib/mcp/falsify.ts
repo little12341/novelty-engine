@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { falsifyCandidate } from "../research/falsification.ts";
+import { extractCompetitors } from "../research/analyze.ts";
+import { fingerprintCandidate, fingerprintCompetitor, similarityMatrix } from "../research/fingerprints.ts";
 import { normalizeResults } from "../research/normalize.ts";
 import { getConfiguredProvider } from "../research/providers.ts";
 import { getResearchResultById } from "../research/store.ts";
@@ -9,8 +11,8 @@ import type { CandidateGap, IdeaCandidate, SearchAngle } from "../research/types
 function focusedAngles(opportunity: string, limit: number): SearchAngle[] {
   const base = opportunity.replace(/\s+/g, " ").trim().slice(0, 700);
   const definitions: Array<Pick<SearchAngle, "kind" | "purpose"> & { suffix: string }> = [
-    { kind: "direct_competitors", suffix: "existing products competitors already solve alternative", purpose: "Counterevidence from direct competitors and adequate existing solutions" },
-    { kind: "customer_complaints", suffix: "failed product customer rejection low demand would not pay", purpose: "Counterevidence about demand, adoption, and willingness to pay" },
+    { kind: "direct_competitors", suffix: "existing products closest substitutes same user same job adequately solved features pricing", purpose: "Counterevidence that a close substitute adequately solves the same job for the same user" },
+    { kind: "customer_complaints", suffix: "unresolved complaints workaround switched cancelled underserved too expensive unreliable trust unavailable", purpose: "Residual unmet demand despite competitors: complaints, workarounds, switching, segments, price/performance, trust, and distribution" },
     { kind: "substitutes", suffix: "startup shut down failure economics acquisition support cost", purpose: "Counterevidence from failed attempts and unfavorable economics" },
     { kind: "change_signals", suffix: "regulation liability privacy security technical limitation", purpose: "Counterevidence from regulation, liability, trust, and feasibility constraints" },
   ];
@@ -70,7 +72,12 @@ export async function activelyFalsifyOpportunity(input: { opportunity: string; r
   };
   const gaps: CandidateGap[] = (sourceGaps.length ? sourceGaps : [externalGap]).map((gap) => ({ ...gap, counterEvidenceIds: [...new Set([...gap.counterEvidenceIds, ...newEvidence.map((item) => item.id)])] }));
   const evidence = [...(prior?.sources ?? []), ...newEvidence.filter((item) => !prior?.sources.some((existing) => existing.id === item.id))];
-  const result = falsifyCandidate(selected, { evidence, gaps, similarities: prior?.similarities ?? [] });
+  const competitorMap = [...(prior?.competitors ?? []), ...extractCompetitors(newEvidence)].filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index);
+  const competitorFingerprints = competitorMap.map(fingerprintCompetitor);
+  const similarities = similarityMatrix([fingerprintCandidate(selected)], competitorFingerprints);
+  const result = falsifyCandidate(selected, {
+    evidence, gaps, similarities, competitorIds: competitorMap.map((item) => item.id),
+  });
   const citedIds = new Set(result.hypotheses.flatMap((item) => [...item.supportingEvidenceIds, ...item.counterEvidenceIds]));
   return {
     candidate: { id: selected.id, name: selected.name, summary: selected.summary, targetCustomer: selected.targetCustomer, mechanism: selected.mechanism },

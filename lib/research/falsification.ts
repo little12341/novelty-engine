@@ -1,9 +1,13 @@
-import type { CandidateGap, Evidence, FalsificationDimension, FalsificationHypothesis, FalsificationResult, IdeaCandidate, SimilarityResult } from "./types.ts";
+import type {
+  CandidateGap, Evidence, FalsificationDimension, FalsificationHypothesis, FalsificationResult,
+  IdeaCandidate, ResidualDemandCriterion, ResidualDemandSignalAssessment,
+  ResidualUnmetDemandAssessment, SimilarityResult,
+} from "./types.ts";
 import { classifyClaim, independentEvidenceCount } from "./quality.ts";
 
 const HYPOTHESES: Array<[FalsificationDimension, string]> = [
   ["demand", "The reported pain is not frequent or severe enough to change behavior."],
-  ["competition", "An existing product already solves the job well enough."],
+  ["competition", "A close substitute already solves the same job for the same user with no meaningful residual gap."],
   ["economics", "The avoided cost is lower than acquisition, support, and delivery cost."],
   ["distribution", "The target user cannot be reached through an affordable trusted channel."],
   ["technical_feasibility", "The core mechanism is unreliable at the required cost or accuracy."],
@@ -15,14 +19,134 @@ const HYPOTHESES: Array<[FalsificationDimension, string]> = [
   ["defensibility", "Incumbents can copy or bundle the mechanism before it compounds."],
 ];
 
+const RESIDUAL_PATTERNS: Record<Exclude<ResidualDemandCriterion, "repeated_unresolved_complaints" | "underserved_segments">, RegExp> = {
+  workaround_prevalence: /workaround|spreadsheet|paper|copy and paste|manual(?:ly)?|by hand|built (?:our|my) own|freezer tape|text messages?/i,
+  switching_behavior: /switched|switching|went back|stopped (?:using|tracking)|abandon(?:ed|ing)?|cancel(?:led|ed)|churn|migrat(?:ed|ing)|replaced/i,
+  price_performance_gaps: /too expensive|overpriced|not worth|unreliable|fails?|broken|limited|slow|inaccurate|hard to use|too (?:much|many)|poor performance|manual entry/i,
+  trust_failures: /don.?t trust|trust failure|privacy concern|security concern|data loss|surveillance|poor support|no response/i,
+  distribution_gaps: /not available|only enterprise|minimum seats?|not in (?:my|our) (?:country|region)|rural|remote area|procurement barrier|no trusted channel/i,
+  missing_integrations: /missing integration|no api|doesn.?t integrate|does not integrate|copy and paste|re-enter|manual export|sync fails?/i,
+  procurement_friction: /procurement|rfp|security review|legal review|vendor approval|sales cycle|contact sales|minimum seats?|enterprise only/i,
+  tolerated_bad_solutions: /put up with|live with|still use|keep using|no better option|went back|paper|spreadsheet|manual rotation|tolerat/i,
+};
+
+const ADEQUATE_SOLUTION = /adequately solves?|fully solves?|complete solution|same job for the same (?:user|customer)|meets? (?:all|the) (?:needs|requirements)|no meaningful (?:gap|complaint)|eliminates? (?:the )?(?:problem|workaround)/i;
+
+function unique(ids: string[]): string[] {
+  return [...new Set(ids)];
+}
+
+function assessResidualUnmetDemand(candidate: IdeaCandidate, gap: CandidateGap | undefined, input: {
+  evidence: Evidence[]; similarities: SimilarityResult[]; competitorIds?: string[];
+}): ResidualUnmetDemandAssessment {
+  const explicitCompetitorIds = new Set(input.competitorIds ?? []);
+  const comparisons = input.similarities.filter((item) => {
+    if (item.leftId !== candidate.id && item.rightId !== candidate.id) return false;
+    if (explicitCompetitorIds.size === 0) return true;
+    const otherId = item.leftId === candidate.id ? item.rightId : item.leftId;
+    return explicitCompetitorIds.has(otherId);
+  });
+  const closest = comparisons[0] ?? null;
+  const competitorsPresent = explicitCompetitorIds.size > 0 || comparisons.length > 0;
+  const sameJobSameUserSubstitute = comparisons.some((item) => {
+    const dimensions = new Set(item.matchingDimensions);
+    return item.score >= .72 && dimensions.has("targetCustomer") && dimensions.has("jobToBeDone");
+  });
+  const relevantIds = unique([...(gap?.supportingEvidenceIds ?? []), ...(gap?.counterEvidenceIds ?? []), ...candidate.evidenceIds]);
+  const relevantEvidence = input.evidence.filter((item) => relevantIds.includes(item.id));
+  const residualEvidence = relevantEvidence.filter((item) => !ADEQUATE_SOLUTION.test(`${item.title} ${item.summary}`));
+  const matchingIds = (pattern: RegExp) => residualEvidence.filter((item) => pattern.test(`${item.title} ${item.summary}`)).map((item) => item.id);
+  const signal = (criterion: ResidualDemandCriterion, ids: string[], rationale: string): ResidualDemandSignalAssessment => {
+    const evidenceIds = unique(ids);
+    return {
+      criterion, present: evidenceIds.length ? true : null,
+      claimStatus: evidenceIds.length ? classifyClaim(evidenceIds, input.evidence) : "UNKNOWN",
+      evidenceIds, rationale: evidenceIds.length ? rationale : `No retrieved evidence directly established ${criterion.replaceAll("_", " ")}; it remains unknown rather than false.`,
+    };
+  };
+  const repeatedIds = independentEvidenceCount(gap?.supportingEvidenceIds ?? [], input.evidence) >= 2 ? gap?.supportingEvidenceIds ?? [] : [];
+  const workaroundIds = unique([
+    ...(gap?.currentWorkaround ? gap.supportingEvidenceIds : []),
+    ...matchingIds(RESIDUAL_PATTERNS.workaround_prevalence),
+  ]);
+  const segmentIds = gap?.affectedSegment ? gap.supportingEvidenceIds : [];
+  const pricePerformanceIds = unique([
+    ...(["pricing", "integration", "usability"].includes(gap?.gapType ?? "") ? gap?.supportingEvidenceIds ?? [] : []),
+    ...matchingIds(RESIDUAL_PATTERNS.price_performance_gaps),
+  ]);
+  const trustIds = unique([
+    ...(gap?.gapType === "trust" ? gap.supportingEvidenceIds : []),
+    ...matchingIds(RESIDUAL_PATTERNS.trust_failures),
+  ]);
+  const distributionIds = unique([
+    ...(gap?.gapType === "distribution" ? gap.supportingEvidenceIds : []),
+    ...matchingIds(RESIDUAL_PATTERNS.distribution_gaps),
+  ]);
+  const signals: ResidualUnmetDemandAssessment["signals"] = {
+    repeated_unresolved_complaints: signal("repeated_unresolved_complaints", repeatedIds, "At least two independent sources repeat the unresolved complaint represented by the source gap."),
+    workaround_prevalence: signal("workaround_prevalence", workaroundIds, "Retrieved users describe continuing manual or improvised workarounds despite available products."),
+    switching_behavior: signal("switching_behavior", matchingIds(RESIDUAL_PATTERNS.switching_behavior), "Retrieved users describe abandoning, cancelling, reverting from, or switching existing solutions."),
+    underserved_segments: signal("underserved_segments", segmentIds, `The source gap identifies a constrained segment${gap?.affectedSegment ? `: ${gap.affectedSegment}` : ""}.`),
+    price_performance_gaps: signal("price_performance_gaps", pricePerformanceIds, "Retrieved evidence describes a price, reliability, usability, integration, or performance shortfall."),
+    trust_failures: signal("trust_failures", trustIds, "Retrieved evidence describes trust, privacy, security, data-loss, or support failures."),
+    distribution_gaps: signal("distribution_gaps", distributionIds, "Retrieved evidence describes availability, packaging, regional, procurement, or channel exclusion."),
+    missing_integrations: signal("missing_integrations", matchingIds(RESIDUAL_PATTERNS.missing_integrations), "Retrieved evidence describes missing integrations, absent APIs, re-entry, exports, or failed synchronization."),
+    procurement_friction: signal("procurement_friction", matchingIds(RESIDUAL_PATTERNS.procurement_friction), "Retrieved evidence describes procurement, review, packaging, or sales-cycle friction."),
+    tolerated_bad_solutions: signal("tolerated_bad_solutions", matchingIds(RESIDUAL_PATTERNS.tolerated_bad_solutions), "Retrieved evidence shows customers continuing to tolerate manual or poor solutions despite available products."),
+  };
+
+  const proposal = `${candidate.mechanism} ${candidate.interface} ${candidate.technology ?? ""} ${candidate.businessModel ?? ""} ${candidate.distribution ?? ""} ${candidate.workflowPosition} ${candidate.differentiator}`;
+  const issue = `${gap?.gapType ?? ""} ${gap?.whySolutionsFail ?? ""} ${gap?.currentWorkaround ?? ""}`;
+  const mechanismPatterns: RegExp[] = [];
+  if (/integration|fragment|multiple tools|copy|re-enter|sync/i.test(issue)) mechanismPatterns.push(/bridge|connector|integrat|interoperab|sync|event|between existing tools|no new system of record/i);
+  if (/manual|usability|hard to use|entry|paper|spreadsheet|product/i.test(issue)) mechanismPatterns.push(/ambient|passive|automat|exception|outcome|zero.entry|removes manual|asks for attention only/i);
+  if (/pricing|expensive|cost/i.test(issue)) mechanismPatterns.push(/outcome|usage|pooled|shared capacity|per verified|instead of another seat/i);
+  if (/trust|privacy|security|support/i.test(issue)) mechanismPatterns.push(/customer.control|local.first|signed|proof|receipt|reversible|escrow|verifi/i);
+  if (/distribution|available|enterprise|region|segment/i.test(issue)) mechanismPatterns.push(/pooled|shared service|workflow partner|direct to the affected segment|cohort/i);
+  const materialChange = mechanismPatterns.length ? mechanismPatterns.some((pattern) => pattern.test(proposal)) : null;
+  const mechanismEvidenceIds = materialChange === null ? [] : gap?.supportingEvidenceIds ?? [];
+  const mechanismMateriallyChangesOutcome = {
+    present: materialChange,
+    claimStatus: materialChange === null ? "UNKNOWN" as const : "INFERRED" as const,
+    evidenceIds: mechanismEvidenceIds,
+    rationale: materialChange === null
+      ? "The retrieved gap does not expose a specific incumbent failure that can be compared with the proposed mechanism."
+      : materialChange
+        ? "The proposed mechanism directly changes the workflow, cost, access, or trust condition implicated by the residual-gap evidence; this is an inferred causal hypothesis, not proof of performance."
+        : "The proposal changes packaging or presentation but does not clearly alter the failure mode identified in the residual-gap evidence.",
+  };
+  const presentSignals = Object.values(signals).filter((item) => item.present).length;
+  const meaningfulResidualGap = signals.repeated_unresolved_complaints.present === true || presentSignals >= 2;
+  const adequateIds = input.evidence.filter((item) => relevantIds.includes(item.id) && ADEQUATE_SOLUTION.test(`${item.title} ${item.summary}`)).map((item) => item.id);
+  const adequateSameJobSameUserSolution = sameJobSameUserSubstitute && !meaningfulResidualGap
+    && independentEvidenceCount(adequateIds, input.evidence) >= 2;
+  const conclusion: ResidualUnmetDemandAssessment["conclusion"] = !competitorsPresent ? "no_competitor_evaluated"
+    : adequateSameJobSameUserSolution ? "adequately_solved"
+      : meaningfulResidualGap && materialChange === true ? "meaningful_residual_gap" : "residual_gap_uncertain";
+  const evidenceIds = unique([...Object.values(signals).flatMap((item) => item.evidenceIds), ...adequateIds]);
+  const rationale = !competitorsPresent
+    ? "No competitor fingerprint was available, so competition remains unknown and receives no whitespace credit."
+    : adequateSameJobSameUserSolution
+      ? "A close substitute matches the same user and job, multiple independent sources indicate adequate resolution, and no meaningful residual-demand signal was retrieved."
+      : meaningfulResidualGap && materialChange === true
+        ? "Competitors validate that the job may exist, while unresolved demand signals and a causally different mechanism preserve a structural-gap hypothesis."
+        : meaningfulResidualGap
+          ? "Residual unmet demand is evidenced, but the proposed mechanism does not yet show a material change to the incumbent failure mode."
+          : "Competitors exist, but the retrieved evidence does not yet establish whether a meaningful residual gap remains; existence alone is not a rejection condition.";
+  return {
+    competitorsPresent, closestCompetitorSimilarity: closest?.score ?? null, sameJobSameUserSubstitute,
+    signals, mechanismMateriallyChangesOutcome, meaningfulResidualGap, adequateSameJobSameUserSolution,
+    conclusion, rationale, evidenceIds,
+  };
+}
+
 export function falsifyCandidate(candidate: IdeaCandidate, input: {
-  evidence: Evidence[]; gaps: CandidateGap[]; similarities: SimilarityResult[];
+  evidence: Evidence[]; gaps: CandidateGap[]; similarities: SimilarityResult[]; competitorIds?: string[];
 }): FalsificationResult {
   const gap = input.gaps.find((item) => candidate.sourceGapIds.includes(item.id));
-  const candidateSimilarity = input.similarities.filter((item) => item.leftId === candidate.id || item.rightId === candidate.id);
-  const maxSimilarity = candidateSimilarity.reduce((max, item) => Math.max(max, item.score), 0);
+  const residualUnmetDemand = assessResidualUnmetDemand(candidate, gap, input);
+  const maxSimilarity = residualUnmetDemand.closestCompetitorSimilarity ?? 0;
   const positiveIds = candidate.evidenceIds;
-  const counterIds = gap?.counterEvidenceIds ?? [];
   const independent = independentEvidenceCount(positiveIds, input.evidence);
   const activeCounterevidence = input.evidence.filter((item) => item.searchAngleIds.some((id) => id.startsWith("falsify_")));
   const idsMatching = (pattern: RegExp) => activeCounterevidence.filter((item) => pattern.test(`${item.title} ${item.summary}`)).map((item) => item.id);
@@ -37,8 +161,16 @@ export function falsifyCandidate(candidate: IdeaCandidate, input: {
       counterEvidenceIds.push(...idsMatching(/low demand|would not pay|not worth|low adoption|cancel|abandon|shut down|failed/i));
     }
     if (dimension === "competition") {
-      risk = Math.round(maxSimilarity * 10);
-      counterEvidenceIds.push(...counterIds, ...idsMatching(/competitor|alternative|substitute|already (?:does|solve)|features?|pricing/i));
+      supportingEvidenceIds.push(...Object.values(residualUnmetDemand.signals).flatMap((item) => item.evidenceIds));
+      if (residualUnmetDemand.adequateSameJobSameUserSolution) {
+        risk = 10;
+        counterEvidenceIds.push(...residualUnmetDemand.evidenceIds.filter((id) => {
+          const item = input.evidence.find((source) => source.id === id);
+          return item ? ADEQUATE_SOLUTION.test(`${item.title} ${item.summary}`) : false;
+        }));
+      } else if (!residualUnmetDemand.competitorsPresent) risk = 7;
+      else if (residualUnmetDemand.conclusion === "meaningful_residual_gap") risk = Math.min(6, Math.round(maxSimilarity * 10));
+      else risk = Math.max(5, Math.round(maxSimilarity * 10));
     }
     if (dimension === "economics") {
       if (gap?.willingnessToPaySignal) supportingEvidenceIds.push(...gap.supportingEvidenceIds);
@@ -68,7 +200,7 @@ export function falsifyCandidate(candidate: IdeaCandidate, input: {
       risk = /replace|new system/i.test(candidate.workflowPosition) ? 8 : 5;
     }
     if (dimension === "defensibility") {
-      counterEvidenceIds.push(...counterIds, ...idsMatching(/incumbent|bundle|copy|open.source|commodity/i));
+      counterEvidenceIds.push(...idsMatching(/incumbent|bundle|copy|open.source|commodity/i));
       risk = maxSimilarity > 0.65 ? 8 : 6;
     }
     if (dimension === "regulation") {
@@ -76,37 +208,50 @@ export function falsifyCandidate(candidate: IdeaCandidate, input: {
       counterEvidenceIds.push(...regulatory.map((item) => item.id));
       risk = regulatory.length ? 6 : 5;
     }
-    const support = [...new Set(supportingEvidenceIds)];
-    const counter = [...new Set(counterEvidenceIds)];
-    const unknown = support.length === 0 && counter.length === 0;
-    if (counter.length >= 2 && support.length === 0) risk = Math.max(risk, 8);
-    else if (counter.length > support.length) risk = Math.max(risk, 7);
-    else if (support.length >= 2 && counter.length === 0) risk = Math.min(risk, 4);
-    else if (support.length > 0 && support.length >= counter.length) risk = Math.min(risk, 5);
-    else if (unknown && critical.has(dimension)) risk = Math.max(risk, 7);
+    const support = unique(supportingEvidenceIds);
+    const counter = unique(counterEvidenceIds);
+    const competitionUnknown = dimension === "competition" && !residualUnmetDemand.competitorsPresent;
+    const unknown = competitionUnknown || support.length === 0 && counter.length === 0;
+    if (dimension !== "competition") {
+      if (counter.length >= 2 && support.length === 0) risk = Math.max(risk, 8);
+      else if (counter.length > support.length) risk = Math.max(risk, 7);
+      else if (support.length >= 2 && counter.length === 0) risk = Math.min(risk, 4);
+      else if (support.length > 0 && support.length >= counter.length) risk = Math.min(risk, 5);
+      else if (unknown && critical.has(dimension)) risk = Math.max(risk, 7);
+    }
     const status = unknown ? "UNKNOWN" : classifyClaim([...support, ...counter], input.evidence);
-    const rationale = unknown
+    const rationale = dimension === "competition" ? residualUnmetDemand.rationale : unknown
       ? "No retrieved source directly tested this failure hypothesis; the risk remains unknown and receives no clearance credit."
       : `${support.length} source record(s) weigh against the failure hypothesis and ${counter.length} weigh in its favor; repeated copies are collapsed upstream.`;
-    return { dimension, statement, supportingEvidenceIds: support, counterEvidenceIds: counter, risk, unknown, claimStatus: status, rationale, decisive: risk >= 7 || unknown && critical.has(dimension) };
+    const decisive = dimension === "competition"
+      ? residualUnmetDemand.adequateSameJobSameUserSolution
+      : risk >= 7 || unknown && critical.has(dimension);
+    return { dimension, statement, supportingEvidenceIds: support, counterEvidenceIds: counter, risk, unknown, claimStatus: status, rationale, decisive };
   });
   const averageRisk = hypotheses.reduce((sum, item) => sum + item.risk, 0) / hypotheses.length;
   const evidenceBonus = Math.min(10, independent * 2.5);
-  const counterPenalty = Math.min(18, counterIds.length * 2.5);
-  const survivalScore = Math.round(Math.max(0, Math.min(100, 100 - averageRisk * 9 + evidenceBonus - counterPenalty)));
+  const survivalScore = Math.round(Math.max(0, Math.min(100, 100 - averageRisk * 9 + evidenceBonus)));
   const unknownCriticalCount = hypotheses.filter((item) => item.unknown && critical.has(item.dimension)).length;
-  const knownFatal = hypotheses.some((item) => item.risk >= 9 && item.counterEvidenceIds.length >= 2);
+  const knownFatal = residualUnmetDemand.adequateSameJobSameUserSolution || hypotheses.some((item) => item.dimension !== "competition" && item.risk >= 9 && item.counterEvidenceIds.length >= 2);
   const outcome = !knownFatal && survivalScore >= 48 && unknownCriticalCount <= 2 ? "survived"
     : !knownFatal && survivalScore >= 35 && unknownCriticalCount <= 3 && candidate.iteration === 0 ? "mutate" : "rejected";
   const decisiveRisks = hypotheses.filter((item) => item.decisive).sort((a, b) => b.risk - a.risk).slice(0, 5).map((item) => ({
     dimension: item.dimension, risk: item.risk, status: item.claimStatus, reason: item.rationale,
-    evidenceIds: [...new Set([...item.supportingEvidenceIds, ...item.counterEvidenceIds])],
+    evidenceIds: unique([...item.supportingEvidenceIds, ...item.counterEvidenceIds]),
   }));
+  const competitorEvidenceIds = unique(gap?.counterEvidenceIds ?? []);
   return {
     candidateId: candidate.id, hypotheses,
-    argumentsFor: positiveIds.length ? [{ claim: "Retrieved evidence supports the source gap, workaround, or enabling change.", evidenceIds: positiveIds }] : [],
-    argumentsAgainst: counterIds.length ? [{ claim: "Retrieved competitors or substitutes may already address part of the job.", evidenceIds: counterIds }] : [{ claim: "No targeted counterevidence was retrieved; competition and demand remain unknown, not cleared.", evidenceIds: [] }],
-    survivalScore, outcome, decisiveRisks, unknownCriticalCount,
-    reason: outcome === "survived" ? "The concept cleared the positive-evidence gate and no known fatal risk or excessive critical unknowns survived the adversarial pass." : outcome === "mutate" ? "The evidence-backed core remains promising, but exactly one bounded constraint mutation may be retested." : "Counterevidence, similarity, a fatal risk, or too many critical unknowns overwhelm the current case; the idea is not rescued further.",
+    argumentsFor: [
+      ...(positiveIds.length ? [{ claim: "Retrieved evidence supports the source gap, workaround, or enabling change.", evidenceIds: positiveIds }] : []),
+      ...(residualUnmetDemand.meaningfulResidualGap ? [{ claim: "Explicit residual-demand signals show that the proposed gap remains unresolved even after accounting for retrieved alternatives.", evidenceIds: residualUnmetDemand.evidenceIds }] : []),
+    ],
+    argumentsAgainst: residualUnmetDemand.adequateSameJobSameUserSolution
+      ? [{ claim: "Close substitutes already solve the same job for the same user and no meaningful residual gap was evidenced.", evidenceIds: residualUnmetDemand.evidenceIds }]
+      : competitorEvidenceIds.length
+        ? [{ claim: "Retrieved competitors address part of the job; similarity reduces differentiation and defensibility but is not by itself decisive.", evidenceIds: competitorEvidenceIds }]
+        : [{ claim: "No targeted competitive resolution evidence was retrieved; competition remains unknown, not cleared.", evidenceIds: [] }],
+    survivalScore, outcome, decisiveRisks, unknownCriticalCount, residualUnmetDemand,
+    reason: outcome === "survived" ? "The concept cleared the positive-evidence gate; competitor existence was separated from adequate resolution, and no known fatal risk or excessive critical unknowns survived the adversarial pass." : outcome === "mutate" ? "The evidence-backed core remains promising, but exactly one bounded constraint mutation may be retested." : residualUnmetDemand.adequateSameJobSameUserSolution ? "A close substitute already solves the same job for the same user, and the residual-demand assessment found no meaningful remaining gap." : "A decisive non-competition factor, counterevidence, or too many critical unknowns overwhelm the current case; competitor existence alone did not cause rejection.",
   };
 }

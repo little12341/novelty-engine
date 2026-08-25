@@ -1,21 +1,26 @@
 # Novelty Engine
 
-Novelty Engine V2.1 is an evidence-driven opportunity-discovery pipeline plus a Claude Skill. It maps a market across source families, collapses repeated claims, weights source quality and independence, models structural gaps, actively searches for counterevidence, rejects unsupported or duplicate candidates, and returns only falsification survivors with traceable lineage and 24–72 hour kill tests. Claude consumes the same structured contract exposed by MCP instead of pretending a prompt performed research.
+Novelty Engine V2.1+ is an evidence-driven business-opportunity research platform plus a Claude Skill. It keeps the canonical V2.1 pipeline and report while adding intent modes, deterministic research-role boundaries, company research, qualitative idea comparison, immutable evidence snapshots, opt-in memory, history, feedback, watchlists/change detection, source-trust and prompt-injection metadata, usage controls, and JSON/Markdown/print-ready exports. Claude consumes the same structured contract exposed by MCP instead of pretending a prompt performed research.
 
 It never treats missing search results as proof of demand, and it never fills unsupported competitors, prices, complaints, or citations from model memory. Claims remain `VERIFIED`, `INFERRED`, or `UNKNOWN`, and an `insufficient_evidence` stop produces no forced ideas.
+
+Competitors validate that a job or market may exist; their existence is never an automatic rejection. Every candidate in a competitive landscape receives an explicit residual-unmet-demand assessment covering repeated unresolved complaints, workaround prevalence, switching behavior, underserved segments, price/performance gaps, trust failures, distribution gaps, and whether the proposed mechanism materially changes the outcome. Similarity can reduce differentiation and defensibility, but competition is decisive only when close substitutes already solve the same job for the same user with no meaningful residual gap.
 
 ## Architecture
 
 ```text
 Claude browser / Claude Code -> Novelty Engine Skill -> remote MCP (/api/mcp)
-  -> user request -> synonym/customer-language plan -> bounded source gathering
+  -> intent (/find-business, /research-market, /research-company, ...)
+  -> user request -> synonym/customer-language plan -> bounded shared source gathering
+  -> source-verification role -> injection screening + trust metadata + deduplication
+  -> market / competitor / complaint / gap / company roles over one evidence set
   -> source quality/independence/repetition assessment -> competitor + substitute map
   -> complaint/workaround mining -> Opportunity Graph -> graph-hole detection
   -> weak signals -> failed-attempt mining -> assumption contradictions
   -> evidence gate + stop decision -> candidate generation -> novelty fingerprints
   -> active counterevidence + 11-dimension falsification -> one bounded mutation
   -> 9 decision assessments with written reasoning -> 24-72 hour validation tests
-  -> consistent final output + cited ResearchResult + schema-safe cache record
+  -> quality checkpoints -> evidence snapshot -> consistent final output + durable history
 ```
 
 The app uses Next.js App Router, TypeScript, native `fetch`, the official MCP TypeScript SDK with Vercel's Web-standard handler, Zod schemas, Node storage helpers, and an optional Upstash Redis adapter. The provider, storage, protection, and authorization boundaries remain intentionally small.
@@ -55,13 +60,22 @@ Configure one provider. Both are server-side only and are never referenced by cl
 | `RESEARCH_MAX_QUERIES` | No; default/hard cap 12 | Landscape plus active-falsification search angles per run |
 | `RESEARCH_RESULTS_PER_QUERY` | No; default 6, hard cap 10 | Provider results per angle |
 | `RESEARCH_MAX_PROVIDER_CALLS` | No; default follows query cap, hard cap 12 | Total search-provider calls |
+| `RESEARCH_MAX_COUNTEREVIDENCE_SEARCHES` | No; default 2, hard cap 4 | Candidate-focused competition/constraint searches inside a run |
+| `RESEARCH_MAX_AGENT_CALLS` | No; default 0, hard cap 8 | Reserved model/agent-call budget; current deterministic role boundaries use 0 |
+| `RESEARCH_MAX_PROVIDER_SPEND_CREDITS` | No; default follows provider cap, hard cap 12 | Abstract per-run provider-credit ceiling (one credit per search call) |
+| `RESEARCH_MAX_CONCURRENCY` | No; default 3, hard cap 6 | Search concurrency inside one run |
+| `RESEARCH_MAX_RETRIES_PER_SEARCH` | No; default 1, hard cap 2 | Retry count for retryable provider failures |
+| `RESEARCH_COMPARISON_MAX_PROVIDER_CALLS` | No; default 30, hard cap 40 | Shared search-call ceiling across a 2–5 idea comparison |
 | `RESEARCH_MAX_CANDIDATES` | No; default 30, hard cap 48 | Initial plus survivor-mutation candidates |
 | `RESEARCH_MAX_SURVIVOR_ITERATIONS` | No; default/hard cap 1 | One tightly bounded mutation/retest round; one dimension per root |
 | `RESEARCH_MAX_MODEL_ITERATIONS` | No; default 0, hard cap 6 | Reserved model-provider budget; deterministic engine currently uses 0 |
 | `RESEARCH_TIMEOUT_MS` | No; default 15000, hard cap 30000 | Per-provider-call timeout |
 | `RESEARCH_RATE_LIMIT_PER_HOUR` | No | Legacy alias used when `MCP_RATE_LIMIT_PER_HOUR` is unset |
 | `RESEARCH_CACHE_TTL_SECONDS` | No; default 86400, hard cap 604800 | Exact/high-similarity result cache TTL |
+| `RESEARCH_HISTORY_TTL_SECONDS` | No; default/hard cap 31536000 | Durable Redis run/snapshot history retention; local files persist until removed |
 | `RESEARCH_RUNS_DIR` | No | Local directory for durable JSON run files |
+| `RESEARCH_PER_USER_DAILY_LIMIT` | No; default 10 | Cost-bearing research calls per hashed client identity per day |
+| `RESEARCH_PER_USER_MONTHLY_LIMIT` | No; default 100 | Cost-bearing research calls per hashed client identity per month |
 | `MCP_RATE_LIMIT_PER_HOUR` | No; default 20, hard cap 200 | Per-IP/client MCP tool-call limit; falls back to `RESEARCH_RATE_LIMIT_PER_HOUR` |
 | `MCP_GLOBAL_DAILY_RESEARCH_LIMIT` | No; default 50 | Shared daily research/falsification request budget |
 | `MCP_GLOBAL_MONTHLY_RESEARCH_LIMIT` | No; default 500 | Shared monthly research/falsification request budget |
@@ -114,9 +128,12 @@ Successful local runs are saved twice under `.research-runs/`: an immutable run-
 ```json
 {
   "query": "give me 5 business ideas in home services",
+  "mode": "find_business",
   "bypassCache": false
 }
 ```
+
+The same endpoint accepts `/find-business`, `/research-market`, `/research-company`, `/find-competitors`, `/find-gaps`, `/falsify`, and `/validate-idea` prefixes. For comparison, send `{ "mode": "compare_ideas", "ideas": ["...", "..."] }`. Current-run `userContext` overrides any explicitly selected opt-in memory profile. Supporting service endpoints are `GET /api/research/history`, `GET /api/research/export`, `POST/GET /api/research/memory`, `POST /api/research/feedback`, `POST /api/research/watchlists`, and `POST /api/research/watchlists/check`.
 
 The versioned `ResearchResult` contains source assessments, coverage, a stop decision, competitor/complaint/gap records, graph and holes, assumptions and contradictions, stitching patterns, weak signals, failed attempts, candidates, bounded mutations, fingerprints, falsification results, rejected ideas, lineages, written decision scores, validation experiments, and a consistent `finalOutput`. The concise order is Research Landscape → Signals → Structural Gaps → Candidate Ideas → Rejected Ideas + Why → Survivors → Evidence Lineage → Decisive Risks → 24–72 Hour Validation Tests.
 
@@ -139,6 +156,10 @@ The deliberate tool surface is:
 | `inspect_competitors` | `{ run_id: string, limit?: 1..15 }` | Evidence-carrying competitor map; unsupported fields stay `null` |
 | `falsify_opportunity` | `{ opportunity: string, run_id?: string, candidate_id?: string }` | Up to four fresh counterevidence searches plus the falsification result |
 | `get_research_run` | `{ run_id: string, include_full?: boolean }` | Concise summary by default; complete internal JSON only when explicitly requested |
+| `run_research_mode` | `{ mode, query }` | Shared pipeline for business, market, company, competitor, gap, falsification, and validation intents |
+| `compare_ideas` | `{ ideas: string[2..5] }` | Qualitative cross-idea comparison under one shared provider-call budget |
+| `export_research_run` | `{ run_id, format }` | JSON, Markdown, or print/PDF-ready report representation |
+| `compare_research_runs` | `{ baseline_run_id, comparison_run_id }` | Material snapshot deltas with trivial/syndicated changes suppressed |
 
 Tool errors are structured and say when the provider is not configured or unavailable. They never substitute fixtures or model-generated research. Cost-bearing calls are bounded by request length, source/result limits, provider timeouts, search-call caps, per-client rate limits, daily/monthly global budgets, and a concurrent-run semaphore. Budget denial returns HTTP `429` with `Retry-After` and a machine-readable reason.
 
