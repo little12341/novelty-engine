@@ -633,3 +633,359 @@ body { background: var(--canvas); }
   .mcp-health-grid, .mcp-tool-list { grid-template-columns: 1fr; }
   .mcp-debug-heading { align-items: flex-start; flex-direction: column; }
 }
+
+/* Precision reconstruction of the supplied 1536 × 1024 desktop hero. */
+.mark svg { width: 100%; height: 100%; overflow: visible; stroke: currentColor; stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round; }
+.arrow-icon { width: 17px; height: 17px; flex: 0 0 auto; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+.leaf-icon { width: 24px; height: 24px; flex: 0 0 auto; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+.glass-filters { position: absolute; pointer-events: none; }
+
+.hero-stage {
+  height: 1024px;
+  min-height: 100svh;
+  background: #cad0c9;
+}
+.hero-stage .hero-image {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  object-position: 50% 50%;
+}
+.hero-stage .hero-tonal-layer,
+.hero-stage::after { display: none; }
+
+.hero-stage .site-header,
+.hero-stage .hero {
+  width: calc(100% - 56px);
+  max-width: none;
+  margin-inline: 28px;
+}
+.hero-stage .site-header { height: 116px; }
+.hero-stage .site-header { padding-right: 50px; }
+.hero-stage .brand {
+  gap: 15px;
+  color: rgba(255, 255, 250, .97);
+  font-family: Baskerville, Georgia, serif;
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: .235em;
+  line-height: 1;
+  text-shadow: 0 2px 16px rgba(16, 22, 17, .4);
+}
+.hero-stage .mark { width: 47px; height: 42px; padding: 0; color: rgba(255, 255, 250, .96); }
+.hero-stage .site-header nav {
+  gap: 59px;
+  margin-right: 55px;
+  color: rgba(255,255,251,.93);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .145em;
+  line-height: 1;
+}
+.hero-stage .header-github {
+  width: 211px;
+  min-width: 211px;
+  height: 55px;
+  min-height: 55px;
+  gap: 19px;
+  padding: 0 22px 0 30px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  white-space: nowrap;
+}
+.hero-stage .header-github .arrow-icon { margin-left: auto; }
+
+.liquid-glass {
+  --glass-x: 30%;
+  --glass-y: 13%;
+  isolation: isolate;
+  transform: translateZ(0);
+}
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at var(--glass-x) var(--glass-y), rgba(255,255,255,.42), transparent 38%),
+    linear-gradient(122deg, rgba(255,255,255,.27), transparent 40%, rgba(255,255,255,.04) 72%);
+  filter: url(#glass-refraction);
+  opacity: .72;
+  transition: background-position .16s ease, opacity .2s ease;
+}
+.liquid-glass::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image:
+    radial-gradient(rgba(255,255,255,.13) .42px, transparent .65px),
+    radial-gradient(rgba(15,20,15,.1) .42px, transparent .65px);
+  background-position: 0 0, 1px 1px;
+  background-size: 3px 3px;
+  mix-blend-mode: soft-light;
+  opacity: .22;
+}
+.glass-control {
+  border: 1px solid rgba(255,255,255,.62);
+  background: linear-gradient(145deg, rgba(255,255,255,.31), rgba(255,255,255,.12) 53%, rgba(64,53,37,.13));
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.52),
+    inset -1px -1px 0 rgba(40,35,26,.17),
+    inset 0 8px 18px rgba(255,255,255,.08),
+    0 12px 31px rgba(25,30,23,.18),
+    0 2px 7px rgba(255,247,225,.16);
+  backdrop-filter: blur(13px) saturate(128%);
+  -webkit-backdrop-filter: blur(13px) saturate(128%);
+}
+.glass-control:hover {
+  border-color: rgba(255,255,255,.84);
+  background: linear-gradient(145deg, rgba(255,255,255,.4), rgba(255,255,255,.17) 60%, rgba(63,52,36,.12));
+}
+
+.hero-stage .hero {
+  height: 1024px;
+  min-height: 100svh;
+  display: block;
+  position: relative;
+  padding: 0;
+}
+.hero-stage .hero-copy {
+  width: 590px;
+  position: absolute;
+  top: 259px;
+  left: 216px;
+  margin: 0;
+}
+.hero-stage .eyebrow {
+  color: #7a591d;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .155em;
+  line-height: 1;
+  text-shadow: 0 1px 17px rgba(255,255,255,.72);
+}
+.hero-stage .hero h1 {
+  max-width: 590px;
+  margin: 29px 0 19px;
+  color: #2d352e;
+  font-family: Baskerville, "Iowan Old Style", Georgia, serif;
+  font-size: 70px;
+  font-weight: 400;
+  letter-spacing: -.027em;
+  line-height: 1.205;
+  text-wrap: initial;
+  text-shadow: 0 2px 28px rgba(255,255,255,.48);
+}
+.hero-stage .hero-lede {
+  width: 430px;
+  max-width: 430px;
+  margin: 0 0 43px;
+  color: #454b46;
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: -.006em;
+  line-height: 1.78;
+  text-shadow: 0 1px 14px rgba(255,255,255,.62);
+}
+.hero-stage .hero-actions { display: flex; flex-wrap: nowrap; gap: 35px; margin-left: -7px; }
+.hero-stage .hero-actions .button {
+  height: 68px;
+  min-height: 68px;
+  min-width: 0;
+  border-radius: 23px;
+  padding: 0 31px;
+  color: rgba(255,255,255,.96);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .175em;
+  line-height: 1;
+}
+.hero-stage .hero-actions .button:first-child { width: 255px; gap: 17px; }
+.hero-stage .hero-actions .button:last-child { width: 216px; gap: 26px; }
+.hero-stage .hero-actions .glass-primary {
+  background: linear-gradient(145deg, rgba(255,255,255,.49), rgba(255,255,255,.19) 61%, rgba(138,113,76,.12));
+  color: rgba(255,255,255,.98);
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.66),
+    inset -1px -1px 0 rgba(72,59,39,.16),
+    inset 0 12px 24px rgba(255,255,255,.13),
+    0 14px 34px rgba(45,42,30,.16),
+    0 0 18px rgba(255,247,220,.18);
+}
+.hero-stage .hero-actions .glass-primary:hover { color: #fff; }
+
+.hero-install-panel {
+  width: 982px;
+  height: 138px;
+  display: block;
+  position: absolute;
+  left: 209px;
+  bottom: 128px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.57);
+  border-radius: 22px;
+  background:
+    linear-gradient(108deg, rgba(76,72,58,.49), rgba(34,37,29,.55) 56%, rgba(28,32,25,.66)),
+    rgba(33,36,29,.34);
+  color: #f7f6ee;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.38),
+    inset -1px -1px 0 rgba(14,17,13,.34),
+    inset 0 15px 35px rgba(255,255,255,.035),
+    0 24px 52px rgba(15,20,15,.25),
+    0 2px 9px rgba(255,244,214,.12);
+  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+}
+.hero-install-panel > section { height: 100%; padding: 0 27px 0 21px; position: relative; z-index: 1; }
+.hero-install-heading { height: 100%; min-height: 0; display: grid; grid-template-columns: 43px 1fr 114px; gap: 33px; align-items: center; }
+.terminal-glyph {
+  width: 43px;
+  height: 43px;
+  border: 1px solid rgba(255,255,255,.39);
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(255,255,255,.2), rgba(255,255,255,.08));
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.3), inset -1px -1px 0 rgba(17,21,16,.2), 0 8px 18px rgba(18,21,17,.15);
+  backdrop-filter: blur(8px) saturate(126%);
+  -webkit-backdrop-filter: blur(8px) saturate(126%);
+}
+.hero-install-panel .terminal-glyph { transform: translateY(-20px); }
+.terminal-glyph svg { width: 24px; height: 24px; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.hero-install-panel .hero-install-heading pre {
+  align-self: center;
+  margin: 0;
+  color: rgba(255,255,255,.91);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: .012em;
+  line-height: 1.72;
+  white-space: pre-wrap;
+}
+.hero-install-panel .hero-mcp-url { display: inline; margin: 0; color: #a6b77b; font-size: inherit; line-height: inherit; }
+.hero-install-heading button {
+  width: 114px;
+  height: 47px;
+  min-height: 47px;
+  justify-content: center;
+  gap: 13px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(34,37,30,.46), rgba(21,24,20,.28));
+  color: rgba(255,255,255,.94);
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.12), inset -1px -1px 0 rgba(7,9,7,.18), 0 8px 20px rgba(12,15,12,.17);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .17em;
+}
+.hero-install-panel .hero-install-heading button { transform: translateY(-19px); }
+.copy-glyph { width: 18px; height: 18px; stroke: currentColor; stroke-width: 1.35; }
+
+.scroll-cue {
+  width: 190px;
+  right: auto;
+  left: 48.3%;
+  bottom: 27px;
+  transform: translateX(-50%);
+  gap: 21px;
+  color: rgba(255,255,255,.94);
+}
+.scroll-cue span {
+  width: 44px;
+  height: 44px;
+  border-color: rgba(255,255,255,.53);
+  background: linear-gradient(145deg, rgba(39,43,34,.55), rgba(18,22,17,.42));
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.23), inset -1px -1px 0 rgba(8,10,8,.3), 0 8px 20px rgba(11,16,11,.27);
+  backdrop-filter: blur(10px) saturate(125%);
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+}
+.scroll-cue span .arrow-icon { width: 22px; height: 22px; }
+.scroll-cue small { font-size: 12px; font-weight: 500; letter-spacing: .185em; line-height: 1; }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-control { background: rgba(113,105,88,.7); }
+  .hero-install-panel { background: rgba(38,41,33,.88); }
+  .terminal-glyph, .hero-install-heading button, .scroll-cue span { background: rgba(47,51,41,.86); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-glass::before { transition: none; }
+  .glass-control, .hero-install-heading button { transition: none; }
+}
+
+@media (max-width: 1100px) {
+  .hero-stage { height: auto; min-height: 980px; }
+  .hero-stage .site-header, .hero-stage .hero { width: min(100% - 40px, 1000px); margin-inline: auto; }
+  .hero-stage .site-header nav { gap: 24px; margin-right: 24px; }
+  .hero-stage .header-github { width: 190px; min-width: 190px; }
+  .hero-stage .hero { height: auto; min-height: 980px; }
+  .hero-stage .hero-copy { width: min(590px, 64vw); top: 220px; left: 30px; }
+  .hero-stage .hero h1 { font-size: clamp(58px, 6.4vw, 70px); }
+  .hero-install-panel { width: calc(100% - 60px); left: 30px; }
+}
+
+@media (max-width: 900px) {
+  .hero-stage .site-header nav { display: none; }
+  .hero-stage .header-github { margin-left: auto; }
+}
+
+html { scrollbar-width: none; }
+body::-webkit-scrollbar { width: 0; height: 0; }
+
+@media (max-width: 760px) {
+  .hero-stage { min-height: 1000px; }
+  .hero-stage .hero-image { object-position: 66% center; }
+  .hero-stage .site-header, .hero-stage .hero { width: min(100% - 32px, 620px); margin-inline: auto; }
+  .hero-stage .site-header { padding-right: 0; }
+  .hero-stage .brand { gap: 8px; font-size: 12px; letter-spacing: .16em; }
+  .hero-stage .mark { width: 34px; height: 31px; }
+  .hero-stage .header-github { width: auto; min-width: 0; height: 44px; min-height: 44px; padding-inline: 16px; font-size: 9px; }
+  .hero-stage .header-github .arrow-icon { display: none; }
+  .hero-stage .hero { min-height: 1000px; padding: 0; }
+  .hero-stage .hero-copy {
+    width: 100%;
+    top: 126px;
+    left: 0;
+    padding: 25px 20px 28px;
+    border: 1px solid rgba(255,255,255,.38);
+    border-radius: 27px;
+    background: rgba(247,242,229,.62);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.48), 0 18px 45px rgba(28,31,25,.12);
+    backdrop-filter: blur(10px) saturate(112%);
+    -webkit-backdrop-filter: blur(10px) saturate(112%);
+  }
+  .hero-stage .hero h1 { margin-block: 20px; font-size: clamp(46px, 13.4vw, 64px); line-height: 1.02; }
+  .hero-stage .hero-lede { width: 100%; font-size: 15px; line-height: 1.65; }
+  .hero-stage .hero-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-left: 0; }
+  .hero-stage .hero-actions .button:first-child,
+  .hero-stage .hero-actions .button:last-child { width: 100%; height: 58px; min-height: 58px; padding-inline: 15px; gap: 12px; font-size: 10px; }
+  .hero-install-panel { width: 100%; height: 188px; left: 0; bottom: 48px; }
+  .hero-install-panel > section { padding: 18px; }
+  .hero-install-heading { grid-template-columns: 42px 1fr; grid-template-rows: 1fr auto; gap: 14px 18px; }
+  .hero-install-panel .hero-install-heading pre { margin: 0; font-size: clamp(9px, 2.65vw, 12px); line-height: 1.7; }
+  .hero-install-heading button { width: 100%; grid-column: 1 / -1; }
+  .scroll-cue { display: none; }
+}
+
+@media (max-width: 430px) {
+  .hero-stage { min-height: 1040px; }
+  .hero-stage .hero { min-height: 1040px; }
+  .hero-stage .brand > span:last-child { max-width: none; white-space: nowrap; }
+  .hero-stage .hero-copy { top: 108px; padding-inline: 16px; }
+  .hero-stage .hero h1 { font-size: clamp(43px, 12.6vw, 56px); }
+  .hero-stage .hero-actions { grid-template-columns: 1fr; }
+  .hero-stage .hero-actions .button:first-child,
+  .hero-stage .hero-actions .button:last-child { height: 52px; min-height: 52px; }
+  .hero-install-panel { height: 208px; }
+  .hero-install-heading { grid-template-columns: 38px 1fr; }
+  .terminal-glyph { width: 38px; height: 38px; }
+}

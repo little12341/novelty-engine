@@ -46,33 +46,59 @@ function useCopyFeedback() {
 export function HeroInstallPanel() {
   const { copyState, copyText, label } = useCopyFeedback();
 
+  useEffect(() => {
+    const stage = document.querySelector<HTMLElement>(".hero-stage");
+    if (!stage || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    let frame = 0;
+    const updateGlass = (event: PointerEvent) => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        stage.querySelectorAll<HTMLElement>(".liquid-glass").forEach((glass) => {
+          const bounds = glass.getBoundingClientRect();
+          const x = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100));
+          const y = Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100));
+          glass.style.setProperty("--glass-x", `${x}%`);
+          glass.style.setProperty("--glass-y", `${y}%`);
+        });
+      });
+    };
+    const resetGlass = () => stage.querySelectorAll<HTMLElement>(".liquid-glass").forEach((glass) => {
+      glass.style.removeProperty("--glass-x");
+      glass.style.removeProperty("--glass-y");
+    });
+
+    stage.addEventListener("pointermove", updateGlass, { passive: true });
+    stage.addEventListener("pointerleave", resetGlass);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      stage.removeEventListener("pointermove", updateGlass);
+      stage.removeEventListener("pointerleave", resetGlass);
+    };
+  }, []);
+
+  const heroCopyText = `${installCommands}\n${productionMcpEndpoint}`;
+
   return (
-    <aside className="hero-install-panel" aria-label="Quick installation options">
+    <aside className="hero-install-panel liquid-glass" aria-label="Quick installation commands">
       <section>
         <div className="hero-install-heading">
-          <span className="terminal-glyph" aria-hidden="true">›_</span>
-          <div><small>Claude Code</small><strong>Local install</strong></div>
-          <button type="button" onClick={() => copyText("commands", installCommands)} aria-label="Copy local install commands">
-            <span aria-hidden="true">▢</span> {label("commands")}
+          <span className="terminal-glyph liquid-glass" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" focusable="false">
+              <path d="m6.2 7.4 4.1 4.1-4.1 4.1M12.7 16.1h5.1" />
+            </svg>
+          </span>
+          <pre><code>{installCommands}{"\n"}<span className="hero-mcp-url">{productionMcpEndpoint}</span></code></pre>
+          <button className="liquid-glass" type="button" onClick={() => copyText("commands", heroCopyText)} aria-label="Copy installation commands and MCP endpoint">
+            <svg className="copy-glyph" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <rect x="6.2" y="6.2" width="10.2" height="10.2" rx="1.4" />
+              <path d="M13.8 6.2V4.8c0-.8-.6-1.4-1.4-1.4H4.8c-.8 0-1.4.6-1.4 1.4v7.6c0 .8.6 1.4 1.4 1.4h1.4" />
+            </svg>
+            {label("commands")}
           </button>
         </div>
-        <pre><code>{installCommands}</code></pre>
         <span className="sr-only" role="status" aria-live="polite">
           {copyState.target === "commands" && copyState.status === "copied" ? "Install commands copied to clipboard." : copyState.target === "commands" && copyState.status === "error" ? "Could not copy the install commands." : ""}
-        </span>
-      </section>
-      <section>
-        <div className="hero-install-heading">
-          <span className="connector-glyph" aria-hidden="true">◎</span>
-          <div><small>Claude Browser</small><strong>MCP connector</strong></div>
-          <button type="button" onClick={() => copyText("mcp", productionMcpEndpoint)} aria-label="Copy remote MCP endpoint">
-            <span aria-hidden="true">▢</span> {label("mcp")}
-          </button>
-        </div>
-        <code className="hero-mcp-url">{productionMcpEndpoint}</code>
-        <p>Add this URL as a custom connector in Claude.</p>
-        <span className="sr-only" role="status" aria-live="polite">
-          {copyState.target === "mcp" && copyState.status === "copied" ? "MCP endpoint copied to clipboard." : copyState.target === "mcp" && copyState.status === "error" ? "Could not copy the MCP endpoint." : ""}
         </span>
       </section>
     </aside>

@@ -6,8 +6,31 @@ const githubUrl = "https://github.com/little12341/novelty-engine";
 function Mark() {
   return (
     <span className="mark" aria-hidden="true">
-      <i>‹</i><span>N</span><i>›</i>
+      <svg viewBox="0 0 52 46" fill="none" focusable="false">
+        <path d="M19.8 39.5C12 36.4 7 30.1 6.2 22.1M16.4 36.6l-6.1.6M12.3 32.2l-5.9-1.1M9.5 27l-5-2.6M8.1 21.4l-3.8-4.1M8.6 16l-2.1-4.7M10.8 11.3l-.4-4.6M32.2 39.5c7.8-3.1 12.8-9.4 13.6-17.4M35.6 36.6l6.1.6M39.7 32.2l5.9-1.1M42.5 27l5-2.6M43.9 21.4l3.8-4.1M43.4 16l2.1-4.7M41.2 11.3l.4-4.6" />
+        <path d="M18.7 40.5c2.2 1.2 4.6 1.8 7.3 1.8s5.1-.6 7.3-1.8" />
+      </svg>
     </span>
+  );
+}
+
+function ArrowIcon({ direction = "right" }: { direction?: "right" | "down" }) {
+  return direction === "down" ? (
+    <svg className="arrow-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M10 2.75v13.5M4.8 11.2 10 16.4l5.2-5.2" />
+    </svg>
+  ) : (
+    <svg className="arrow-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M2.75 10h13.5M11.2 4.8l5.2 5.2-5.2 5.2" />
+    </svg>
+  );
+}
+
+function LeafIcon() {
+  return (
+    <svg className="leaf-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M17.8 3.1c-.2 4.9-2.4 8.7-6.6 11.2M19.4 7.3c-2.6 2.7-5.6 4.4-9 5.2M13.6 2.7c.2 2.2-.3 4.3-1.4 6.2M8.4 7.5c.3 2 .9 3.5 2 4.8M5.3 11.9c.9 1.6 2.3 2.7 4.1 3.2M3.9 16.4c1.8.9 3.6 1.1 5.4.7M8.6 20.8c-.1-2.5.6-4.8 2.1-6.8" />
+    </svg>
   );
 }
 
@@ -53,15 +76,23 @@ export default function Home() {
       <section className="hero-stage" id="overview" aria-labelledby="hero-title">
         <Image
           className="hero-image"
-          src="/hero-mediterranean.webp"
+          src="/hero-mediterranean.png"
           alt=""
           fill
-          priority
+          preload
           unoptimized
           sizes="100vw"
           aria-hidden="true"
         />
         <div className="hero-tonal-layer" aria-hidden="true" />
+        <svg className="glass-filters" width="0" height="0" aria-hidden="true" focusable="false">
+          <defs>
+            <filter id="glass-refraction" x="-12%" y="-12%" width="124%" height="124%" colorInterpolationFilters="sRGB">
+              <feTurbulence type="fractalNoise" baseFrequency="0.012 0.038" numOctaves="1" seed="8" result="noise" />
+              <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.35" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+          </defs>
+        </svg>
 
         <header className="site-header-wrap">
           <div className="site-header page-width">
@@ -72,11 +103,10 @@ export default function Home() {
             <nav aria-label="Main navigation">
               <a href="#overview">Overview</a>
               <a href="#method">How it works</a>
-              <a href="#install">Install</a>
               <a href={`${githubUrl}#readme`} target="_blank" rel="noreferrer">Docs</a>
             </nav>
-            <a className="header-github glass-control" href="#install">
-              Get started <span aria-hidden="true">→</span>
+            <a className="header-github glass-control liquid-glass" href="#install">
+              Get started <ArrowIcon />
             </a>
           </div>
         </header>
@@ -89,11 +119,11 @@ export default function Home() {
               Novelty Engine uses research, signals, and reasoning to uncover real market gaps and generate opportunities worth building.
             </p>
             <div className="hero-actions">
-              <a className="button glass-control glass-primary" href="#install">
-                <span aria-hidden="true">❧</span> Install skill
+              <a className="button glass-control glass-primary liquid-glass" href="#install">
+                <LeafIcon /> Install skill
               </a>
-              <a className="button glass-control" href="#comparison">
-                Learn more <span aria-hidden="true">→</span>
+              <a className="button glass-control liquid-glass" href="#comparison">
+                Learn more <ArrowIcon />
               </a>
             </div>
           </div>
@@ -101,7 +131,7 @@ export default function Home() {
           <HeroInstallPanel />
 
           <a className="scroll-cue" href="#principles" aria-label="Scroll to explore">
-            <span aria-hidden="true">↓</span>
+            <span className="liquid-glass" aria-hidden="true"><ArrowIcon direction="down" /></span>
             <small>Scroll to explore</small>
           </a>
         </div>
