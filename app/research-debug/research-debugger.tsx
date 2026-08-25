@@ -54,7 +54,7 @@ export default function ResearchDebugger({ initialConfiguration, initialMcpHealt
   return (
     <main className="debug-shell">
       <header className="debug-header">
-        <Link href="/">← Novelty Engine</Link>
+        <Link href="/">Back to Novelty Engine</Link>
         <div><span className={initialConfiguration.configured ? "status-ready" : "status-missing"} />{initialConfiguration.configured ? `${initialConfiguration.selected} configured` : "Provider key missing"}</div>
       </header>
       <section className="debug-intro">

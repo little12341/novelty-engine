@@ -14,16 +14,28 @@ function useCopyFeedback() {
 
   async function copyText(target: "commands" | "mcp", value: string) {
     try {
+      let copied = false;
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-      } else {
+        try {
+          await Promise.race([
+            navigator.clipboard.writeText(value),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("Clipboard write timed out")), 350)),
+          ]);
+          copied = true;
+        } catch {
+          copied = false;
+        }
+      }
+      if (!copied) {
         const textArea = document.createElement("textarea");
         textArea.value = value;
         textArea.style.position = "fixed";
         textArea.style.opacity = "0";
+        textArea.setAttribute("readonly", "");
         document.body.appendChild(textArea);
+        textArea.focus();
         textArea.select();
-        const copied = document.execCommand("copy");
+        copied = document.execCommand("copy");
         textArea.remove();
         if (!copied) throw new Error("Copy command was unavailable");
       }
@@ -45,6 +57,47 @@ function useCopyFeedback() {
 
 export function HeroInstallPanel() {
   const { copyState, copyText, label } = useCopyFeedback();
+
+  useEffect(() => {
+    const stage = document.querySelector<HTMLElement>(".hero-stage");
+    const cover = document.querySelector<HTMLElement>(".principle-strip");
+    if (!stage || !cover) return;
+
+    const controls = Array.from(stage.querySelectorAll<HTMLElement>("a, button"));
+    let frame = 0;
+    const updateCoveredControls = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const layered = window.getComputedStyle(stage).position === "sticky";
+        const coverTop = cover.getBoundingClientRect().top;
+        controls.forEach((control) => {
+          const covered = layered && control.getBoundingClientRect().bottom > coverTop;
+          control.toggleAttribute("inert", covered);
+          if (covered) {
+            control.setAttribute("aria-hidden", "true");
+            control.setAttribute("tabindex", "-1");
+          } else {
+            control.removeAttribute("aria-hidden");
+            control.removeAttribute("tabindex");
+          }
+        });
+      });
+    };
+
+    updateCoveredControls();
+    window.addEventListener("scroll", updateCoveredControls, { passive: true });
+    window.addEventListener("resize", updateCoveredControls, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", updateCoveredControls);
+      window.removeEventListener("resize", updateCoveredControls);
+      controls.forEach((control) => {
+        control.removeAttribute("inert");
+        control.removeAttribute("aria-hidden");
+        control.removeAttribute("tabindex");
+      });
+    };
+  }, []);
 
   useEffect(() => {
     const stage = document.querySelector<HTMLElement>(".hero-stage");
@@ -124,7 +177,6 @@ export function HeroInstallPanel() {
 }
 
 export function InstallPanel() {
-  const { copyState, copyText, label } = useCopyFeedback();
   const [mcpEndpoint, setMcpEndpoint] = useState(productionMcpEndpoint);
 
   useEffect(() => {
@@ -144,15 +196,9 @@ export function InstallPanel() {
         <div className="command-block">
           <div className="command-header">
             <span>Manual install</span>
-            <button type="button" onClick={() => copyText("commands", installCommands)} aria-label="Copy local install commands">
-              <span aria-hidden="true" className="copy-icon">{copyState.target === "commands" && copyState.status === "copied" ? "✓" : "□"}</span>
-              {label("commands")}
-            </button>
+            <span className="command-meta">Two commands</span>
           </div>
           <pre><code>{installCommands}</code></pre>
-          <span className="sr-only" role="status" aria-live="polite">
-            {copyState.target === "commands" && copyState.status === "copied" ? "Install commands copied to clipboard." : copyState.target === "commands" && copyState.status === "error" ? "Could not copy the install commands." : ""}
-          </span>
         </div>
       </article>
 
@@ -166,16 +212,10 @@ export function InstallPanel() {
         <div className="command-block mcp-command">
           <div className="command-header">
             <span>Streamable HTTP endpoint</span>
-            <button type="button" onClick={() => copyText("mcp", mcpEndpoint)} aria-label="Copy remote MCP endpoint">
-              <span aria-hidden="true" className="copy-icon">{copyState.target === "mcp" && copyState.status === "copied" ? "✓" : "□"}</span>
-              {label("mcp")}
-            </button>
+            <span className="command-meta">Remote connection</span>
           </div>
           <pre><code>{mcpEndpoint}</code></pre>
           <p className="archive-contents"><span>Test connection</span><a href={productionHealthEndpoint} target="_blank" rel="noreferrer">Open health check</a></p>
-          <span className="sr-only" role="status" aria-live="polite">
-            {copyState.target === "mcp" && copyState.status === "copied" ? "MCP endpoint copied to clipboard." : copyState.target === "mcp" && copyState.status === "error" ? "Could not copy the MCP endpoint." : ""}
-          </span>
         </div>
       </article>
     </div>
