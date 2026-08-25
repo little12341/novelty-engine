@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <linearGradient id="g" x1="32" y1="202" x2="205" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8E6A32"/><stop offset=".48" stop-color="#D1B56F"/><stop offset="1" stop-color="#9A753A"/>
+    </linearGradient>
+    <g id="leaf">
+      <path d="M0 0C5-15 18-23 34-21 31-7 18 3 0 0Z" fill="url(#g)" stroke="#8F6A33" stroke-width=".75"/>
+      <path d="M3-1 29-19" stroke="#F2E3B7" stroke-width=".55" opacity=".7"/>
+    </g>
+  </defs>
+  <g opacity=".94">
+    <path d="M115 218C55 208 25 170 28 121c2-42 28-77 66-94M125 218c60-10 90-48 87-97-2-42-28-77-66-94" stroke="url(#g)" stroke-width="3.2" stroke-linecap="round"/>
+    <g transform="translate(54 184) rotate(-116)"><use href="#leaf"/></g>
+    <g transform="translate(39 157) rotate(-98) scale(.94)"><use href="#leaf"/></g>
+    <g transform="translate(32 128) rotate(-82) scale(.92)"><use href="#leaf"/></g>
+    <g transform="translate(35 98) rotate(-66) scale(.88)"><use href="#leaf"/></g>
+    <g transform="translate(48 70) rotate(-48) scale(.84)"><use href="#leaf"/></g>
+    <g transform="translate(68 47) rotate(-31) scale(.8)"><use href="#leaf"/></g>
+    <g transform="translate(94 30) rotate(-15) scale(.72)"><use href="#leaf"/></g>
+    <g transform="translate(186 184) rotate(-64) scale(-1 1)"><use href="#leaf"/></g>
+    <g transform="translate(201 157) rotate(-82) scale(-.94 .94)"><use href="#leaf"/></g>
+    <g transform="translate(208 128) rotate(-98) scale(-.92 .92)"><use href="#leaf"/></g>
+    <g transform="translate(205 98) rotate(-114) scale(-.88 .88)"><use href="#leaf"/></g>
+    <g transform="translate(192 70) rotate(-132) scale(-.84 .84)"><use href="#leaf"/></g>
+    <g transform="translate(172 47) rotate(-149) scale(-.8 .8)"><use href="#leaf"/></g>
+    <g transform="translate(146 30) rotate(-165) scale(-.72 .72)"><use href="#leaf"/></g>
+    <path d="M107 216c5 5 9 8 13 9 4-1 8-4 13-9" stroke="#9A753A" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

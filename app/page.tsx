@@ -1,34 +1,42 @@
 import Image from "next/image";
-import { HeroInstallPanel, InstallPanel } from "./install-panel";
+import { HeroInstallPanel } from "./install-panel";
+import { InstallTransition } from "./install-transition";
 
 const githubUrl = "https://github.com/little12341/novelty-engine";
 
-function Mark() {
+function HeroMark() {
   return (
     <span className="mark" aria-hidden="true">
-      <svg viewBox="0 0 72 64" fill="none" focusable="false">
+      <svg viewBox="0 0 72 60" fill="none" focusable="false">
         <g className="laurel-side">
-          <path className="laurel-stem" d="M34.6 59.1C22.9 57.9 13.7 50.8 9.4 40.6 5.2 30.4 6.9 18.2 14.2 8.6" />
-          <path className="laurel-leaf" d="M11.2 44.1C6.3 44.5 2.8 42.1 1.5 37.7c4.8-.5 8.1 1.5 9.7 6.4Z" />
-          <path className="laurel-leaf" d="M8.4 37.2C3.8 36.1 1.4 32.8 1.7 28.4c4.6.9 7.1 3.8 6.7 8.8Z" />
-          <path className="laurel-leaf" d="M7.3 29.7C3.2 27.4 1.8 23.5 3.3 19.4c4 2.1 5.7 5.6 4 10.3Z" />
-          <path className="laurel-leaf" d="M8.5 22.1c-3.2-3.3-3.4-7.3-.7-10.7 3.3 3.1 3.8 6.8.7 10.7Z" />
-          <path className="laurel-leaf" d="M12.1 15.2C10 11.1 11 7.2 14.4 4.8c2.2 3.9 1.5 7.6-2.3 10.4Z" />
-          <path className="laurel-leaf" d="M14.4 48.9c-4.5 1.5-8.2-.1-10.4-4 4.3-1.6 7.8-.5 10.4 4Z" />
-          <path className="laurel-leaf" d="M19.9 54.5c-4 2.6-8 1.9-11-1.2 3.8-2.6 7.6-2.3 11 1.2Z" />
-          <path className="laurel-leaf" d="M26.7 58c-3.2 3.5-7.3 3.8-11 1.4 3-3.4 6.8-4.1 11-1.4Z" />
+          <path className="laurel-stem" d="M36 56.7C23.2 54.6 13.5 46.6 9.7 35.8 6.2 25.8 8.4 14.6 16.5 5.1" />
+          <path className="laurel-leaf" d="M14.2 44.8C9.1 46.2 4.9 44.2 2.7 39.7c5-1.4 9.2.2 11.5 5.1Z" />
+          <path className="laurel-leaf" d="M10.4 38.1C5.3 38.3 1.9 35.5 1.1 30.8c5-.3 8.6 2.1 9.3 7.3Z" />
+          <path className="laurel-leaf" d="M8.6 30.7C4 29.5 1.7 26.1 2.1 21.6c4.7 1 7.2 4.1 6.5 9.1Z" />
+          <path className="laurel-leaf" d="M8.8 23.2C4.8 20.8 3.5 16.9 5.1 12.8c4.1 2.2 5.7 5.8 3.7 10.4Z" />
+          <path className="laurel-leaf" d="M11 16.6C8.1 13.1 8.4 9.1 11.3 5.9c3 3.3 3.1 7.1-.3 10.7Z" />
+          <path className="laurel-leaf" d="M16.8 49.9c-4.3 2.5-8.5 1.5-11.3-2.2 4.1-2.6 8.1-2 11.3 2.2Z" />
+          <path className="laurel-leaf" d="M22.7 54.3c-3.5 3.4-7.8 3.3-11.2.5 3.4-3.3 7.3-3.7 11.2-.5Z" />
+          <path className="laurel-leaf" d="M29.4 56.8c-2.6 3.8-6.7 4.5-10.5 2.5 2.4-3.8 6.1-4.8 10.5-2.5Z" />
+          <path className="laurel-leaf laurel-inner-leaf" d="M13.2 41.1c4.8.1 8-2.6 8.9-7.1-4.8-.3-8.1 2-8.9 7.1Z" />
+          <path className="laurel-leaf laurel-inner-leaf" d="M10.8 33.6c4.6-.9 7.2-4 7.2-8.4-4.6.7-7.4 3.4-7.2 8.4Z" />
+          <path className="laurel-leaf laurel-inner-leaf" d="M11.2 25.4c4-1.9 5.8-5.5 4.8-9.7-4.1 1.7-6.1 4.9-4.8 9.7Z" />
         </g>
         <g className="laurel-side" transform="translate(72 0) scale(-1 1)">
-          <path className="laurel-stem" d="M34.6 59.1C22.9 57.9 13.7 50.8 9.4 40.6 5.2 30.4 6.9 18.2 14.2 8.6" />
-          <path className="laurel-leaf" d="M11.2 44.1C6.3 44.5 2.8 42.1 1.5 37.7c4.8-.5 8.1 1.5 9.7 6.4Z" />
-          <path className="laurel-leaf" d="M8.4 37.2C3.8 36.1 1.4 32.8 1.7 28.4c4.6.9 7.1 3.8 6.7 8.8Z" />
-          <path className="laurel-leaf" d="M7.3 29.7C3.2 27.4 1.8 23.5 3.3 19.4c4 2.1 5.7 5.6 4 10.3Z" />
-          <path className="laurel-leaf" d="M8.5 22.1c-3.2-3.3-3.4-7.3-.7-10.7 3.3 3.1 3.8 6.8.7 10.7Z" />
-          <path className="laurel-leaf" d="M12.1 15.2C10 11.1 11 7.2 14.4 4.8c2.2 3.9 1.5 7.6-2.3 10.4Z" />
-          <path className="laurel-leaf" d="M14.4 48.9c-4.5 1.5-8.2-.1-10.4-4 4.3-1.6 7.8-.5 10.4 4Z" />
-          <path className="laurel-leaf" d="M19.9 54.5c-4 2.6-8 1.9-11-1.2 3.8-2.6 7.6-2.3 11 1.2Z" />
-          <path className="laurel-leaf" d="M26.7 58c-3.2 3.5-7.3 3.8-11 1.4 3-3.4 6.8-4.1 11-1.4Z" />
+          <path className="laurel-stem" d="M36 56.7C23.2 54.6 13.5 46.6 9.7 35.8 6.2 25.8 8.4 14.6 16.5 5.1" />
+          <path className="laurel-leaf" d="M14.2 44.8C9.1 46.2 4.9 44.2 2.7 39.7c5-1.4 9.2.2 11.5 5.1Z" />
+          <path className="laurel-leaf" d="M10.4 38.1C5.3 38.3 1.9 35.5 1.1 30.8c5-.3 8.6 2.1 9.3 7.3Z" />
+          <path className="laurel-leaf" d="M8.6 30.7C4 29.5 1.7 26.1 2.1 21.6c4.7 1 7.2 4.1 6.5 9.1Z" />
+          <path className="laurel-leaf" d="M8.8 23.2C4.8 20.8 3.5 16.9 5.1 12.8c4.1 2.2 5.7 5.8 3.7 10.4Z" />
+          <path className="laurel-leaf" d="M11 16.6C8.1 13.1 8.4 9.1 11.3 5.9c3 3.3 3.1 7.1-.3 10.7Z" />
+          <path className="laurel-leaf" d="M16.8 49.9c-4.3 2.5-8.5 1.5-11.3-2.2 4.1-2.6 8.1-2 11.3 2.2Z" />
+          <path className="laurel-leaf" d="M22.7 54.3c-3.5 3.4-7.8 3.3-11.2.5 3.4-3.3 7.3-3.7 11.2-.5Z" />
+          <path className="laurel-leaf" d="M29.4 56.8c-2.6 3.8-6.7 4.5-10.5 2.5 2.4-3.8 6.1-4.8 10.5-2.5Z" />
+          <path className="laurel-leaf laurel-inner-leaf" d="M13.2 41.1c4.8.1 8-2.6 8.9-7.1-4.8-.3-8.1 2-8.9 7.1Z" />
+          <path className="laurel-leaf laurel-inner-leaf" d="M10.8 33.6c4.6-.9 7.2-4 7.2-8.4-4.6.7-7.4 3.4-7.2 8.4Z" />
+          <path className="laurel-leaf laurel-inner-leaf" d="M11.2 25.4c4-1.9 5.8-5.5 4.8-9.7-4.1 1.7-6.1 4.9-4.8 9.7Z" />
         </g>
+        <path className="laurel-cross" d="M27.8 54.1c3.2 2.4 5.9 3.7 8.2 4.2 2.3-.5 5-1.8 8.2-4.2M30.8 57.8h10.4" />
       </svg>
     </span>
   );
@@ -48,13 +56,9 @@ function ArrowIcon({ direction = "right" }: { direction?: "right" | "down" }) {
 
 function LeafIcon() {
   return (
-    <svg className="leaf-icon" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-      <path className="leaf-stem" d="M5.1 24.2c3.2-6.7 7.5-12.7 13.8-19.5" />
-      <path className="leaf-body" d="M8.2 19.3c-3.5.2-5.7-1.4-6.5-4.4 3.4-.3 5.6 1 6.5 4.4Z" />
-      <path className="leaf-body" d="M11.5 14.5c-3.4-.4-5.2-2.3-5.4-5.3 3.3.3 5.2 1.9 5.4 5.3Z" />
-      <path className="leaf-body" d="M14.9 10.5c-1-3.2.1-5.6 2.8-7.1 1.1 3 .3 5.4-2.8 7.1Z" />
-      <path className="leaf-body" d="M13.8 17.2c3.4.2 5.6-1.3 6.4-4.3-3.3-.3-5.5 1-6.4 4.3Z" />
-      <path className="leaf-body" d="M17.2 12.4c3.4-.5 5.2-2.4 5.3-5.5-3.3.4-5.1 2.1-5.3 5.5Z" />
+    <svg className="leaf-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path className="leaf-outline" d="M11.15 20.15a7 7 0 0 1-1.3-13.95c5.58-2.35 10.78-1.67 10.98-1.58.08.21.77 5.38-1.67 9.95a7 7 0 0 1-8.01 5.58Z" />
+      <path className="leaf-vein" d="M3 21c.15-3.02 2.03-5.37 5.18-6.9 2.75-1.35 6.2-1.76 10.35-1.25" />
     </svg>
   );
 }
@@ -68,13 +72,29 @@ function UtilityIcon({ kind }: { kind: "down" | "external" }) {
 }
 
 const pipeline = [
-  ["01", "Map", "Competitors, complaints, workarounds, shifts"],
-  ["02", "Find", "Structural holes and underserved workflows"],
-  ["03", "Challenge", "Defaults, assumptions, and constraints"],
-  ["04", "Generate", "Candidates with a traceable lineage"],
-  ["05", "Falsify", "Demand, economics, trust, and feasibility"],
-  ["06", "Return", "Survivors with a measurable first test"],
-];
+  ["01", "Map", "Competitors, complaints, workarounds, shifts", "map"],
+  ["02", "Find", "Structural holes and underserved workflows", "find"],
+  ["03", "Challenge", "Defaults, assumptions, and constraints", "challenge"],
+  ["04", "Generate", "Candidates with a traceable lineage", "generate"],
+  ["05", "Falsify", "Demand, economics, trust, and feasibility", "falsify"],
+  ["06", "Return", "Survivors with a measurable first test", "return"],
+] as const;
+
+function EvidenceArtifact({ kind }: { kind: (typeof pipeline)[number][3] }) {
+  return (
+    <span className={`evidence-artifact evidence-artifact-${kind}`} aria-hidden="true">
+      <Image src={`/assets/generated/evidence-${kind}-v3.png`} alt="" width={512} height={512} unoptimized />
+    </span>
+  );
+}
+
+function MethodArtifact({ number }: { number: string }) {
+  return (
+    <span className={`method-artifact method-artifact-${number}`} aria-hidden="true">
+      <Image src={`/assets/generated/method-${number}-v2.png`} alt="" width={500} height={500} unoptimized />
+    </span>
+  );
+}
 
 const phases = [
   {
@@ -119,19 +139,10 @@ export default function Home() {
           />
         </div>
         <div className="hero-tonal-layer" aria-hidden="true" />
-        <svg className="glass-filters" width="0" height="0" aria-hidden="true" focusable="false">
-          <defs>
-            <filter id="glass-refraction" x="-12%" y="-12%" width="124%" height="124%" colorInterpolationFilters="sRGB">
-              <feTurbulence type="fractalNoise" baseFrequency="0.012 0.038" numOctaves="1" seed="8" result="noise" />
-              <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.35" xChannelSelector="R" yChannelSelector="G" />
-            </filter>
-          </defs>
-        </svg>
-
         <header className="site-header-wrap">
           <div className="site-header page-width">
             <a className="brand" href="#top" aria-label="Novelty Engine home">
-              <Mark />
+              <HeroMark />
               <span>Novelty Engine</span>
             </a>
             <nav aria-label="Main navigation">
@@ -171,44 +182,25 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="principle-strip" id="principles">
-        <div className="page-width principle-grid">
-          <p><span>01</span> Novelty without demand is a curiosity.</p>
-          <p><span>02</span> Demand without differentiation is a crowded category.</p>
-          <p><span>03</span> Evidence without falsification is just a story.</p>
-        </div>
-      </div>
-
-      <section className="install-section" id="install">
-        <div className="page-width">
-          <div className="section-heading install-heading">
-            <p className="eyebrow">Install</p>
-            <div>
-              <h2>Install once. Connect the research path that fits.</h2>
-              <p>Install the Claude Skill locally, or connect the deployed <code>/api/mcp</code> endpoint for live research without local configuration.</p>
-            </div>
-          </div>
-          <InstallPanel />
-          <ol className="install-flow" aria-label="Research connection steps">
-            <li><span>1</span><div><strong>Install the Skill</strong><p>Copy the folder into Claude’s local skills directory.</p></div></li>
-            <li><span>2</span><div><strong>Connect research</strong><p>Add the MCP URL in Claude browser, or set the direct helper URL in Claude Code.</p></div></li>
-            <li><span>3</span><div><strong>Ask normally</strong><p>Invoke <code>/novelty-engine</code> or request market-gap research.</p></div></li>
-          </ol>
-        </div>
-      </section>
+      <InstallTransition />
 
       <section className="pipeline-section page-width" aria-labelledby="pipeline-title">
+        <Image className="pipeline-laurel pipeline-laurel-left" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
+        <Image className="pipeline-laurel pipeline-laurel-right" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
         <div className="section-heading pipeline-heading">
           <p className="eyebrow">The evidence loop</p>
           <div>
             <h2 id="pipeline-title">A research method, not a longer prompt.</h2>
             <p>The engine makes the search process inspectable from first source to final experiment.</p>
           </div>
+          <Image className="pipeline-halo" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized />
         </div>
         <ol className="pipeline-list">
-          {pipeline.map(([number, title, description]) => (
+          {pipeline.map(([number, title, description, icon]) => (
             <li key={number}>
               <span>{number}</span>
+              <i aria-hidden="true" />
+              <EvidenceArtifact kind={icon} />
               <strong>{title}</strong>
               <p>{description}</p>
             </li>
@@ -226,12 +218,12 @@ export default function Home() {
             </div>
           </div>
 
-          <blockquote className="example-prompt">
-            <span>Prompt</span>
-            <p>“Find opportunities for small field-service teams that still move job data between tools.”</p>
-          </blockquote>
-
-          <div className="comparison-grid">
+          <div className="example-showcase">
+            <blockquote className="example-prompt">
+              <span>Prompt</span>
+              <p>“Find opportunities for small field-service teams that still move job data between tools.”</p>
+            </blockquote>
+            <div className="comparison-grid">
             <article className="baseline-card">
               <header><p className="card-label">First-pass brainstorming</p><h3>Familiar answers</h3></header>
               <ol>
@@ -255,11 +247,16 @@ export default function Home() {
               </dl>
               <p className="fixture-note">Illustrative, fixture-backed pipeline walkthrough—not a claim about a live market.</p>
             </article>
+            </div>
           </div>
         </div>
+        <Image className="comparison-column" src="/assets/generated/worked-column-urn-foliage-v3.png" alt="" width={990} height={1536} unoptimized />
+        <Image className="comparison-laurel" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
       </section>
 
       <section className="method-section" id="method">
+        <Image className="method-scenery" src="/assets/method-mediterranean-terrace.png" alt="" fill unoptimized loading="eager" sizes="100vw" />
+        <div className="method-wash" aria-hidden="true" />
         <div className="page-width">
           <div className="section-heading method-heading">
             <p className="eyebrow">The method</p>
@@ -271,7 +268,7 @@ export default function Home() {
           <ol className="method-grid">
             {phases.map((phase) => (
               <li key={phase.number}>
-                <span>{phase.number}</span>
+                <div className="phase-top"><span>{phase.number}</span><MethodArtifact number={phase.number} /></div>
                 <h3>{phase.title}</h3>
                 <p>{phase.description}</p>
                 <p className="phase-detail">{phase.detail}</p>
@@ -279,6 +276,9 @@ export default function Home() {
             ))}
           </ol>
           <div className="research-positioning">
+            <div className="positioning-wreath" aria-hidden="true">
+              <Image src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized />
+            </div>
             <div>
               <p className="eyebrow">Built for honest research</p>
               <h3>No competitor found does not mean a good opportunity was found.</h3>
@@ -292,6 +292,8 @@ export default function Home() {
       </section>
 
       <section className="final-cta">
+        <Image className="cta-laurel cta-laurel-left" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
+        <Image className="cta-laurel cta-laurel-right" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
         <div className="page-width final-cta-inner">
           <div>
             <p className="eyebrow">Novelty Engine V2.1</p>
@@ -306,7 +308,7 @@ export default function Home() {
 
       <footer className="site-footer">
         <div className="page-width footer-inner">
-          <a className="brand" href="#top"><Mark /><span>Novelty Engine</span></a>
+          <a className="brand" href="#top"><Image className="footer-wreath" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized /><span>Novelty Engine</span></a>
           <p>V2.1 · Free and open source under the MIT License.</p>
           <a href={githubUrl} target="_blank" rel="noreferrer">GitHub <UtilityIcon kind="external" /></a>
         </div>

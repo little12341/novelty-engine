@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./landing-refinement.css";
+import "./install-transition.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://novelty-engine.vercel.app"),

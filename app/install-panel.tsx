@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
 const installCommands = "mkdir -p ~/.claude/skills\ncp -R novelty-engine ~/.claude/skills/";
@@ -109,16 +110,25 @@ export function HeroInstallPanel() {
       frame = window.requestAnimationFrame(() => {
         stage.querySelectorAll<HTMLElement>(".liquid-glass").forEach((glass) => {
           const bounds = glass.getBoundingClientRect();
-          const x = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100));
-          const y = Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100));
+          const x = Math.max(-14, Math.min(114, ((event.clientX - bounds.left) / bounds.width) * 100));
+          const y = Math.max(-18, Math.min(118, ((event.clientY - bounds.top) / bounds.height) * 100));
+          const dx = event.clientX < bounds.left
+            ? bounds.left - event.clientX
+            : event.clientX > bounds.right ? event.clientX - bounds.right : 0;
+          const dy = event.clientY < bounds.top
+            ? bounds.top - event.clientY
+            : event.clientY > bounds.bottom ? event.clientY - bounds.bottom : 0;
+          const proximity = Math.max(0, 1 - Math.hypot(dx, dy) / 440);
           glass.style.setProperty("--glass-x", `${x}%`);
           glass.style.setProperty("--glass-y", `${y}%`);
+          glass.style.setProperty("--glass-light", `${0.48 + proximity * 0.27}`);
         });
       });
     };
     const resetGlass = () => stage.querySelectorAll<HTMLElement>(".liquid-glass").forEach((glass) => {
       glass.style.removeProperty("--glass-x");
       glass.style.removeProperty("--glass-y");
+      glass.style.removeProperty("--glass-light");
     });
 
     stage.addEventListener("pointermove", updateGlass, { passive: true });
@@ -178,6 +188,7 @@ export function HeroInstallPanel() {
 
 export function InstallPanel() {
   const [mcpEndpoint, setMcpEndpoint] = useState(productionMcpEndpoint);
+  const { copyState, copyText, label } = useCopyFeedback();
 
   useEffect(() => {
     const endpointTimer = window.setTimeout(() => setMcpEndpoint(window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? new URL("/api/mcp", window.location.origin).href : productionMcpEndpoint), 0);
@@ -187,7 +198,10 @@ export function InstallPanel() {
   return (
     <div className="install-options">
       <article className="install-option manual-option">
-        <div className="option-number">Option 01</div>
+        <div className="option-number">
+          <Image src="/assets/generated/open-laurel-wreath-v3.png" alt="" fill sizes="72px" unoptimized aria-hidden="true" />
+          <span>Option 01</span>
+        </div>
         <div>
           <p className="option-kicker">Claude Skill</p>
           <h3>Install the local Skill.</h3>
@@ -196,14 +210,23 @@ export function InstallPanel() {
         <div className="command-block">
           <div className="command-header">
             <span>Manual install</span>
-            <span className="command-meta">Two commands</span>
+            <button type="button" onClick={() => copyText("commands", installCommands)} aria-label="Copy both Claude Skill setup commands">
+              <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><rect x="6" y="6" width="8" height="8" rx="1"/><path d="M12 6V4.8c0-.5-.4-.8-.8-.8H4.8c-.4 0-.8.3-.8.8v6.4c0 .4.4.8.8.8H6"/></svg>
+              {label("commands")}
+            </button>
           </div>
           <pre><code>{installCommands}</code></pre>
         </div>
+        <span className="sr-only" role="status" aria-live="polite">
+          {copyState.target === "commands" && copyState.status === "copied" ? "Both install commands copied to clipboard." : copyState.target === "commands" && copyState.status === "error" ? "Could not copy the install commands." : ""}
+        </span>
       </article>
 
       <article className="install-option browser-option">
-        <div className="option-number">Option 02</div>
+        <div className="option-number">
+          <Image src="/assets/generated/open-laurel-wreath-v3.png" alt="" fill sizes="72px" unoptimized aria-hidden="true" />
+          <span>Option 02</span>
+        </div>
         <div>
           <p className="option-kicker">Claude browser</p>
           <h3>Connect live research once.</h3>
@@ -212,11 +235,17 @@ export function InstallPanel() {
         <div className="command-block mcp-command">
           <div className="command-header">
             <span>Streamable HTTP endpoint</span>
-            <span className="command-meta">Remote connection</span>
+            <button type="button" onClick={() => copyText("mcp", mcpEndpoint)} aria-label="Copy MCP endpoint">
+              <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><rect x="6" y="6" width="8" height="8" rx="1"/><path d="M12 6V4.8c0-.5-.4-.8-.8-.8H4.8c-.4 0-.8.3-.8.8v6.4c0 .4.4.8.8.8H6"/></svg>
+              {label("mcp")}
+            </button>
           </div>
           <pre><code>{mcpEndpoint}</code></pre>
           <p className="archive-contents"><span>Test connection</span><a href={productionHealthEndpoint} target="_blank" rel="noreferrer">Open health check</a></p>
         </div>
+        <span className="sr-only" role="status" aria-live="polite">
+          {copyState.target === "mcp" && copyState.status === "copied" ? "MCP endpoint copied to clipboard." : copyState.target === "mcp" && copyState.status === "error" ? "Could not copy the MCP endpoint." : ""}
+        </span>
       </article>
     </div>
   );
