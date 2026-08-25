@@ -138,14 +138,14 @@ export function clusterComplaints(evidence: Evidence[]): ComplaintCluster[] {
   }
 
   return [...buckets.values()].map(({ rule, evidence: items, segments, workarounds }) => {
-    const sourceHosts = new Set(items.map((item) => new URL(item.normalizedUrl).hostname));
-    const independentCount = Math.max(items.length, sourceHosts.size);
+    const independentGroups = new Set(items.map((item) => item.sourceAssessment.independenceGroup));
+    const independentCount = independentGroups.size;
     const isIsolated = independentCount < 2;
     return {
       id: stableId("complaint", rule.label),
       label: rule.label,
       normalizedProblem: `${rule.label} is reported in retrieved user or developer discussions.`,
-      evidenceCount: items.length,
+      evidenceCount: independentCount,
       severity: rule.severity,
       affectedSegment: segments[0] ?? null,
       representativeEvidenceIds: items.slice(0, 5).map((item) => item.id),

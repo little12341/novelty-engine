@@ -4,6 +4,8 @@ function citation(evidence: Evidence) {
   return {
     id: evidence.id, title: evidence.title, url: evidence.sourceUrl,
     publicationDate: evidence.publicationDate, confidence: evidence.confidence,
+    sourceType: evidence.sourceType, sourceAssessment: evidence.sourceAssessment,
+    duplicateSourceUrls: evidence.duplicateSourceUrls,
   };
 }
 
@@ -60,8 +62,12 @@ export function summarizeResearch(result: ResearchResult) {
         outcome: opportunity.falsification.outcome, survivalScore: opportunity.falsification.survivalScore,
         reason: opportunity.falsification.reason,
         unknownDimensions: opportunity.falsification.hypotheses.filter((item) => item.unknown).map((item) => item.dimension),
+        decisiveRisks: opportunity.falsification.decisiveRisks,
       },
       evidenceIds: opportunity.candidate.evidenceIds,
+      evidenceLineage: opportunity.lineage,
+      decisionFactors: opportunity.score.decisionFactors,
+      writtenReasoning: opportunity.score.writtenReasoning,
       validationExperiment: opportunity.validationExperiment,
     };
   });
@@ -69,10 +75,19 @@ export function summarizeResearch(result: ResearchResult) {
   return {
     schemaVersion: result.schemaVersion, runId: result.id, query: result.query, status: result.status,
     provider: result.provider, cache: result.cache, completedAt: result.completedAt,
-    gaps: result.gaps.slice(0, 5).map((gap) => summarizeGap(gap, result)), survivors,
+    researchLandscape: result.output.researchLandscape,
+    signals: result.output.signals,
+    structuralGaps: result.output.structuralGaps.slice(0, 5).map((gap) => summarizeGap(gap, result)),
+    candidateIdeas: result.output.candidateIdeas.slice(0, 12),
+    rejectedIdeas: result.output.rejectedIdeas.slice(0, 12),
+    survivors,
+    evidenceLineage: result.output.evidenceLineage,
+    decisiveRisks: result.output.decisiveRisks,
+    validationTests: result.output.validationTests,
+    stopDecision: result.stopDecision,
     citations: citationsFor([...evidenceIds], result, 20), warnings: result.warnings,
     budgetUsage: result.budgetUsage,
-    unknowns: survivors.length === 0 ? ["No opportunity survived the bounded falsification loop."] : [],
+    unknowns: survivors.length === 0 ? [result.stopDecision.status === "insufficient_evidence" ? "Insufficient evidence for a compelling opportunity; no candidate was forced." : "No opportunity survived the bounded falsification loop."] : [],
     retrievalHint: "Use get_research_run with include_full=true only when the full internal record is needed.",
   };
 }

@@ -1,4 +1,6 @@
-export const RESEARCH_SCHEMA_VERSION = "2.0.0" as const;
+export const RESEARCH_SCHEMA_VERSION = "2.1.0" as const;
+
+export type ClaimStatus = "VERIFIED" | "INFERRED" | "UNKNOWN";
 
 export type SearchAngleKind =
   | "direct_competitors"
@@ -10,7 +12,15 @@ export type SearchAngleKind =
   | "workflow_fragmentation"
   | "poor_integrations"
   | "change_signals"
-  | "substitutes";
+  | "substitutes"
+  | "customer_language"
+  | "failed_attempts"
+  | "research_regulation"
+  | "open_source_patents"
+  | "jobs_procurement"
+  | "adjacent_mechanisms"
+  | "active_falsification_competition"
+  | "active_falsification_constraints";
 
 export type SourceType =
   | "official_company"
@@ -24,6 +34,10 @@ export type SourceType =
   | "review"
   | "industry_publication"
   | "regulator"
+  | "research"
+  | "patent"
+  | "job_posting"
+  | "marketplace"
   | "other";
 
 export type GapType =
@@ -81,6 +95,28 @@ export interface Evidence {
   supports: string;
   confidence: number;
   searchAngleIds: string[];
+  claimFingerprint: string;
+  duplicateSourceUrls: string[];
+  duplicateSourceTypes: SourceType[];
+  sourceAssessment: {
+    quality: number;
+    directness: number;
+    recency: number;
+    independence: number;
+    overallWeight: number;
+    independenceGroup: string;
+    isPrimary: boolean;
+    repetitionRisk: "none" | "possible" | "likely";
+    rationale: string;
+  };
+}
+
+export interface TraceableClaim {
+  id: string;
+  claim: string;
+  status: ClaimStatus;
+  evidenceIds: string[];
+  rationale: string;
 }
 
 export interface SupportedValue<T> {
@@ -330,6 +366,14 @@ export interface IdeaCandidate {
   sourceFailedAttemptIds: string[];
   evidenceIds: string[];
   iteration: number;
+  rootCandidateId: string;
+  mechanismFamily: string;
+  crossDomainTransfer: {
+    sourceDomain: string;
+    borrowedMechanism: string;
+    structuralAnalogue: string;
+    adaptationBoundary: string;
+  } | null;
 }
 
 export interface MutationRecord {
@@ -341,6 +385,8 @@ export interface MutationRecord {
   after: string;
   effect: string;
   iteration: number;
+  boundedRationale: string;
+  result: "pending" | "survived" | "rejected";
 }
 
 export interface NoveltyFingerprint {
@@ -368,12 +414,17 @@ export interface LineageStep {
   refId: string;
   label: string;
   evidenceIds: string[];
+  claimStatus: ClaimStatus;
 }
 
 export interface IdeaLineage {
   candidateId: string;
   steps: LineageStep[];
   summary: string;
+  observations: TraceableClaim[];
+  contradictions: TraceableClaim[];
+  mutations: Array<{ mutationId: string; parentCandidateId: string; dimension: MutationDimension; before: string | null; after: string }>;
+  evidenceIds: string[];
 }
 
 export type FalsificationDimension =
@@ -387,6 +438,9 @@ export interface FalsificationHypothesis {
   counterEvidenceIds: string[];
   risk: number;
   unknown: boolean;
+  claimStatus: ClaimStatus;
+  rationale: string;
+  decisive: boolean;
 }
 
 export interface FalsificationResult {
@@ -397,6 +451,8 @@ export interface FalsificationResult {
   survivalScore: number;
   outcome: "survived" | "mutate" | "rejected";
   reason: string;
+  decisiveRisks: Array<{ dimension: FalsificationDimension; risk: number; status: ClaimStatus; reason: string; evidenceIds: string[] }>;
+  unknownCriticalCount: number;
 }
 
 export interface OpportunityScoreFactors {
@@ -413,6 +469,25 @@ export interface OpportunityScore {
   penalties: Array<{ code: string; points: number; reason: string }>;
   confidenceLabel: "evidence-backed" | "plausible" | "speculative";
   heuristic: true;
+  decisionFactors: {
+    evidenceStrength: ScoreFactorAssessment;
+    demandSignal: ScoreFactorAssessment;
+    noveltyDifferentiation: ScoreFactorAssessment;
+    feasibility: ScoreFactorAssessment;
+    economics: ScoreFactorAssessment;
+    distribution: ScoreFactorAssessment;
+    defensibility: ScoreFactorAssessment;
+    regulatoryRisk: ScoreFactorAssessment;
+    confidence: ScoreFactorAssessment;
+  };
+  writtenReasoning: string;
+}
+
+export interface ScoreFactorAssessment {
+  score: number;
+  status: ClaimStatus;
+  rationale: string;
+  evidenceIds: string[];
 }
 
 export interface ValidationExperiment {
@@ -439,6 +514,55 @@ export interface FinalOpportunity {
   validationExperiment: ValidationExperiment;
 }
 
+export interface RejectedIdea {
+  candidateId: string;
+  name: string;
+  phase: "evidence_gate" | "deduplication" | "competitor_check" | "falsification" | "mutation" | "selection_cutoff";
+  reason: string;
+  evidenceIds: string[];
+  decisiveRisks: FalsificationDimension[];
+  mutatedFrom: string | null;
+}
+
+export interface ResearchCoverage {
+  requestedAngles: number;
+  successfulAngles: number;
+  failedAngles: number;
+  usableSourceCount: number;
+  independentSourceCount: number;
+  sourceTypeCount: number;
+  sourceTypes: SourceType[];
+  sourceFamilyCoverage: Record<"competitor" | "user_voice" | "technical" | "institutional" | "failed_attempt" | "commercial", number>;
+  missingCriticalSourceFamilies: string[];
+  duplicateClaimsCollapsed: number;
+  qualityWeightedEvidence: number;
+  coverageStatus: "adequate" | "partial" | "insufficient";
+}
+
+export interface StopDecision {
+  status: "proceed" | "partial_research" | "insufficient_evidence";
+  canGenerateCandidates: boolean;
+  reasons: string[];
+  distinction: "A validated opportunity requires positive demand evidence and a surviving falsification case; merely finding no competitor never qualifies.";
+}
+
+export interface FinalOutputSchema {
+  researchLandscape: {
+    coverage: ResearchCoverage;
+    competitors: Array<{ id: string; name: string | null; website: string; claimStatus: ClaimStatus; evidenceIds: string[] }>;
+    sourceTypeCounts: Partial<Record<SourceType, number>>;
+  };
+  signals: Array<{ id: string; label: string; status: ClaimStatus; evidenceIds: string[] }>;
+  structuralGaps: CandidateGap[];
+  candidateIdeas: Array<{ candidateId: string; name: string; mechanismFamily: string; status: "rejected" | "survivor" }>;
+  rejectedIdeas: RejectedIdea[];
+  survivors: FinalOpportunity[];
+  evidenceLineage: IdeaLineage[];
+  decisiveRisks: Array<{ candidateId: string; risks: FalsificationResult["decisiveRisks"] }>;
+  validationTests: ValidationExperiment[];
+  stopDecision: StopDecision;
+}
+
 export interface PipelineBudgetUsage {
   providerCalls: number;
   modelIterations: number;
@@ -459,6 +583,7 @@ export interface IdeationContext {
   weakSignals: WeakSignal[];
   resurrectionOpportunities: FailedAttempt[];
   finalOpportunities: FinalOpportunity[];
+  finalOutput: FinalOutputSchema;
   budgetUsage: PipelineBudgetUsage;
 }
 
@@ -495,6 +620,10 @@ export interface ResearchResult {
   opportunityScores: OpportunityScore[];
   validationExperiments: ValidationExperiment[];
   finalOpportunities: FinalOpportunity[];
+  rejectedIdeas: RejectedIdea[];
+  coverage: ResearchCoverage;
+  stopDecision: StopDecision;
+  output: FinalOutputSchema;
   budgetUsage: PipelineBudgetUsage;
   ideationContext: IdeationContext;
   warnings: string[];

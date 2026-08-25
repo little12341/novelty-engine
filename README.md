@@ -1,19 +1,21 @@
 # Novelty Engine
 
-Novelty Engine V2.1 is an evidence-driven opportunity-discovery pipeline plus a Claude Skill. It gathers and deduplicates public sources, models the market as an Opportunity Graph, detects structural holes and stitched workflows, challenges category assumptions, generates and mutates typed candidates, rejects fingerprint lookalikes, tries to falsify the survivors, ranks them with visible factor scores, and attaches a measurable validation experiment. Claude consumes that structured result instead of pretending a prompt performed research.
+Novelty Engine V2.1 is an evidence-driven opportunity-discovery pipeline plus a Claude Skill. It maps a market across source families, collapses repeated claims, weights source quality and independence, models structural gaps, actively searches for counterevidence, rejects unsupported or duplicate candidates, and returns only falsification survivors with traceable lineage and 24–72 hour kill tests. Claude consumes the same structured contract exposed by MCP instead of pretending a prompt performed research.
 
-It never treats missing search results as proof of demand, and it never fills unsupported competitors, prices, complaints, or citations from model memory. Unknown stays unknown.
+It never treats missing search results as proof of demand, and it never fills unsupported competitors, prices, complaints, or citations from model memory. Claims remain `VERIFIED`, `INFERRED`, or `UNKNOWN`, and an `insufficient_evidence` stop produces no forced ideas.
 
 ## Architecture
 
 ```text
 Claude browser / Claude Code -> Novelty Engine Skill -> remote MCP (/api/mcp)
-  -> user request -> research plan -> bounded source gathering -> competitor map
+  -> user request -> synonym/customer-language plan -> bounded source gathering
+  -> source quality/independence/repetition assessment -> competitor + substitute map
   -> complaint/workaround mining -> Opportunity Graph -> graph-hole detection
   -> weak signals -> failed-attempt mining -> assumption contradictions
-  -> candidate generation -> constraint mutation -> novelty fingerprints
-  -> falsification -> bounded survivor mutation -> factor ranking
-  -> 24-72 hour validation experiments -> cited ResearchResult + cache record
+  -> evidence gate + stop decision -> candidate generation -> novelty fingerprints
+  -> active counterevidence + 11-dimension falsification -> one bounded mutation
+  -> 9 decision assessments with written reasoning -> 24-72 hour validation tests
+  -> consistent final output + cited ResearchResult + schema-safe cache record
 ```
 
 The app uses Next.js App Router, TypeScript, native `fetch`, the official MCP TypeScript SDK with Vercel's Web-standard handler, Zod schemas, Node storage helpers, and an optional Upstash Redis adapter. The provider, storage, protection, and authorization boundaries remain intentionally small.
@@ -31,9 +33,9 @@ Important locations:
 
 ## What the pipeline researches
 
-Every request derives bounded angles for direct competitors, adjacent categories, customer complaints, manual workarounds, pricing complaints, underserved segments, workflow fragmentation, poor integrations, regulatory/technology changes, and substitutes. Targeted angles use legitimate indexed public pages and `site:` queries for sources such as Reddit, GitHub, review sites, startup directories, and forums. The system does not bypass robots, authentication, paywalls, or access controls and does not directly scrape protected pages.
+Every request derives bounded angles for direct competitors, substitutes, first-person complaints and negative reviews, manual workarounds, customer terminology, pricing/procurement objections, underserved segments, GitHub/open-source gaps, research/regulation/patents, failed products, job postings, and paid labor. A provisional pass then spends remaining budget on candidate-focused competitor/demand and economics/feasibility/trust/regulatory counterqueries. The system does not bypass robots, authentication, paywalls, or access controls and does not directly scrape protected pages.
 
-Each normalized source records its URL, title, inferred source type, available date, factual search-result summary, the question it supports, confidence, retrieval time, and contributing search angles. Repeated normalized URLs merge and do not inflate counts.
+Each normalized source records its URL, title, inferred source type, date, search-result summary, retrieval time, contributing angles, claim fingerprint, repeated-copy URLs, and a transparent quality/directness/recency/independence assessment. Repeated URLs and high-overlap claims merge and cannot inflate recurrence, while the repetition warning remains visible.
 
 Competitor fields use an evidence-carrying value shape: `{ value, evidenceIds, confidence }`. Public pricing is extracted only when a retrieved result states a price or pricing phrase. Target customers, weaknesses, and other unsupported fields remain `null` with no evidence IDs.
 
@@ -50,11 +52,11 @@ Configure one provider. Both are server-side only and are never referenced by cl
 | `BRAVE_SEARCH_API_KEY` | One of the two keys | Brave Search API subscription token |
 | `TAVILY_API_KEY` | One of the two keys | Tavily Search API key |
 | `SEARCH_PROVIDER` | No; default `auto` | `brave`, `tavily`, or `auto` (Brave first) |
-| `RESEARCH_MAX_QUERIES` | No; default 10, hard cap 12 | Search calls per research run |
+| `RESEARCH_MAX_QUERIES` | No; default/hard cap 12 | Landscape plus active-falsification search angles per run |
 | `RESEARCH_RESULTS_PER_QUERY` | No; default 6, hard cap 10 | Provider results per angle |
 | `RESEARCH_MAX_PROVIDER_CALLS` | No; default follows query cap, hard cap 12 | Total search-provider calls |
 | `RESEARCH_MAX_CANDIDATES` | No; default 30, hard cap 48 | Initial plus survivor-mutation candidates |
-| `RESEARCH_MAX_SURVIVOR_ITERATIONS` | No; default/hard cap 2 | Maximum mutation/retest rounds |
+| `RESEARCH_MAX_SURVIVOR_ITERATIONS` | No; default/hard cap 1 | One tightly bounded mutation/retest round; one dimension per root |
 | `RESEARCH_MAX_MODEL_ITERATIONS` | No; default 0, hard cap 6 | Reserved model-provider budget; deterministic engine currently uses 0 |
 | `RESEARCH_TIMEOUT_MS` | No; default 15000, hard cap 30000 | Per-provider-call timeout |
 | `RESEARCH_RATE_LIMIT_PER_HOUR` | No | Legacy alias used when `MCP_RATE_LIMIT_PER_HOUR` is unset |
@@ -116,7 +118,7 @@ Successful local runs are saved twice under `.research-runs/`: an immutable run-
 }
 ```
 
-The versioned `ResearchResult` contains sources, competitor/complaint/gap records, the graph and holes, assumptions and contradictions, stitching patterns, weak signals, failed attempts, candidates and mutations, fingerprints and similarity explanations, falsification results, lineages, factor scores, validation experiments, final opportunities, explicit budget usage, warnings, and a reduced `ideationContext`. Factual fields carry evidence IDs; unsupported values remain `null` or absent.
+The versioned `ResearchResult` contains source assessments, coverage, a stop decision, competitor/complaint/gap records, graph and holes, assumptions and contradictions, stitching patterns, weak signals, failed attempts, candidates, bounded mutations, fingerprints, falsification results, rejected ideas, lineages, written decision scores, validation experiments, and a consistent `finalOutput`. The concise order is Research Landscape → Signals → Structural Gaps → Candidate Ideas → Rejected Ideas + Why → Survivors → Evidence Lineage → Decisive Risks → 24–72 Hour Validation Tests.
 
 ## Remote MCP
 
@@ -132,7 +134,7 @@ The deliberate tool surface is:
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
-| `research_market` | `{ query: string }` | Full pipeline execution summarized as ranked gaps, survivors, citations, scores, confidence, warnings, budgets, and a run ID |
+| `research_market` | `{ query: string }` | Complete V2.1 output schema, coverage/stop decision, citations, warnings, budgets, and run ID; may return no ideas |
 | `find_market_gaps` | `{ run_id: string, limit?: 1..10 }` | Ranked gaps with supporting/counter citations and explicit unknowns |
 | `inspect_competitors` | `{ run_id: string, limit?: 1..15 }` | Evidence-carrying competitor map; unsupported fields stay `null` |
 | `falsify_opportunity` | `{ opportunity: string, run_id?: string, candidate_id?: string }` | Up to four fresh counterevidence searches plus the falsification result |

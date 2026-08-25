@@ -40,6 +40,8 @@ test("deduplication prevents repeated URLs from inflating evidence", () => {
   ], "2026-08-24T00:00:00.000Z", 20);
   assert.equal(sources.length, 1);
   assert.equal(sources[0].searchAngleIds.length, 2);
+  assert.equal(sources[0].duplicateSourceUrls.length, 1);
+  assert.equal(sources[0].sourceAssessment.repetitionRisk, "likely");
 });
 
 test("claim deduplication prevents syndicated copies at different URLs from inflating evidence", () => {
@@ -51,6 +53,8 @@ test("claim deduplication prevents syndicated copies at different URLs from infl
   ], "2026-08-24T00:00:00.000Z", 20);
   assert.equal(sources.length, 1);
   assert.equal(sources[0].searchAngleIds.length, 2);
+  assert.equal(sources[0].duplicateSourceUrls.length, 1);
+  assert.equal(sources[0].sourceAssessment.repetitionRisk, "likely");
 });
 
 test("competitor extraction only fills fields supported by evidence", () => {

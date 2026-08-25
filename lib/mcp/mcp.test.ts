@@ -68,6 +68,12 @@ test("MCP fixture path research_market -> pipeline -> survivor opportunities pre
     assert.ok(structured.survivors.length > 0);
     assert.ok(structured.citations.length > 0);
     assert.ok(structured.citations.every((item) => item.url.startsWith("https://")));
+    assert.equal(structured.stopDecision.status, result.ideationContext.finalOutput.stopDecision.status);
+    assert.equal(structured.researchLandscape.coverage.usableSourceCount, result.coverage.usableSourceCount);
+    assert.ok(Array.isArray(structured.rejectedIdeas));
+    assert.ok(Array.isArray(structured.evidenceLineage));
+    assert.ok(Array.isArray(structured.decisiveRisks));
+    assert.ok(Array.isArray(structured.validationTests));
   });
 });
 
@@ -95,7 +101,7 @@ test("falsify_opportunity routes the validated candidate to focused falsificatio
       candidate: { id: "candidate_test", name: "Test", summary: input.opportunity, targetCustomer: null, mechanism: "test mechanism" },
       priorRunId: null, provider: { id: "fixture", displayName: "Fixture" },
       activeSearch: { requestedQueries: 4, successfulQueries: 4, sourceCount: 4, errors: [] },
-      falsification: { candidateId: "candidate_test", hypotheses: [], argumentsFor: [], argumentsAgainst: [], survivalScore: 40, outcome: "mutate" as const, reason: "Test counterevidence requires mutation." },
+      falsification: { candidateId: "candidate_test", hypotheses: [], argumentsFor: [], argumentsAgainst: [], survivalScore: 40, outcome: "mutate" as const, reason: "Test counterevidence requires mutation.", decisiveRisks: [], unknownCriticalCount: 1 },
       citations: [{ id: "ev_test", title: "Counterevidence", url: "https://example.test/counterevidence", confidence: 0.7 }],
       explicitUnknowns: ["economics" as const], warning: "Fixture falsification response.",
     };

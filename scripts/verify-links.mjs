@@ -5,6 +5,7 @@ const root = process.cwd();
 const sources = await Promise.all([
   readFile(path.join(root, "app", "page.tsx"), "utf8"),
   readFile(path.join(root, "app", "install-panel.tsx"), "utf8"),
+  readFile(path.join(root, "app", "install-transition.tsx"), "utf8"),
 ]);
 const source = sources.join("\n");
 const ids = new Set([...source.matchAll(/id="([^"]+)"/g)].map((match) => match[1]));

@@ -11,7 +11,20 @@ export class ResearchConfigurationError extends Error {
 }
 
 function requireOk(response: Response, provider: string): void {
-  if (!response.ok) throw new Error(`${provider} search failed with HTTP ${response.status}`);
+  if (!response.ok) {
+    const retryAfter = response.headers.get("retry-after");
+    throw new Error(`${provider} search failed with HTTP ${response.status}${retryAfter ? ` (retry-after ${retryAfter})` : ""}`);
+  }
+}
+
+async function readJson<T>(response: Response, provider: string): Promise<T> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType && !/json/i.test(contentType)) throw new TypeError(`${provider} returned malformed non-JSON content (${contentType}).`);
+  try {
+    return await response.json() as T;
+  } catch (error) {
+    throw new TypeError(`${provider} returned malformed JSON: ${error instanceof Error ? error.message : "parse failure"}`);
+  }
 }
 
 export class BraveSearchProvider implements SearchProvider {
@@ -30,7 +43,8 @@ export class BraveSearchProvider implements SearchProvider {
       signal: options.signal,
     });
     requireOk(response, this.displayName);
-    const payload = await response.json() as { web?: { results?: Array<{ url?: string; title?: string; description?: string; age?: string }> } };
+    const payload = await readJson<{ web?: { results?: Array<{ url?: string; title?: string; description?: string; age?: string }> } }>(response, this.displayName);
+    if (payload.web?.results !== undefined && !Array.isArray(payload.web.results)) throw new TypeError(`${this.displayName} returned a malformed results field.`);
     return (payload.web?.results ?? []).flatMap((item, index) => item.url && item.title ? [{
       url: item.url,
       title: item.title,
@@ -55,7 +69,8 @@ export class TavilySearchProvider implements SearchProvider {
       signal: options.signal,
     });
     requireOk(response, this.displayName);
-    const payload = await response.json() as { results?: Array<{ url?: string; title?: string; content?: string; published_date?: string; score?: number }> };
+    const payload = await readJson<{ results?: Array<{ url?: string; title?: string; content?: string; published_date?: string; score?: number }> }>(response, this.displayName);
+    if (payload.results !== undefined && !Array.isArray(payload.results)) throw new TypeError(`${this.displayName} returned a malformed results field.`);
     return (payload.results ?? []).flatMap((item, index) => item.url && item.title ? [{
       url: item.url,
       title: item.title,

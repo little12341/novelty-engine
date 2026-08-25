@@ -45,6 +45,7 @@ const baseCandidate: IdeaCandidate = {
   sourceContradictionIds: contradictions.slice(0, 1).map((item) => item.id), sourceStitchingIds: stitching.slice(0, 1).map((item) => item.id),
   sourceSignalIds: signals.slice(0, 1).map((item) => item.id), sourceFailedAttemptIds: failures.slice(0, 1).map((item) => item.id),
   evidenceIds: [...new Set([...gaps.slice(0, 1).flatMap((item) => item.supportingEvidenceIds), ...stitching.slice(0, 1).flatMap((item) => item.evidenceIds)])], iteration: 0,
+  rootCandidateId: "candidate_base", mechanismFamily: "exception management", crossDomainTransfer: null,
 };
 
 test("opportunity graph constructs typed nodes, cited edges, and structural holes", () => {
@@ -134,10 +135,12 @@ test("opportunity score exposes factor-level heuristic scoring", () => {
   const fingerprint = fingerprintCandidate(baseCandidate);
   const similarities = [compareFingerprints(fingerprint, fingerprintCandidate({ ...baseCandidate, id: "other", mechanism: "manual concierge", differentiator: "human delivery" }))];
   const falsification = falsifyCandidate(baseCandidate, { evidence: sources, gaps, similarities });
-  const score = scoreOpportunity(baseCandidate, { gaps, holes, stitching, signals, similarities, falsification });
+  const score = scoreOpportunity(baseCandidate, { gaps, holes, stitching, signals, similarities, falsification, evidence: sources });
   assert.equal(score.heuristic, true);
   assert.equal(Object.keys(score.factors).length, 13);
   assert.ok(score.score >= 0 && score.score <= 100);
+  assert.equal(score.decisionFactors.noveltyDifferentiation.status, "UNKNOWN");
+  assert.ok(score.penalties.some((penalty) => penalty.code === "competitor_check_unresolved"));
 });
 
 test("validation generator creates a measurable 24–72 hour ethical test", () => {
@@ -159,7 +162,7 @@ test("limits enforce hard caps and unknown fields remain explicit", () => {
   assert.equal(limits.maxSearchQueries, 12);
   assert.equal(limits.resultsPerQuery, 10);
   assert.equal(limits.maxCandidates, 48);
-  assert.equal(limits.maxSurvivorIterations, 2);
+  assert.equal(limits.maxSurvivorIterations, 1);
   assert.equal(limits.timeoutMs, 30_000);
   const unknownFailure = mineFailedAttempts(normalizeResults([{ angle, results: [{ url: "https://news.example/dead", title: "Mystery product shut down", snippet: "The product shut down." }] }], "2026-08-24T00:00:00Z", 5), []);
   assert.equal(unknownFailure[0].blocker, "unknown");

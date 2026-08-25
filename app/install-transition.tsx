@@ -73,9 +73,9 @@ function InstallViewport() {
     <div className="transition-install-viewport">
       <PrincipleStrip />
       <div className="transition-install-surface">
-        <LaurelBranch side="left" />
-        <LaurelBranch side="right" />
         <div className="transition-install-content">
+          <LaurelBranch side="left" />
+          <LaurelBranch side="right" />
           <header className="transition-install-heading">
             <Image className="transition-install-crown" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized aria-hidden="true" />
             <p className="eyebrow">Install</p>

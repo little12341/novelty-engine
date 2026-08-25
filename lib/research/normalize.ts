@@ -49,12 +49,61 @@ export function inferSourceType(urlString: string): SourceType {
   if (/g2\.com|capterra\.|trustpilot\.|trustradius\.|getapp\./.test(host)) return "review";
   if (/producthunt\.|betalist\.|crunchbase\./.test(host)) return "product_directory";
   if (/apps\.apple\.com|play\.google\.com|marketplace\./.test(host)) return "app_marketplace";
+  if (/patents\.google\.|patentscope\.|uspto\.|epo\.org/.test(host)) return "patent";
+  if (/arxiv\.|pubmed\.|nih\.gov|nature\.|sciencedirect\.|springer\.|jstor\.|doi\.org|semanticscholar\./.test(host)) return "research";
   if (/\.gov$|\.gov\.|europa\.eu$/.test(host)) return "regulator";
+  if (/jobs\.|careers\.|indeed\.|greenhouse\.|lever\.co|workdayjobs\./.test(host) || /\/jobs?|\/careers?/.test(path)) return "job_posting";
+  if (/amazon\.|etsy\.|ebay\.|alibaba\.|gumroad\./.test(host)) return "marketplace";
   if (/forum|community|discuss/.test(host) || /\/forum|\/community|\/discussions/.test(path)) return "forum";
   if (/pricing|plans|packages/.test(path)) return "pricing";
   if (/docs|documentation|help|support|developers/.test(host) || /\/docs|\/help|\/support/.test(path)) return "documentation";
   if (/techcrunch|forbes|reuters|bloomberg|wired|industry|journal|magazine/.test(host)) return "industry_publication";
   return "official_company";
+}
+
+const SOURCE_QUALITY: Record<SourceType, number> = {
+  official_company: .76, pricing: .84, documentation: .84, reddit: .52, forum: .5,
+  github: .68, product_directory: .48, app_marketplace: .6, review: .62,
+  industry_publication: .68, regulator: .96, research: .9, patent: .78,
+  job_posting: .7, marketplace: .56, other: .4,
+};
+
+function registrableHost(host: string): string {
+  const parts = host.replace(/^www\./, "").split(".");
+  return parts.slice(-2).join(".");
+}
+
+function independenceGroup(urlString: string, sourceType: SourceType): string {
+  const url = new URL(urlString);
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (sourceType === "reddit") return `${url.hostname}:${parts.slice(0, 4).join("/")}`;
+  if (sourceType === "github") return `${url.hostname}:${parts.slice(0, 2).join("/")}`;
+  if (["forum", "review", "app_marketplace", "marketplace"].includes(sourceType)) return `${url.hostname}:${parts.slice(0, 3).join("/")}`;
+  return registrableHost(url.hostname);
+}
+
+function recencyScore(publicationDate: string | null, retrievedAt: string): number {
+  if (!publicationDate) return .5;
+  const ageDays = Math.max(0, (new Date(retrievedAt).getTime() - new Date(publicationDate).getTime()) / 86_400_000);
+  return ageDays <= 365 ? 1 : ageDays <= 1_095 ? .75 : ageDays <= 2_555 ? .55 : .35;
+}
+
+function directnessScore(sourceType: SourceType): number {
+  if (["regulator", "pricing", "documentation", "patent", "job_posting"].includes(sourceType)) return .92;
+  if (["reddit", "forum", "review", "github", "app_marketplace", "marketplace"].includes(sourceType)) return .8;
+  if (["official_company", "research"].includes(sourceType)) return .78;
+  return .5;
+}
+
+function claimTokens(value: string): Set<string> {
+  return new Set(canonicalizeQuery(value).split(" ").filter((token) => token.length > 3));
+}
+
+function claimSimilarity(left: string, right: string): number {
+  const a = claimTokens(left); const b = claimTokens(right);
+  if (!a.size || !b.size) return 0;
+  const shared = [...a].filter((token) => b.has(token)).length;
+  return shared / Math.min(a.size, b.size);
 }
 
 function cleanText(value: string, maxLength = 420): string {
@@ -77,7 +126,7 @@ export function normalizeResults(
   maxSources: number,
 ): Evidence[] {
   const byUrl = new Map<string, Evidence>();
-  const byClaim = new Map<string, Evidence>();
+  const claimRepresentatives: Evidence[] = [];
   for (const { angle, results } of batches) {
     for (const result of results) {
       const normalizedUrl = normalizeUrl(result.url);
@@ -85,32 +134,60 @@ export function normalizeResults(
       const existing = byUrl.get(normalizedUrl);
       if (existing) {
         if (!existing.searchAngleIds.includes(angle.id)) existing.searchAngleIds.push(angle.id);
+        if (result.url !== existing.sourceUrl && !existing.duplicateSourceUrls.includes(result.url)) existing.duplicateSourceUrls.push(result.url);
+        existing.sourceAssessment.repetitionRisk = "likely";
         continue;
       }
       const summary = cleanText(result.snippet);
       const title = cleanText(result.title, 200);
       if (!summary || !title) continue;
       const claimKey = createHash("sha256").update(canonicalizeQuery(`${title} ${summary}`)).digest("hex");
-      const existingClaim = byClaim.get(claimKey);
+      const existingClaim = claimRepresentatives.find((item) => item.claimFingerprint === claimKey
+        || claimSimilarity(`${item.title} ${item.summary}`, `${title} ${summary}`) >= .88);
       if (existingClaim) {
         if (!existingClaim.searchAngleIds.includes(angle.id)) existingClaim.searchAngleIds.push(angle.id);
+        if (!existingClaim.duplicateSourceUrls.includes(result.url)) existingClaim.duplicateSourceUrls.push(result.url);
+        const duplicateType = inferSourceType(normalizedUrl);
+        if (!existingClaim.duplicateSourceTypes.includes(duplicateType)) existingClaim.duplicateSourceTypes.push(duplicateType);
+        existingClaim.sourceAssessment.repetitionRisk = "likely";
+        existingClaim.sourceAssessment.independence = Math.max(.25, existingClaim.sourceAssessment.independence - .1);
+        existingClaim.sourceAssessment.overallWeight = Math.round((existingClaim.sourceAssessment.quality * .35
+          + existingClaim.sourceAssessment.directness * .3 + existingClaim.sourceAssessment.recency * .2
+          + existingClaim.sourceAssessment.independence * .15) * 100) / 100;
         continue;
       }
+      const sourceType = inferSourceType(normalizedUrl);
+      const publicationDate = normalizePublicationDate(result.publishedAt);
+      const recency = recencyScore(publicationDate, retrievedAt);
+      const quality = SOURCE_QUALITY[sourceType];
+      const directness = directnessScore(sourceType);
+      const independence = .9;
+      const overallWeight = Math.round((quality * .35 + directness * .3 + recency * .2 + independence * .15) * 100) / 100;
       const normalized: Evidence = {
         id: evidenceId(normalizedUrl),
         sourceUrl: result.url,
         normalizedUrl,
         title,
-        sourceType: inferSourceType(normalizedUrl),
-        publicationDate: normalizePublicationDate(result.publishedAt),
+        sourceType,
+        publicationDate,
         retrievedAt,
         summary,
         supports: angle.purpose,
-        confidence: result.rank && result.rank > 5 ? 0.55 : 0.7,
+        confidence: Math.round((overallWeight - (result.rank && result.rank > 5 ? .08 : 0)) * 100) / 100,
         searchAngleIds: [angle.id],
+        claimFingerprint: claimKey,
+        duplicateSourceUrls: [],
+        duplicateSourceTypes: [],
+        sourceAssessment: {
+          quality, directness, recency, independence, overallWeight,
+          independenceGroup: independenceGroup(normalizedUrl, sourceType),
+          isPrimary: ["official_company", "pricing", "documentation", "regulator", "research", "patent", "job_posting"].includes(sourceType),
+          repetitionRisk: "none",
+          rationale: `Weighted by ${sourceType} quality, claim directness, publication recency, and publisher independence; search rank is not treated as truth.`,
+        },
       };
       byUrl.set(normalizedUrl, normalized);
-      byClaim.set(claimKey, normalized);
+      claimRepresentatives.push(normalized);
       if (byUrl.size >= maxSources) break;
     }
     if (byUrl.size >= maxSources) break;

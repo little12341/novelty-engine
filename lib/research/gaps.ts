@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { CandidateGap, ComplaintCluster, Competitor, Evidence, GapPenalty, GapScoreFactors, UnderservedSegment } from "./types.ts";
+import { independentEvidenceCount } from "./quality.ts";
 
 const clamp = (value: number, min = 0, max = 10) => Math.min(max, Math.max(min, value));
 
@@ -37,7 +38,7 @@ export function detectGaps(
 ): CandidateGap[] {
   return complaints.map((complaint) => {
     const supportingEvidence = evidence.filter((item) => complaint.representativeEvidenceIds.includes(item.id));
-    const hosts = new Set(supportingEvidence.map((item) => new URL(item.normalizedUrl).hostname));
+    const independentCount = independentEvidenceCount(complaint.representativeEvidenceIds, evidence);
     const segment = complaint.affectedSegment ?? segments.find((item) => item.evidenceIds.some((id) => complaint.representativeEvidenceIds.includes(id)))?.segment ?? null;
     const relatedCompetitors = competitors.filter((competitor) => competitor.evidenceIds.some((id) => {
       const source = evidence.find((item) => item.id === id);
@@ -61,10 +62,11 @@ export function detectGaps(
     };
     const scored = scoreGap(factors, {
       evidenceCount: complaint.evidenceCount,
-      independentSourceCount: hosts.size,
+      independentSourceCount: independentCount,
       competitorCount: competitors.length,
     });
-    const confidence = clamp(0.25 + complaint.evidenceCount * 0.12 + hosts.size * 0.08 - scored.penalties.length * 0.08, 0, 0.95);
+    const qualityWeight = supportingEvidence.reduce((sum, item) => sum + item.sourceAssessment.overallWeight, 0) / Math.max(1, supportingEvidence.length);
+    const confidence = clamp(0.2 + complaint.evidenceCount * 0.1 + independentCount * 0.08 + qualityWeight * .2 - scored.penalties.length * 0.08, 0, 0.95);
     const confidenceLabel = confidence >= 0.68 && complaint.evidenceCount >= 3
       ? "evidence-backed market gap"
       : confidence >= 0.45 && complaint.evidenceCount >= 2

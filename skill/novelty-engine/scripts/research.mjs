@@ -32,7 +32,9 @@ try {
     process.exit(1);
   }
   const result = JSON.parse(text);
-  if (!result?.ideationContext || !Array.isArray(result?.sources)) throw new Error("response did not contain a structured research result");
+  if (!result?.ideationContext?.finalOutput || !result?.stopDecision || !result?.coverage || !Array.isArray(result?.sources)) {
+    throw new Error("response did not contain the V2.1 research, coverage, stop-decision, and final-output contract");
+  }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 } catch (error) {
   console.error(`Research backend unavailable: ${error instanceof Error ? error.message : String(error)}`);

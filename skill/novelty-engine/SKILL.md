@@ -37,9 +37,13 @@ node scripts/research.mjs "<the user's complete research or ideation request>"
 
 Claude browser users should install this Skill and connect `https://novelty-engine.vercel.app/api/mcp` once under **Settings → Connectors → Add custom connector**. They can test server readiness at `https://novelty-engine.vercel.app/api/mcp/health`. They do not need `NOVELTY_RESEARCH_API_URL`, PowerShell configuration, or a Tavily/Brave key. Provider credentials stay on the Novelty Engine server.
 
-Treat the backend as the evidence and invention system, not merely a source finder. Read `ideationContext.finalOpportunities` first, then its `graphHoles`, `contradictions`, `stitchingPatterns`, `weakSignals`, `resurrectionOpportunities`, `competitors`, and `evidence`. The backend has already created structured candidates, rejected near-duplicates, run falsification, bounded survivor mutations, ranked factor-level scores, and generated validation experiments. Present and, when needed, concisely adapt those survivors; do not silently resurrect a rejected candidate or replace its evidence lineage with an unsupported story.
+Treat the backend as the evidence and invention system, not merely a source finder. Read `ideationContext.finalOutput` first and preserve its exact decision structure: **Research Landscape → Signals → Structural Gaps → Candidate Ideas → Rejected Ideas + Why → Survivors → Evidence Lineage → Decisive Risks → 24–72 Hour Validation Tests**. Use `finalOpportunities`, `graphHoles`, `contradictions`, `stitchingPatterns`, `weakSignals`, `resurrectionOpportunities`, `competitors`, and `evidence` only for detail. The backend has already applied its evidence gate, checked competitors and substitutes, collapsed mechanism-level duplicates, run adversarial falsification, bounded mutations, scored decision factors with written reasoning, and generated validation experiments. Do not silently resurrect a rejected candidate or replace its evidence lineage with an unsupported story.
 
 Resolve every evidence ID to a record in `ideationContext.evidence` and then to its `sourceUrl`. Never invent a competitor, price, complaint, capability, failure reason, trend, source, or citation to fill a `null`, empty, or missing field. Treat `counterEvidenceIds`, falsification arguments, penalties, warnings, low confidence, approximate weak-signal acceleration, and exhausted budgets as decision-relevant evidence. Novelty fingerprints and opportunity scores are explicitly heuristic: explain their useful factor-level meaning, never present them as proof of uniqueness, demand, or success.
+
+Preserve the backend's claim calibration exactly: **VERIFIED** means the claim has direct, quality-weighted support under the recorded provenance rule; **INFERRED** means evidence plus an explicit transform supports a hypothesis; **UNKNOWN** means the retrieved record does not answer the question. Never promote INFERRED to VERIFIED or UNKNOWN to an assumption. Use `sourceAssessment` to account for quality, independence, recency, and directness. When `duplicateSourceUrls` is non-empty, say that repetitions were collapsed; several pages repeating one underlying claim do not become several independent signals.
+
+Honor `stopDecision`. `insufficient_evidence` means return the landscape, what was searched, missing source families, and the next research action—no ideas. `partial_research` means label the limitation and return only survivors that actually cleared the evidence and falsification gates. “No competitor found” is a retrieval result, never a validated opportunity.
 
 Preserve the requested count from the backend whenever it returned that many survivors. If it returned fewer, say why based on the recorded rejection/budget state. Do not pad the answer with failed concepts. You may ask for a larger backend run only if doing so remains within the user's scope and configured budgets.
 
@@ -169,11 +173,11 @@ Evaluate each candidate internally on:
 
 Treat similarity as a risk to investigate, not a positive score. Reject candidates that are generic, derivative, vague, novelty theater, unsupported demand stories, impractical without a reason to accept that risk, or solutions whose economics and user behavior do not fit the gap.
 
-With the V2 backend, honor each structured falsification outcome. Separate `argumentsFor` from `argumentsAgainst`, surface the hardest surviving hypothesis, and penalize strong counterevidence. An unknown falsification dimension remains unknown; absence of counterevidence is not evidence that the risk is cleared.
+With the V2.1 backend, honor each structured falsification outcome across demand, economics, feasibility, competition, distribution, behavior, trust, regulation, liability, defensibility, switching cost, and incumbent response. Separate `argumentsFor` from `argumentsAgainst`, surface `decisiveRisks`, and preserve `unknownCriticalCount`. An unknown falsification dimension remains unknown; absence of counterevidence is not evidence that the risk is cleared.
 
 ## 8. Mutate the strongest survivors
 
-Take the best survivors and deliberately change several assumptions. Useful mutation axes include:
+Only a promising candidate that cleared the positive-evidence gate and received `outcome: mutate` may be changed. Change exactly one core assumption, record the parent and before/after constraint, and retest it once. A rejected mutation is terminal for that root candidate. Useful mutation axes include:
 
 - target user, buyer, or beneficiary;
 - which complaint or workflow failure is addressed;
@@ -203,15 +207,15 @@ For each mutated survivor, ask internally:
 
 When search is available, run targeted follow-up searches for close analogues and counterevidence. A limited search can support “apparently uncommon” or “evidence suggests an underserved segment,” never absolute novelty or proven demand.
 
-## 10. Replenish rejected candidates
+## 10. Replenish rejected candidates only through the bounded evidence gate
 
-Preserve the user's requested number of final ideas whenever reasonably possible. If a candidate is rejected or collapses into another, generate or mutate a replacement, evaluate it with the same criteria, and repeat until the requested count survives.
+Treat requested count as a maximum after quality filtering, not a quota. A fresh candidate may enter only from a different evidenced structural gap or genuinely different causal mechanism. Never mutate a fully rejected idea, and never repeatedly rescue the same root candidate.
 
-Return fewer only when the constraints, evidence, safety, or available search make additional ideas misleading or materially below the quality threshold. State the reason briefly; do not silently substitute the skill's default count for an explicit request.
+Return fewer whenever the remaining candidates are duplicates, lack traceable positive evidence, fail competitor checks, retain fatal counterevidence, or exceed the mutation bound. If none survive, say **insufficient evidence** or **no candidate survived** and state why.
 
 ## 11. Return the strongest ideas
 
-If the user does not specify a count, usually return 3–5 ideas. Start with a one-sentence framing of the opportunity and any consequential assumption. When research was used, give a compact landscape summary with representative sources or evidence and the limits of the check; do not narrate every query.
+If the user does not specify a count, return at most 3–5 survivors. Use the consistent compact order: **Research Landscape → Signals → Structural Gaps → Candidate Ideas → Rejected Ideas + Why → Survivors → Evidence Lineage → Decisive Risks → 24–72 Hour Validation Tests**. Omit empty middle sections only when `stopDecision` explains why. When research was used, give representative sources and coverage limits; do not narrate every query.
 
 For each final idea include every field below. Cite the supporting public pages inline when research was used. If the research does not support a field, say “unknown” or describe it as a hypothesis instead of guessing.
 
@@ -229,7 +233,7 @@ For each final idea include every field below. Cite the supporting public pages 
 - **Hardest risk:** The most important risk, tradeoff, hidden constraint, or reason the gap may be a trap.
 - **Evidence lineage:** The concise, user-facing provenance summary from the structured lineage record.
 - **Falsification survived:** The strongest argument against, the recorded outcome, and the decisive unresolved risk.
-- **Why it ranked here:** The two or three strongest and weakest factor-level score components; call the score heuristic.
+- **Why it ranked here:** Preserve written reasoning for evidence strength, demand signal, novelty/differentiation, feasibility, economics, distribution, defensibility, regulatory risk, and confidence. The numeric score is a heuristic prioritization aid and never replaces this reasoning.
 - **First validation experiment:** Use the structured experiment's exact target, action, success threshold, failure threshold, cost, time, and decision. Keep any ethics note. Fake doors must not deceptively charge for unavailable products.
 - **Confidence:** One of **evidence-backed**, **plausible**, or **speculative**, with a brief reason.
 

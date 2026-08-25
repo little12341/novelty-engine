@@ -25,16 +25,22 @@ function textResult(value: Record<string, unknown>) {
 function toolError(error: unknown) {
   const message = error instanceof Error ? error.message : "Novelty Engine tool failed.";
   const code = error instanceof ResearchConfigurationError ? "RESEARCH_NOT_CONFIGURED"
-    : error instanceof RangeError ? "INVALID_OR_MISSING_RUN"
-      : "RESEARCH_PROVIDER_ERROR";
+    : error instanceof RangeError && /research query/i.test(message) ? "INVALID_QUERY"
+      : error instanceof RangeError ? "INVALID_OR_MISSING_RUN"
+        : /malformed/i.test(message) ? "MALFORMED_PROVIDER_RESPONSE"
+          : /abort|time(?:d)?\s*out/i.test(message) ? "RESEARCH_TIMEOUT" : "RESEARCH_PROVIDER_ERROR";
   const value: Record<string, unknown> = { error: message, code, fabricatedEvidence: false };
   if (error instanceof ResearchConfigurationError) value.requiredEnvironmentVariables = error.requiredEnvironmentVariables;
   return { content: [{ type: "text" as const, text: JSON.stringify(value) }], structuredContent: value, isError: true };
 }
 
 function errorCode(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
   return error instanceof ResearchConfigurationError ? "RESEARCH_NOT_CONFIGURED"
-    : error instanceof RangeError ? "INVALID_OR_MISSING_RUN" : "RESEARCH_PROVIDER_ERROR";
+    : error instanceof RangeError && /research query/i.test(message) ? "INVALID_QUERY"
+      : error instanceof RangeError ? "INVALID_OR_MISSING_RUN"
+        : /malformed/i.test(message) ? "MALFORMED_PROVIDER_RESPONSE"
+          : /abort|time(?:d)?\s*out/i.test(message) ? "RESEARCH_TIMEOUT" : "RESEARCH_PROVIDER_ERROR";
 }
 
 function resultMetadata(value: Record<string, unknown>) {
@@ -71,7 +77,7 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
 
   server.registerTool("research_market", {
     title: "Research a market",
-    description: "Run Novelty Engine's complete evidence-backed market research and opportunity-survivor pipeline for one topic or request. Use this first for market-gap, startup, product, or invention research.",
+    description: "Run Novelty Engine's complete V2.1 market map, source-quality, evidence gate, active counterevidence, competitor/substitute, deduplication, falsification, scoring-with-reasons, and 24–72 hour validation pipeline. It may return insufficient_evidence instead of ideas.",
     inputSchema: researchMarketInput,
     annotations,
   }, ({ query }) => observed("research_market", async () => summarizeResearch(await deps.research(query))));

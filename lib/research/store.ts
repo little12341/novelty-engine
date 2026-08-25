@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ResearchResult } from "./types.ts";
+import { RESEARCH_SCHEMA_VERSION } from "./types.ts";
 import { querySimilarity } from "./normalize.ts";
 import { getDurableRedis } from "./durable.ts";
 
@@ -11,7 +12,9 @@ const globalState = globalThis as typeof globalThis & { __noveltyResearchCache?:
 const memoryCache = globalState.__noveltyResearchCache ??= new Map<string, CacheEntry>();
 
 function hasCurrentShape(result: ResearchResult): boolean {
-  return Array.isArray(result.finalOpportunities) && Array.isArray(result.opportunityGraph?.nodes) && Array.isArray(result.falsificationResults);
+  return result.schemaVersion === RESEARCH_SCHEMA_VERSION
+    && Array.isArray(result.finalOpportunities) && Array.isArray(result.opportunityGraph?.nodes)
+    && Array.isArray(result.falsificationResults) && Boolean(result.coverage) && Boolean(result.stopDecision) && Boolean(result.output);
 }
 
 function cacheKey(canonicalQuery: string, providerId: string): string {

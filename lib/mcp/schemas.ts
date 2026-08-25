@@ -3,7 +3,7 @@ import { z } from "zod";
 const runId = z.string().regex(/^research_[a-zA-Z0-9_]{8,80}$/, "Invalid research run ID.");
 
 export const researchMarketInput = z.object({
-  query: z.string().trim().min(8).max(500).describe("Complete market research or ideation request."),
+  query: z.string().trim().min(8).max(500).describe("Complete market research or ideation request. The result may intentionally contain no candidates when evidence is insufficient."),
 }).strict();
 
 export const findMarketGapsInput = z.object({

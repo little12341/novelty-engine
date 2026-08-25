@@ -19,16 +19,25 @@ export function mutateCandidate(parent: IdeaCandidate, iteration: number, dimens
   const candidate: IdeaCandidate = {
     ...parent, id, name: `${parent.name} / ${mutation.dimension.replaceAll("_", " ")}`,
     summary: `${parent.summary} The mutation ${mutation.effect}.`, iteration,
-    [mutation.read]: after,
+    [mutation.read]: after, rootCandidateId: parent.rootCandidateId || parent.id,
   };
   return { candidate, mutation: {
     id: stableId("mutation", `${parent.id}:${id}`), parentCandidateId: parent.id, resultCandidateId: id,
     dimension: mutation.dimension, before: typeof parent[mutation.read] === "string" ? parent[mutation.read] as string : null,
     after, effect: mutation.effect, iteration,
+    boundedRationale: "One core constraint changed because the parent cleared the evidence gate but failed a bounded falsification test; no other dimensions were rescued.",
+    result: "pending",
   } };
 }
 
 export function mutateCandidates(candidates: IdeaCandidate[], iteration: number, limit: number): { candidates: IdeaCandidate[]; mutations: MutationRecord[] } {
-  const pairs = candidates.slice(0, limit).map((candidate, index) => mutateCandidate(candidate, iteration, index + iteration));
+  const seenRoots = new Set<string>();
+  const eligible = candidates.filter((candidate) => {
+    const root = candidate.rootCandidateId || candidate.id;
+    if (candidate.iteration > 0 || seenRoots.has(root)) return false;
+    seenRoots.add(root);
+    return true;
+  });
+  const pairs = eligible.slice(0, limit).map((candidate, index) => mutateCandidate(candidate, iteration, index + iteration));
   return { candidates: pairs.map((pair) => pair.candidate), mutations: pairs.map((pair) => pair.mutation) };
 }

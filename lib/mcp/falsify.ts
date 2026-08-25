@@ -30,6 +30,7 @@ function syntheticCandidate(opportunity: string): IdeaCandidate {
     dataSource: null, ownershipModel: null, workflowPosition: "unknown", differentiator: "unknown",
     sourceGapIds: ["gap_external"], sourceGraphHoleIds: [], sourceContradictionIds: [], sourceStitchingIds: [],
     sourceSignalIds: [], sourceFailedAttemptIds: [], evidenceIds: [], iteration: 0,
+    rootCandidateId: id, mechanismFamily: "externally supplied mechanism", crossDomainTransfer: null,
   };
 }
 

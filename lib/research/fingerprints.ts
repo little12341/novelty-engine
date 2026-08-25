@@ -60,7 +60,12 @@ export function rejectNearDuplicates(candidates: IdeaCandidate[], fingerprints: 
   const accepted: IdeaCandidate[] = [];
   for (const candidate of candidates) {
     const fingerprint = fingerprints.find((item) => item.candidateId === candidate.id)!;
-    if (accepted.some((item) => compareFingerprints(fingerprint, fingerprints.find((other) => other.candidateId === item.id)!).score >= threshold)) continue;
+    if (accepted.some((item) => {
+      const sameMechanism = candidate.mechanismFamily === item.mechanismFamily
+        || jaccard(tokens(`${candidate.mechanismFamily} ${candidate.mechanism}`), tokens(`${item.mechanismFamily} ${item.mechanism}`)) >= .58;
+      return sameMechanism
+        || compareFingerprints(fingerprint, fingerprints.find((other) => other.candidateId === item.id)!).score >= threshold;
+    })) continue;
     accepted.push(candidate);
   }
   return accepted;
