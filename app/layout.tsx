@@ -3,30 +3,30 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://novelty-engine.vercel.app"),
-  title: "Novelty Engine V2.1 — Find ideas the market has not made obvious",
+  title: "Novelty Engine — Discover the gaps. Build what’s next.",
   description:
-    "An open-source evidence system and Claude Skill that maps markets, finds structural gaps, falsifies candidates, and returns surviving opportunities.",
+    "Evidence-driven market-gap research that maps markets, finds structural gaps, falsifies candidates, and returns opportunities worth building.",
   openGraph: {
-    title: "Novelty Engine V2.1",
-    description: "Find ideas the market has not made obvious.",
+    title: "Novelty Engine — Discover the gaps. Build what’s next.",
+    description: "Evidence-driven market-gap research for opportunities worth building.",
     type: "website",
     images: [{
       url: "/og.png",
       width: 1731,
       height: 909,
-      alt: "Novelty Engine V2.1 — Find ideas the market has not made obvious.",
+      alt: "Novelty Engine — Discover the gaps. Build what’s next.",
     }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Novelty Engine V2.1",
-    description: "Find ideas the market has not made obvious.",
+    title: "Novelty Engine — Discover the gaps. Build what’s next.",
+    description: "Evidence-driven market-gap research for opportunities worth building.",
     images: ["/og.png"],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f6f7f3",
+  themeColor: "#f2efe6",
   colorScheme: "light",
 };
 

@@ -6,15 +6,11 @@ const installCommands = "mkdir -p ~/.claude/skills\ncp -R novelty-engine ~/.clau
 const productionMcpEndpoint = "https://novelty-engine.vercel.app/api/mcp";
 const productionHealthEndpoint = "https://novelty-engine.vercel.app/api/mcp/health";
 
-export function InstallPanel() {
+function useCopyFeedback() {
   const [copyState, setCopyState] = useState<{ target: "commands" | "mcp" | null; status: "idle" | "copied" | "error" }>({ target: null, status: "idle" });
-  const [mcpEndpoint, setMcpEndpoint] = useState(productionMcpEndpoint);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const endpointTimer = window.setTimeout(() => setMcpEndpoint(window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? new URL("/api/mcp", window.location.origin).href : productionMcpEndpoint), 0);
-    return () => { window.clearTimeout(endpointTimer); if (resetTimer.current) clearTimeout(resetTimer.current); };
-  }, []);
+  useEffect(() => () => { if (resetTimer.current) clearTimeout(resetTimer.current); }, []);
 
   async function copyText(target: "commands" | "mcp", value: string) {
     try {
@@ -43,6 +39,54 @@ export function InstallPanel() {
   const label = (target: "commands" | "mcp") => copyState.target === target
     ? copyState.status === "copied" ? "Copied" : copyState.status === "error" ? "Copy failed" : "Copy"
     : "Copy";
+
+  return { copyState, copyText, label };
+}
+
+export function HeroInstallPanel() {
+  const { copyState, copyText, label } = useCopyFeedback();
+
+  return (
+    <aside className="hero-install-panel" aria-label="Quick installation options">
+      <section>
+        <div className="hero-install-heading">
+          <span className="terminal-glyph" aria-hidden="true">›_</span>
+          <div><small>Claude Code</small><strong>Local install</strong></div>
+          <button type="button" onClick={() => copyText("commands", installCommands)} aria-label="Copy local install commands">
+            <span aria-hidden="true">▢</span> {label("commands")}
+          </button>
+        </div>
+        <pre><code>{installCommands}</code></pre>
+        <span className="sr-only" role="status" aria-live="polite">
+          {copyState.target === "commands" && copyState.status === "copied" ? "Install commands copied to clipboard." : copyState.target === "commands" && copyState.status === "error" ? "Could not copy the install commands." : ""}
+        </span>
+      </section>
+      <section>
+        <div className="hero-install-heading">
+          <span className="connector-glyph" aria-hidden="true">◎</span>
+          <div><small>Claude Browser</small><strong>MCP connector</strong></div>
+          <button type="button" onClick={() => copyText("mcp", productionMcpEndpoint)} aria-label="Copy remote MCP endpoint">
+            <span aria-hidden="true">▢</span> {label("mcp")}
+          </button>
+        </div>
+        <code className="hero-mcp-url">{productionMcpEndpoint}</code>
+        <p>Add this URL as a custom connector in Claude.</p>
+        <span className="sr-only" role="status" aria-live="polite">
+          {copyState.target === "mcp" && copyState.status === "copied" ? "MCP endpoint copied to clipboard." : copyState.target === "mcp" && copyState.status === "error" ? "Could not copy the MCP endpoint." : ""}
+        </span>
+      </section>
+    </aside>
+  );
+}
+
+export function InstallPanel() {
+  const { copyState, copyText, label } = useCopyFeedback();
+  const [mcpEndpoint, setMcpEndpoint] = useState(productionMcpEndpoint);
+
+  useEffect(() => {
+    const endpointTimer = window.setTimeout(() => setMcpEndpoint(window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? new URL("/api/mcp", window.location.origin).href : productionMcpEndpoint), 0);
+    return () => window.clearTimeout(endpointTimer);
+  }, []);
 
   return (
     <div className="install-options">

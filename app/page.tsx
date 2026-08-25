@@ -1,12 +1,12 @@
-import { InstallPanel } from "./install-panel";
+import Image from "next/image";
+import { HeroInstallPanel, InstallPanel } from "./install-panel";
 
 const githubUrl = "https://github.com/little12341/novelty-engine";
 
 function Mark() {
   return (
     <span className="mark" aria-hidden="true">
-      <span>N</span>
-      <i />
+      <i>‹</i><span>N</span><i>›</i>
     </span>
   );
 }
@@ -50,68 +50,64 @@ const phases = [
 export default function Home() {
   return (
     <main id="top">
-      <header className="site-header-wrap">
-        <div className="site-header page-width">
-          <a className="brand" href="#top" aria-label="Novelty Engine home">
-            <Mark />
-            <span>Novelty Engine</span>
-          </a>
-          <nav aria-label="Main navigation">
-            <a href="#comparison">Example</a>
-            <a href="#method">Method</a>
-            <a href="#install">Install</a>
-          </nav>
-          <a className="header-github" href={githubUrl} target="_blank" rel="noreferrer">
-            GitHub <span aria-hidden="true">↗</span>
-          </a>
-        </div>
-      </header>
+      <section className="hero-stage" id="overview" aria-labelledby="hero-title">
+        <Image
+          className="hero-image"
+          src="/hero-mediterranean.webp"
+          alt=""
+          fill
+          priority
+          unoptimized
+          sizes="100vw"
+          aria-hidden="true"
+        />
+        <div className="hero-tonal-layer" aria-hidden="true" />
 
-      <section className="hero page-width">
-        <div className="hero-copy">
-          <p className="eyebrow"><span>V2.1</span> Open-source Claude Skill</p>
-          <h1>Find the ideas the market has <em>not made obvious.</em></h1>
-          <p className="hero-lede">
-            Novelty Engine maps what exists, looks for structural gaps, and tries to disprove each candidate before it reaches you.
-          </p>
-          <div className="hero-actions">
-            <a className="button button-primary" href="#install">
-              Install the skill <span aria-hidden="true">↓</span>
+        <header className="site-header-wrap">
+          <div className="site-header page-width">
+            <a className="brand" href="#top" aria-label="Novelty Engine home">
+              <Mark />
+              <span>Novelty Engine</span>
             </a>
-            <a className="button button-secondary" href={githubUrl} target="_blank" rel="noreferrer">
-              Read the source <span aria-hidden="true">↗</span>
+            <nav aria-label="Main navigation">
+              <a href="#overview">Overview</a>
+              <a href="#method">How it works</a>
+              <a href="#install">Install</a>
+              <a href={`${githubUrl}#readme`} target="_blank" rel="noreferrer">Docs</a>
+            </nav>
+            <a className="header-github glass-control" href="#install">
+              Get started <span aria-hidden="true">→</span>
             </a>
           </div>
-          <ul className="hero-facts" aria-label="Product facts">
-            <li>Free and open source</li>
-            <li>Works locally</li>
-            <li>No account required</li>
-          </ul>
-        </div>
+        </header>
 
-        <aside className="research-card" aria-label="Novelty Engine research flow">
-          <div className="research-card-header">
-            <span>Research model</span>
-            <span className="status-pill"><i /> Evidence first</span>
+        <div className="hero page-width">
+          <div className="hero-copy">
+            <p className="eyebrow">Find what others miss</p>
+            <h1 id="hero-title">Discover the gaps.<br />Build what’s next.</h1>
+            <p className="hero-lede">
+              Novelty Engine uses research, signals, and reasoning to uncover real market gaps and generate opportunities worth building.
+            </p>
+            <div className="hero-actions">
+              <a className="button glass-control glass-primary" href="#install">
+                <span aria-hidden="true">❧</span> Install skill
+              </a>
+              <a className="button glass-control" href="#comparison">
+                Learn more <span aria-hidden="true">→</span>
+              </a>
+            </div>
           </div>
-          <div className="research-question">
-            <span>Question</span>
-            <p>Where is the market poorly served—and what mechanism could change that?</p>
-          </div>
-          <ol className="mini-flow">
-            <li><span>Landscape</span><strong>What exists?</strong></li>
-            <li><span>Gap</span><strong>What remains hard?</strong></li>
-            <li><span>Candidate</span><strong>What is meaningfully different?</strong></li>
-            <li><span>Test</span><strong>What would prove it wrong?</strong></li>
-          </ol>
-          <div className="survivor-note">
-            <span>Output</span>
-            <p><strong>Surviving opportunities</strong> with evidence lineage, decisive risks, and a measurable next test.</p>
-          </div>
-        </aside>
+
+          <HeroInstallPanel />
+
+          <a className="scroll-cue" href="#principles" aria-label="Scroll to explore">
+            <span aria-hidden="true">↓</span>
+            <small>Scroll to explore</small>
+          </a>
+        </div>
       </section>
 
-      <div className="principle-strip">
+      <div className="principle-strip" id="principles">
         <div className="page-width principle-grid">
           <p><span>01</span> Novelty without demand is a curiosity.</p>
           <p><span>02</span> Demand without differentiation is a crowded category.</p>
