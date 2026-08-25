@@ -6,6 +6,20 @@ V2 separates public evidence, deterministic inference, candidate invention, adve
 
 The backend is modular and provider-neutral. Search uses the `SearchProvider` interface; Brave and Tavily are current adapters. The deterministic invention layer uses no model calls, so fixture runs are repeatable and free. `maxModelIterations` reserves an explicit budget for a future `ModelProvider` without making one a hidden dependency.
 
+The remote MCP layer is an adapter in front of this backend, not a replacement for it:
+
+```text
+Claude browser / Claude Code
+  → Novelty Engine Skill
+  → /api/mcp (stateless MCP Streamable HTTP)
+  → deliberate tool router
+  → existing runResearch / opportunity / falsification modules
+  → Brave or Tavily
+  → structured evidence, gaps, competitors, and survivors
+```
+
+`mcp-handler` 2.x and the official MCP TypeScript SDK v2 provide Web-standard Next.js route handling. The endpoint serves MCP 2026-07-28 natively and 2025-era stateless Streamable HTTP through the package's compatibility path. No proprietary request envelope or deprecated HTTP+SSE route is used.
+
 ## Pipeline
 
 ```text
@@ -33,6 +47,22 @@ request
 ```
 
 `pipeline.ts` owns request/search/cache orchestration. `opportunity-pipeline.ts` composes the post-research stages. Individual engines do not perform network calls, persistence, or UI work.
+
+## MCP boundary
+
+`app/api/mcp/route.ts` mounts one endpoint and registers five tools through `lib/mcp/tools.ts`:
+
+- `research_market({ query })` invokes the complete existing pipeline and returns a bounded summary plus run ID.
+- `find_market_gaps({ run_id, limit? })` selects ranked gaps and resolves support/counterevidence to source URLs.
+- `inspect_competitors({ run_id, limit? })` returns the evidence-carrying competitor map and a list of unsupported fields.
+- `falsify_opportunity({ opportunity, run_id?, candidate_id? })` makes at most four focused counterevidence searches, then reuses the existing falsification engine.
+- `get_research_run({ run_id, include_full? })` returns a concise summary or the preserved full record when explicitly requested.
+
+All input schemas are strict Zod objects with bounded strings and list limits. MCP tool results include both text content and `structuredContent`; the default summaries bound sources and survivors rather than dumping every internal stage. Provider/configuration failures return tool errors with `fabricatedEvidence: false`. Transport-level request, rate, budget, and concurrency denials use HTTP `4xx`/`429` plus JSON-RPC errors and `Retry-After` where applicable.
+
+The HTTP wrapper is separate from tool registration. It currently supports authless rate-limited access or an optional constant-time bearer-token check. OAuth or per-user authorization can replace that wrapper without changing tool schemas or research functions.
+
+Authless cost-bearing MCP calls fail closed on Vercel when no distributed store is configured. A named instance-local override exists for private preview testing, but production does not silently present warm-instance counters as safe public protection.
 
 ## Schemas and provenance
 
@@ -79,7 +109,9 @@ Hard caps are enforced in `researchLimits()` even if environment values are larg
 - 30-second provider-call timeout;
 - bounded request length, API body size, concurrency, and per-IP request rate.
 
-Exact cache keys hash provider plus canonical query. Similar warm-process queries can reuse results at a token-set threshold of 0.88. Local runs persist immutable and cache JSON files. On Vercel, storage is warm-instance memory only and the response warns that history is nondurable. A production deployment needing cross-instance durability should replace the storage adapter with KV/Redis/Postgres/Blob and move rate limits to the same shared system.
+MCP adds a 16 KiB protocol-body cap, a configurable per-IP/client hourly call limit, global daily/monthly research-call budgets, maximum concurrent research runs, and a four-query hard cap for focused falsification. The direct `/api/research` route shares the same global budgets and semaphore, so it cannot bypass public cost controls.
+
+Exact cache keys hash provider plus canonical query. Similar warm-process queries can reuse results at a token-set threshold of 0.88. Local runs persist immutable and cache JSON files. When Upstash Redis REST credentials are present, exact cache entries, full run-ID records, request counters, global budgets, and the concurrency semaphore are distributed and TTL-bound. Without Redis, local files preserve runs locally while counters remain memory-only; Vercel falls back to warm-instance memory and reports that limitation through health/debug output.
 
 ## Live and fixture-backed capabilities
 
@@ -89,4 +121,4 @@ Fixture-backed tests establish deterministic behavior and schema/provenance inva
 
 ## User surfaces
 
-`/api/research` returns the full versioned record. `/research-debug` exposes graph counts and raw JSON for every stage. The public page explains the pipeline and labels its concrete walkthrough as fixture-backed. The Claude Skill reads `ideationContext.finalOpportunities` first, resolves citations, surfaces factor-level tradeoffs and falsification, and falls back to hypothesis-led local ideation only when the backend is unavailable.
+`/api/research` returns the full versioned record. `/api/mcp` exposes concise protocol-native tools, while `/api/mcp/health` reports tools, provider readiness, storage/protection mode, and sanitized recent calls. `/research-debug` exposes MCP status plus graph counts and raw JSON for every stage. The public page explains local and Claude-browser installation paths and labels its concrete walkthrough as fixture-backed. The Claude Skill prefers remote MCP, then the direct `NOVELTY_RESEARCH_API_URL` helper, and finally clearly labeled non-researched local ideation.

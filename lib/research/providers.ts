@@ -1,4 +1,5 @@
 import type { ProviderSearchResult, SearchProvider } from "./types.ts";
+import fixtureResults from "./fixtures/v2-market.json" with { type: "json" };
 
 export class ResearchConfigurationError extends Error {
   readonly requiredEnvironmentVariables: string[];
@@ -65,8 +66,21 @@ export class TavilySearchProvider implements SearchProvider {
   }
 }
 
+class LocalFixtureSearchProvider implements SearchProvider {
+  readonly id = "fixture";
+  readonly displayName = "Local MCP integration fixture";
+
+  async search(query: string, options: { limit: number }): Promise<ProviderSearchResult[]> {
+    const offset = /pricing|competitor|alternative/i.test(query) ? 0
+      : /complaint|workaround|fragment|integration|underserved/i.test(query) ? 5 : 10;
+    const results = fixtureResults as ProviderSearchResult[];
+    return Array.from({ length: Math.min(options.limit, results.length) }, (_, index) => results[(offset + index) % results.length]);
+  }
+}
+
 export function getConfiguredProvider(env: NodeJS.ProcessEnv = process.env): SearchProvider {
   const requested = (env.SEARCH_PROVIDER ?? "auto").toLowerCase();
+  if (requested === "fixture" && env.NOVELTY_MCP_TEST_FIXTURES === "true" && !env.VERCEL) return new LocalFixtureSearchProvider();
   if ((requested === "auto" || requested === "brave") && env.BRAVE_SEARCH_API_KEY) return new BraveSearchProvider(env.BRAVE_SEARCH_API_KEY);
   if ((requested === "auto" || requested === "tavily") && env.TAVILY_API_KEY) return new TavilySearchProvider(env.TAVILY_API_KEY);
   if (!['auto', 'brave', 'tavily'].includes(requested)) {

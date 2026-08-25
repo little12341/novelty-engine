@@ -13,17 +13,27 @@
     "package:skill": "node scripts/package-skill.mjs",
     "verify:package": "node scripts/verify-package.mjs",
     "verify:links": "node scripts/verify-links.mjs",
-    "test": "npm run test:unit && npm run verify:package && npm run verify:links && node scripts/evaluate.mjs",
-    "test:unit": "node --test lib/research/research.test.ts lib/research/v2.test.ts",
+    "verify:routes": "node scripts/verify-production-routes.mjs",
+    "test": "npm run test:unit && npm run package:skill && npm run verify:package && npm run verify:links && node scripts/evaluate.mjs",
+    "test:unit": "node --test lib/research/research.test.ts lib/research/v2.test.ts lib/mcp/mcp.test.ts",
+    "test:mcp": "node --test lib/mcp/mcp.test.ts",
+    "test:mcp:client": "node scripts/test-mcp-client.mjs",
+    "test:mcp:http": "node scripts/test-mcp-http.mjs",
+    "test:production": "npm run build && npm run verify:routes && npm run test:mcp:http",
     "validate:skill": "node scripts/validate-skill.mjs",
     "eval": "node scripts/evaluate.mjs",
     "eval:init": "node scripts/evaluate.mjs --init evals/results/local.json",
     "eval:score": "node scripts/evaluate.mjs --score"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@upstash/redis": "^1.38.2",
+    "mcp-handler": "^2.1.1",
     "next": "16.3.2",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",

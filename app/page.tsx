@@ -124,15 +124,15 @@ export default function Home() {
           <div className="section-heading install-heading">
             <p className="eyebrow">Install</p>
             <div>
-              <h2>From download to Claude in three small steps.</h2>
-              <p>Download the ZIP, extract it, then copy the complete <code>novelty-engine</code> folder into Claude’s local skills directory.</p>
+              <h2>Install once. Connect the research path that fits.</h2>
+              <p>Keep the ZIP and Claude Code workflow, or connect the deployed <code>/api/mcp</code> endpoint in Claude browser for live research without local configuration.</p>
             </div>
           </div>
           <InstallPanel />
-          <ol className="install-flow" aria-label="Installation steps">
-            <li><span>1</span><div><strong>Download</strong><p>Save the skill ZIP.</p></div></li>
-            <li><span>2</span><div><strong>Extract</strong><p>Keep the folder intact.</p></div></li>
-            <li><span>3</span><div><strong>Copy</strong><p>Move it to <code>~/.claude/skills/</code>.</p></div></li>
+          <ol className="install-flow" aria-label="Research connection steps">
+            <li><span>1</span><div><strong>Install the Skill</strong><p>Upload the ZIP or copy the folder locally.</p></div></li>
+            <li><span>2</span><div><strong>Connect research</strong><p>Add the MCP URL in Claude browser, or set the direct helper URL in Claude Code.</p></div></li>
+            <li><span>3</span><div><strong>Ask normally</strong><p>Invoke <code>/novelty-engine</code> or request market-gap research.</p></div></li>
           </ol>
         </div>
       </section>

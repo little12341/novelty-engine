@@ -23,13 +23,19 @@ Do not use the full process for factual questions, editing, summarization, imple
 
 For commercial ideation, market-gap discovery, startup ideas, business ideas, or requests that ask for market evidence, use the Novelty Engine research backend before generating any final ideas when the backend is available. Do not brainstorm first and retrofit evidence afterward.
 
-The preferred integration is the bundled helper:
+Use research paths in this order:
+
+1. **Remote MCP (preferred):** In Claude browser, check for Novelty Engine MCP tools before attempting any local helper. When available, call `research_market` with the user's complete request. Use its structured survivor and gap outputs as the research result; do not redo independent web research or brainstorm a replacement. Use its returned run ID with `find_market_gaps`, `inspect_competitors`, or `get_research_run` only when more detail is needed. Call `falsify_opportunity` when a survivor needs a fresh, focused counterevidence search. Do not replace these deliberate tools with a generic HTTP request.
+2. **Direct helper (Claude Code fallback):** If MCP is unavailable and the bundled helper can run, use:
 
 ```bash
 node scripts/research.mjs "<the user's complete research or ideation request>"
 ```
 
-The helper calls `NOVELTY_RESEARCH_API_URL`, which should point to the deployed `/api/research` endpoint (or defaults to `http://localhost:3000/api/research`). It prints the structured research JSON. If direct HTTP tools are available instead, send `POST {"query":"..."}` to that endpoint.
+   The helper calls `NOVELTY_RESEARCH_API_URL`, which should point to the deployed `/api/research` endpoint (or defaults to `http://localhost:3000/api/research`). It prints the structured research JSON. If direct HTTP tools are available instead, send `POST {"query":"..."}` to that endpoint.
+3. **Local methodology (last fallback):** If neither MCP nor the direct helper is available, continue with this Skill's bounded local methodology and clearly label every result as **non-researched, hypothesis-led ideation**. Do not imply that live evidence was checked.
+
+Claude browser users should install this Skill and connect `https://novelty-engine.vercel.app/api/mcp` once under **Settings → Connectors → Add custom connector**. They can test server readiness at `https://novelty-engine.vercel.app/api/mcp/health`. They do not need `NOVELTY_RESEARCH_API_URL`, PowerShell configuration, or a Tavily/Brave key. Provider credentials stay on the Novelty Engine server.
 
 Treat the backend as the evidence and invention system, not merely a source finder. Read `ideationContext.finalOpportunities` first, then its `graphHoles`, `contradictions`, `stitchingPatterns`, `weakSignals`, `resurrectionOpportunities`, `competitors`, and `evidence`. The backend has already created structured candidates, rejected near-duplicates, run falsification, bounded survivor mutations, ranked factor-level scores, and generated validation experiments. Present and, when needed, concisely adapt those survivors; do not silently resurrect a rejected candidate or replace its evidence lineage with an unsupported story.
 
@@ -39,7 +45,7 @@ Preserve the requested count from the backend whenever it returned that many sur
 
 For every final survivor, preserve the concrete **24–72 hour** validation experiment when that timeframe is practical, including its success and failure thresholds.
 
-If the backend reports missing configuration, cannot be reached, or returns no supported gaps, continue with the graceful fallback in “When web or search access is unavailable.” Explicitly label the result as hypothesis-led rather than research-backed and make external validation the first next step. Never substitute fabricated research or imply that fixture/test data is live evidence.
+If MCP returns an error, report its actual category (for example `RESEARCH_NOT_CONFIGURED`, `DURABLE_PROTECTION_REQUIRED`, `RATE_LIMIT`, `DAILY_BUDGET`, `MONTHLY_BUDGET`, `CONCURRENCY`, or transport unavailable) before trying a fallback. In Claude browser, do not attempt the local `NOVELTY_RESEARCH_API_URL` helper; continue to the graceful local methodology. In Claude Code, try the direct helper before the final fallback. If no research path succeeds or no supported gaps are returned, continue with the graceful fallback in “When web or search access is unavailable.” Explicitly label the result as non-researched and hypothesis-led rather than research-backed, and make external validation the first next step. Never substitute fabricated research or imply that fixture/test data is live evidence.
 
 ## 1. Frame the real problem
 
