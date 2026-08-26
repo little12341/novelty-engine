@@ -1,8 +1,16 @@
 import Image from "next/image";
+import { productionOrigin } from "@/lib/site";
 import { HeroInstallPanel } from "./install-panel";
 import { InstallTransition } from "./install-transition";
 
 const githubUrl = "https://github.com/little12341/novelty-engine";
+const websiteStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Novelty Engine",
+  url: productionOrigin,
+  description: "Evidence-driven market-gap research for opportunities worth building.",
+};
 
 function HeroMark() {
   return (
@@ -126,6 +134,10 @@ const phases = [
 export default function Home() {
   return (
     <main id="top">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteStructuredData).replace(/</g, "\\u003c") }}
+      />
       <section className="hero-stage" id="overview" aria-labelledby="hero-title">
         <div className="hero-backdrop" aria-hidden="true">
           <Image

@@ -42,6 +42,9 @@ for (let index = 0; index < count; index += 1) {
       "research_market",
       "falsify_opportunity",
       "NOVELTY_RESEARCH_API_URL",
+      "https://novelty-engine.com/api/mcp",
+      "https://novelty-engine.com/api/mcp/health",
+      "https://novelty-engine.com/api/research",
       "**Exact market gap:**",
       "**evidence-backed market gap**",
       "ideationContext.finalOutput",
@@ -57,6 +60,15 @@ for (let index = 0; index < count; index += 1) {
     if (requiredMethodology.some((phrase) => !text.includes(phrase))) {
       throw new Error("Packaged SKILL.md is missing required methodology");
     }
+    if (text.includes("novelty-engine.vercel.app")) throw new Error("Packaged SKILL.md contains the legacy production hostname");
+  }
+  if (name === "novelty-engine/scripts/research.mjs") {
+    const localNameLength = archive.readUInt16LE(localOffset + 26);
+    const localExtraLength = archive.readUInt16LE(localOffset + 28);
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    const text = inflateRawSync(archive.subarray(dataStart, dataStart + compressedSize)).toString("utf8");
+    if (!text.includes('"https://novelty-engine.com/api/research"')) throw new Error("Packaged helper does not default to the canonical research endpoint");
+    if (text.includes("novelty-engine.vercel.app")) throw new Error("Packaged helper contains the legacy production hostname");
   }
   cursor += 46 + nameLength + extraLength + commentLength;
 }

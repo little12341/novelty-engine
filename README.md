@@ -2,6 +2,8 @@
 
 Novelty Engine V2.1+ is an evidence-driven business-opportunity research platform plus a Claude Skill. It keeps the canonical V2.1 pipeline and report while adding intent modes, deterministic research-role boundaries, company research, qualitative idea comparison, immutable evidence snapshots, opt-in memory, history, feedback, watchlists/change detection, source-trust and prompt-injection metadata, usage controls, and JSON/Markdown/print-ready exports. Claude consumes the same structured contract exposed by MCP instead of pretending a prompt performed research.
 
+Production website: [https://novelty-engine.com](https://novelty-engine.com)
+
 It never treats missing search results as proof of demand, and it never fills unsupported competitors, prices, complaints, or citations from model memory. Claims remain `VERIFIED`, `INFERRED`, or `UNKNOWN`, and an `insufficient_evidence` stop produces no forced ideas.
 
 Competitors validate that a job or market may exist; their existence is never an automatic rejection. Every candidate in a competitive landscape receives an explicit residual-unmet-demand assessment covering repeated unresolved complaints, workaround prevalence, switching behavior, underserved segments, price/performance gaps, trust failures, distribution gaps, and whether the proposed mechanism materially changes the outcome. Similarity can reduce differentiation and defensibility, but competition is decisive only when close substitutes already solve the same job for the same user with no meaningful residual gap.
@@ -123,6 +125,8 @@ Successful local runs are saved twice under `.research-runs/`: an immutable run-
 
 ## Research API
 
+The production research endpoint is `https://novelty-engine.com/api/research`. Keep relative `/api/research` calls inside the deployed application so they remain same-origin.
+
 `GET /api/research` reports provider readiness without exposing keys. `POST /api/research` accepts:
 
 ```json
@@ -142,10 +146,12 @@ The versioned `ResearchResult` contains source assessments, coverage, a stop dec
 The production connector endpoint is:
 
 ```text
-https://novelty-engine.vercel.app/api/mcp
+https://novelty-engine.com/api/mcp
 ```
 
 It uses Vercel's `mcp-handler` 2.x implementation pattern with the official MCP TypeScript SDK v2: stateless Streamable HTTP, native MCP `2026-07-28`, and built-in stateless compatibility for 2025-era Streamable HTTP clients. Deprecated HTTP+SSE is not exposed. `GET /api/mcp/health` checks readiness without starting a paid research run.
+
+Existing connectors configured with `https://novelty-engine.vercel.app/api/mcp` remain supported for backward compatibility. Use the canonical `novelty-engine.com` endpoints for every new installation.
 
 The deliberate tool surface is:
 
@@ -184,9 +190,9 @@ After deployment:
 
 1. Install the Novelty Engine Skill with the local setup commands above.
 2. In Claude, open **Settings → Connectors**. On Team/Enterprise, an Owner or Primary Owner first uses the **Organization connectors** view.
-3. Choose **Add custom connector**, name it `Novelty Engine`, and paste `https://novelty-engine.vercel.app/api/mcp`.
+3. Choose **Add custom connector**, name it `Novelty Engine`, and paste `https://novelty-engine.com/api/mcp`.
 4. In a chat, open **Search and tools**, enable the Novelty Engine connector/tools, then invoke `/novelty-engine` or ask for market-gap/invention research normally.
-5. Test the connection with `GET https://novelty-engine.vercel.app/api/mcp/health`, then confirm a live call in `https://novelty-engine.vercel.app/research-debug`.
+5. Test the connection with `GET https://novelty-engine.com/api/mcp/health`, then confirm a live call in `https://novelty-engine.com/research-debug`.
 
 Claude's remote connector supports authless and OAuth servers. This project initially defaults to authless public access protected by distributed limits when Upstash is configured. Leave `NOVELTY_MCP_ACCESS_TOKEN` unset for that browser flow. The optional static bearer token is useful for programmable MCP clients, but Claude's custom-connector form does not provide a general custom-header field; add OAuth at the isolated auth wrapper before requiring authentication in Claude browser.
 
@@ -202,7 +208,7 @@ cp -R skill/novelty-engine ~/.claude/skills/
 Set the backend URL in the environment used by Claude Code:
 
 ```bash
-export NOVELTY_RESEARCH_API_URL="https://novelty-engine.vercel.app/api/research"
+export NOVELTY_RESEARCH_API_URL="https://novelty-engine.com/api/research"
 ```
 
 The Skill’s `scripts/research.mjs` helper posts the complete ideation request to the backend and returns structured JSON. It consumes ranked survivor records before writing the response. When the backend is unavailable, the Skill uses a bounded local process but must label market openings as hypothesis-led, not research-backed; fixtures are never a fallback.
@@ -256,7 +262,7 @@ npm run eval:score -- evals/results/local.json
 3. Add `SEARCH_PROVIDER` and one provider API key in **Project Settings → Environment Variables**. Do not use `NEXT_PUBLIC_` prefixes.
 4. Add an Upstash Redis integration (required for authless public research on a multi-instance Vercel deployment) and expose its REST URL/token variables.
 5. Tune the MCP per-client, daily, monthly, concurrency, search, and cache budgets for the provider plan.
-6. Deploy, check `GET /api/mcp/health`, connect `https://novelty-engine.vercel.app/api/mcp` in Claude, and run a request from Claude plus `/research-debug`.
+6. Deploy, check `GET https://novelty-engine.com/api/mcp/health`, connect `https://novelty-engine.com/api/mcp` in Claude, and run a request from Claude plus `https://novelty-engine.com/research-debug`.
 
 Vercel functions cannot rely on local files for cross-instance history. This build uses Upstash Redis REST when configured and falls back to warm-instance memory on Vercel. Public production use should configure Redis; memory-only limits are suitable for local/single-instance evaluation, not a distributed free service. OAuth/per-user authorization remains intentionally outside the tool definitions so it can be added without rewriting them. No deploy or push is performed by repository scripts.
 

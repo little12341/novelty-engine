@@ -32,10 +32,10 @@ Use research paths in this order:
 node scripts/research.mjs "<the user's complete research or ideation request>"
 ```
 
-   The helper calls `NOVELTY_RESEARCH_API_URL`, which should point to the deployed `/api/research` endpoint (or defaults to `http://localhost:3000/api/research`). It prints the structured research JSON. If direct HTTP tools are available instead, send `POST {"query":"..."}` to that endpoint.
+   The helper calls `NOVELTY_RESEARCH_API_URL`, which should point to the deployed `https://novelty-engine.com/api/research` endpoint (and defaults to that canonical production URL). It prints the structured research JSON. If direct HTTP tools are available instead, send `POST {"query":"..."}` to that endpoint.
 3. **Local methodology (last fallback):** If neither MCP nor the direct helper is available, continue with this Skill's bounded local methodology and clearly label every result as **non-researched, hypothesis-led ideation**. Do not imply that live evidence was checked.
 
-Claude browser users should install this Skill and connect `https://novelty-engine.vercel.app/api/mcp` once under **Settings → Connectors → Add custom connector**. They can test server readiness at `https://novelty-engine.vercel.app/api/mcp/health`. They do not need `NOVELTY_RESEARCH_API_URL`, PowerShell configuration, or a Tavily/Brave key. Provider credentials stay on the Novelty Engine server.
+Claude browser users should install this Skill and connect `https://novelty-engine.com/api/mcp` once under **Settings → Connectors → Add custom connector**. They can test server readiness at `https://novelty-engine.com/api/mcp/health`. They do not need `NOVELTY_RESEARCH_API_URL`, PowerShell configuration, or a Tavily/Brave key. Provider credentials stay on the Novelty Engine server.
 
 Map explicit user commands to the shared backend instead of duplicating research logic: `/find-business` → `find_business`, `/research-market` → `research_market`, `/research-company` → `research_company`, `/find-competitors` → `find_competitors`, `/find-gaps` → `find_gaps`, `/falsify` → `falsify`, `/validate-idea` → `validate_idea`, and `/compare-ideas` → `compare_ideas`. Company mode may add Company Profile, Competitive Position, and Threats; comparison mode may add a qualitative Comparison Summary. Keep the canonical V2.1 final-output order intact.
 

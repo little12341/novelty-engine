@@ -2,10 +2,9 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { productionMcpEndpoint, productionMcpHealthEndpoint } from "@/lib/site";
 
 const installCommands = "mkdir -p ~/.claude/skills\ncp -R novelty-engine ~/.claude/skills/";
-const productionMcpEndpoint = "https://novelty-engine.vercel.app/api/mcp";
-const productionHealthEndpoint = "https://novelty-engine.vercel.app/api/mcp/health";
 
 function useCopyFeedback() {
   const [copyState, setCopyState] = useState<{ target: "commands" | "mcp" | null; status: "idle" | "copied" | "error" }>({ target: null, status: "idle" });
@@ -241,7 +240,7 @@ export function InstallPanel() {
             </button>
           </div>
           <pre><code>{mcpEndpoint}</code></pre>
-          <p className="archive-contents"><span>Test connection</span><a href={productionHealthEndpoint} target="_blank" rel="noreferrer">Open health check</a></p>
+          <p className="archive-contents"><span>Test connection</span><a href={productionMcpHealthEndpoint} target="_blank" rel="noreferrer">Open health check</a></p>
         </div>
         <span className="sr-only" role="status" aria-live="polite">
           {copyState.target === "mcp" && copyState.status === "copied" ? "MCP endpoint copied to clipboard." : copyState.target === "mcp" && copyState.status === "error" ? "Could not copy the MCP endpoint." : ""}
