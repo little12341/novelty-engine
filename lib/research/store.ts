@@ -5,6 +5,7 @@ import type { ResearchResult } from "./types.ts";
 import { RESEARCH_ENGINE_VERSION, RESEARCH_SCHEMA_VERSION } from "./types.ts";
 import { querySimilarity } from "./normalize.ts";
 import { getDurableRedis } from "./durable.ts";
+import { operationalLog, safeErrorCategory } from "../http-safety.ts";
 
 interface CacheEntry { result: ResearchResult; expiresAt: number }
 
@@ -131,7 +132,7 @@ export async function findCachedResearch(canonicalQuery: string, providerId: str
         return structuredClone(normalized);
       }
     } catch (error) {
-      console.error("Durable research cache lookup failed", error instanceof Error ? error.message : "unknown error");
+      operationalLog("error", "durable_cache_lookup_failed", { category: safeErrorCategory(error) });
     }
   }
 
@@ -164,7 +165,7 @@ export async function saveResearchResult(result: ResearchResult, ttlSeconds: num
       ]);
       return { durable: true };
     } catch (error) {
-      console.error("Durable research save failed", error instanceof Error ? error.message : "unknown error");
+      operationalLog("error", "durable_research_save_failed", { category: safeErrorCategory(error) });
     }
   }
   const directory = runsDirectory();
@@ -192,7 +193,7 @@ export async function getResearchResultById(id: string): Promise<ResearchResult 
         if (hasCurrentShape(normalized)) return normalized;
       }
     } catch (error) {
-      console.error("Durable research run lookup failed", error instanceof Error ? error.message : "unknown error");
+      operationalLog("error", "durable_run_lookup_failed", { category: safeErrorCategory(error) });
     }
   }
   const directory = runsDirectory();
@@ -214,7 +215,7 @@ export async function listResearchRuns(limit = 20): Promise<Array<Pick<ResearchR
     try {
       ids.push(...await durable.zrange<string[]>(runIndexKey, 0, bounded - 1, { rev: true }));
     } catch (error) {
-      console.error("Durable research history lookup failed", error instanceof Error ? error.message : "unknown error");
+      operationalLog("error", "durable_history_lookup_failed", { category: safeErrorCategory(error) });
     }
   }
   if (!ids.length) {

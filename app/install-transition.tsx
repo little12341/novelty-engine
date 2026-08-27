@@ -80,11 +80,11 @@ function InstallViewport() {
             <Image className="transition-install-crown" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized aria-hidden="true" />
             <p className="eyebrow">Install</p>
             <h2>Install once. Connect the<br />research path that fits.</h2>
-            <p>Install the Claude Skill locally, or connect the deployed <code>/api/mcp</code><br className="desktop-break" /> endpoint for live research without local configuration.</p>
+            <p>Upload or install the Claude Skill, then connect the deployed <code>/api/mcp</code><br className="desktop-break" /> endpoint for live research without local provider configuration.</p>
           </header>
           <InstallPanel />
           <ol className="transition-install-flow" aria-label="Research connection steps">
-            <li><span aria-hidden="true"><InstallStepIcon kind="install" /></span><div><strong>Install the Skill</strong><p>Copy the folder into Claude’s local skills directory.</p></div></li>
+            <li><span aria-hidden="true"><InstallStepIcon kind="install" /></span><div><strong>Install the Skill</strong><p>Upload the ZIP in Claude, or copy the extracted folder into Claude Code’s skills directory.</p></div></li>
             <li><span aria-hidden="true"><InstallStepIcon kind="connect" /></span><div><strong>Connect research</strong><p>Add the MCP URL in Claude browser, or set the direct helper URL in Claude Code.</p></div></li>
             <li><span aria-hidden="true"><InstallStepIcon kind="ask" /></span><div><strong>Ask normally</strong><p>Invoke <code>/novelty-engine</code> or request market-gap research.</p></div></li>
           </ol>

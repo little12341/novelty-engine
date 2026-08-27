@@ -95,11 +95,17 @@ class LocalFixtureSearchProvider implements SearchProvider {
   }
 }
 
+export function hasUsableProviderKey(value: string | undefined): value is string {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return false;
+  return !/^(?:your(?:[_\s-]|$)|replace(?:[_\s-]?me)?$|change(?:[_\s-]?me)?$|placeholder$|example$|<[^>]+>$|x{6,}$)/i.test(normalized);
+}
+
 export function getConfiguredProvider(env: NodeJS.ProcessEnv = process.env): SearchProvider {
   const requested = (env.SEARCH_PROVIDER ?? "auto").toLowerCase();
   if (requested === "fixture" && env.NOVELTY_MCP_TEST_FIXTURES === "true" && !env.VERCEL) return new LocalFixtureSearchProvider();
-  if ((requested === "auto" || requested === "brave") && env.BRAVE_SEARCH_API_KEY) return new BraveSearchProvider(env.BRAVE_SEARCH_API_KEY);
-  if ((requested === "auto" || requested === "tavily") && env.TAVILY_API_KEY) return new TavilySearchProvider(env.TAVILY_API_KEY);
+  if ((requested === "auto" || requested === "brave") && hasUsableProviderKey(env.BRAVE_SEARCH_API_KEY)) return new BraveSearchProvider(env.BRAVE_SEARCH_API_KEY.trim());
+  if ((requested === "auto" || requested === "tavily") && hasUsableProviderKey(env.TAVILY_API_KEY)) return new TavilySearchProvider(env.TAVILY_API_KEY.trim());
   if (!['auto', 'brave', 'tavily'].includes(requested)) {
     throw new ResearchConfigurationError(`Unknown SEARCH_PROVIDER value: ${requested}`, ["SEARCH_PROVIDER"]);
   }
@@ -114,4 +120,8 @@ export function providerConfiguration(env: NodeJS.ProcessEnv = process.env): { c
   } catch {
     return { configured: false, selected: null, supported: ["brave", "tavily"] };
   }
+}
+
+export function publicProviderConfiguration(env: NodeJS.ProcessEnv = process.env): { configured: boolean } {
+  return { configured: providerConfiguration(env).configured };
 }

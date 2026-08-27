@@ -5,6 +5,7 @@ const root = process.cwd();
 const websiteSources = await Promise.all([
   readFile(path.join(root, "app", "page.tsx"), "utf8"),
   readFile(path.join(root, "app", "install-panel.tsx"), "utf8"),
+  readFile(path.join(root, "app", "beta-feedback.tsx"), "utf8"),
   readFile(path.join(root, "app", "install-transition.tsx"), "utf8"),
   readFile(path.join(root, "app", "layout.tsx"), "utf8"),
   readFile(path.join(root, "app", "robots.ts"), "utf8"),
@@ -20,11 +21,11 @@ for (const href of hrefs) {
   if (href.startsWith("/") && !href.includes("${")) await access(path.join(root, "public", href.slice(1)));
 }
 
-for (const expected of ["#comparison", "#method", "#commands", "#install"]) {
+for (const expected of ["#comparison", "#method", "#commands", "#install", "#feedback"]) {
   if (!hrefs.includes(expected)) throw new Error(`Required internal link missing: ${expected}`);
 }
-if (source.includes("/novelty-engine.zip")) throw new Error("Removed ZIP download must not be linked from the website");
-const canonicalOrigin = "https://novelty-engine.com";
+if (!source.includes('href="/novelty-engine.zip"')) throw new Error("Current installable Skill ZIP must be linked from the website");
+const canonicalOrigin = "https://www.novelty-engine.com";
 const siteConstants = await readFile(path.join(root, "lib", "site.ts"), "utf8");
 const installPanel = await readFile(path.join(root, "app", "install-panel.tsx"), "utf8");
 const layout = await readFile(path.join(root, "app", "layout.tsx"), "utf8");
@@ -45,4 +46,5 @@ for (const metadataRequirement of ["metadataBase: new URL(productionOrigin)", 'c
 }
 if (!page.includes('"@type": "WebSite"') || !page.includes("url: productionOrigin")) throw new Error("Canonical WebSite structured data is missing");
 if (publicConfiguration.includes("novelty-engine.vercel.app")) throw new Error("Legacy Vercel hostname leaked into current public/install configuration");
+if (publicConfiguration.includes("https://novelty-engine.com")) throw new Error("Redirecting apex hostname leaked into current public/install configuration");
 console.log(`Verified ${hrefs.length} static internal links and downloadable assets.`);

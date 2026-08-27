@@ -3,6 +3,7 @@ import { productionOrigin } from "@/lib/site";
 import { NOVELTY_COMMAND_CATALOG } from "@/lib/research/intents";
 import { HeroInstallPanel } from "./install-panel";
 import { InstallTransition } from "./install-transition";
+import { BetaFeedback } from "./beta-feedback";
 
 const githubUrl = "https://github.com/little12341/novelty-engine";
 const websiteStructuredData = {
@@ -128,7 +129,7 @@ const phases = [
     number: "04",
     title: "Try to kill the ideas",
     description: "Pressure-test demand, economics, distribution, feasibility, behavior, trust, regulation, and defensibility.",
-    detail: "Promising failures get at most two bounded mutations. Survivors leave with a 24–72 hour validation test.",
+    detail: "Promising failures get at most one bounded mutation and retest. Survivors leave with a 24–72 hour validation test.",
   },
 ];
 
@@ -158,10 +159,12 @@ export default function Home() {
               <HeroMark />
               <span>Novelty Engine</span>
             </a>
+            <span className="beta-label">Public Beta</span>
             <nav aria-label="Main navigation">
               <a href="#overview">Overview</a>
               <a href="#method">How it works</a>
               <a href="#commands">Commands</a>
+              <a href="#feedback">Feedback</a>
               <a href={`${githubUrl}#readme`} target="_blank" rel="noreferrer">Docs</a>
             </nav>
             <a className="header-github glass-control liquid-glass" href="#install">
@@ -175,8 +178,9 @@ export default function Home() {
             <p className="eyebrow">Find what others miss</p>
             <h1 id="hero-title"><span>Discover the gaps.</span><span>Build what’s next.</span></h1>
             <p className="hero-lede">
-              Novelty Engine uses research, signals, and reasoning to uncover real market gaps and generate opportunities worth building.
+              Novelty Engine searches for real market gaps, gathers evidence, challenges weak opportunities, expands into adjacent markets when appropriate, and reports only the opportunities that survive its checks.
             </p>
+            <p className="beta-disclaimer">Evidence-driven research may be incomplete and does not guarantee that an opportunity will succeed.</p>
             <div className="hero-actions">
               <a className="button glass-control glass-primary liquid-glass" href="#install">
                 <LeafIcon /> Install skill
@@ -228,7 +232,7 @@ export default function Home() {
             <p className="eyebrow">Command discovery</p>
             <div>
               <h2 id="commands-title">A clear vocabulary for every research move.</h2>
-              <p>Type these as plain-text intents with the Novelty Skill enabled. They route to Novelty research or MCP tools; they are not registered native Claude slash commands.</p>
+              <p>Type these as plain-text Skill intents with Novelty Engine enabled. They route to Novelty research or MCP tools and do not appear in Claude’s native prompt-bar slash autocomplete unless Claude itself supports that interface.</p>
             </div>
           </div>
           <ul className="command-catalog">
@@ -249,7 +253,7 @@ export default function Home() {
             <p className="eyebrow">A worked example</p>
             <div>
               <h2>From a common prompt to a specific opening.</h2>
-              <p>V2.1 records how an idea was derived, what resembles it, what could kill it, and the cheapest test that should come next.</p>
+              <p>V2.2 records how an idea was derived, what resembles it, what could kill it, and the cheapest test that should come next.</p>
             </div>
           </div>
 
@@ -326,12 +330,14 @@ export default function Home() {
         </div>
       </section>
 
+      <BetaFeedback />
+
       <section className="final-cta">
         <Image className="cta-laurel cta-laurel-left" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
         <Image className="cta-laurel cta-laurel-right" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
         <div className="page-width final-cta-inner">
           <div>
-            <p className="eyebrow">Novelty Engine V2.1</p>
+            <p className="eyebrow">Novelty Engine V2.2 · Public Beta</p>
             <h2>Make the next idea earn its place.</h2>
           </div>
           <div className="final-actions">
@@ -344,7 +350,7 @@ export default function Home() {
       <footer className="site-footer">
         <div className="page-width footer-inner">
           <a className="brand" href="#top"><Image className="footer-wreath" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized /><span>Novelty Engine</span></a>
-          <p>V2.1 · Free and open source under the MIT License.</p>
+          <p>V2.2 Public Beta · Free and open source under the MIT License.</p>
           <a href={githubUrl} target="_blank" rel="noreferrer">GitHub <UtilityIcon kind="external" /></a>
         </div>
       </footer>

@@ -2117,3 +2117,58 @@ main#top > :not(.hero-stage) {
   .command-catalog { grid-template-columns: 1fr; margin-top: 36px; }
   .command-catalog li { min-height: 0; }
 }
+
+.beta-label {
+  flex: none;
+  padding: 6px 9px 5px;
+  border: 1px solid rgba(255, 255, 248, .42);
+  border-radius: 999px;
+  color: rgba(255, 255, 248, .9);
+  font: 700 8px/1 Arial, sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.beta-disclaimer {
+  max-width: 520px;
+  margin: -20px 0 24px;
+  color: #676b63;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.hero-install-content a,
+.install-option a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+.beta-feedback {
+  padding: clamp(68px, 7vw, 96px) 0;
+  border-top: 1px solid #d8cfbc;
+  background: #e8e1d1;
+}
+
+.beta-feedback-inner {
+  display: grid;
+  grid-template-columns: minmax(0, .75fr) minmax(420px, 1.25fr);
+  gap: clamp(48px, 8vw, 110px);
+  align-items: start;
+}
+
+.beta-feedback h2 { margin: 15px 0 18px; color: #29342c; font: 400 clamp(36px, 3.6vw, 52px)/1.02 Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.beta-feedback p { color: #686a61; font-size: 13px; line-height: 1.65; }
+.beta-feedback form { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.beta-feedback label { display: grid; gap: 8px; color: #41493f; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.beta-feedback input,
+.beta-feedback select,
+.beta-feedback textarea { width: 100%; border: 1px solid #bbb29f; border-radius: 8px; background: rgba(255,255,255,.62); padding: 12px 13px; color: #2c332d; font: 13px/1.4 Arial, sans-serif; text-transform: none; }
+.beta-feedback textarea { resize: vertical; }
+.beta-feedback .feedback-note { grid-column: 1 / -1; }
+.beta-feedback .button { justify-self: start; border: 0; background: #344638; color: #fff; }
+.feedback-status { align-self: center; min-height: 20px; margin: 0; }
+
+@media (max-width: 760px) {
+  .beta-label { margin-left: 8px; }
+  .beta-disclaimer { margin-top: -10px; }
+  .beta-feedback-inner { grid-template-columns: 1fr; gap: 35px; }
+  .beta-feedback form { grid-template-columns: 1fr; }
+  .beta-feedback .feedback-note { grid-column: auto; }
+}

@@ -22,9 +22,10 @@ export function GET() {
       "/api/research/export": { get: { summary: "Export a saved run", parameters: [{ name: "run_id", in: "query", required: true, schema: { type: "string" } }, { name: "format", in: "query", schema: { enum: ["json", "markdown", "print", "csv", "competitor_matrix", "validation_plan", "opportunity_brief", "investor_memo", "bibliography"] } }], responses: { "200": { description: "Requested export" }, "404": { description: "Run not found" } } } },
       "/api/research/feed": { get: { summary: "Filter opportunity signals from recent saved runs", responses: { "200": { description: "Daily/weekly saved-run feed" } } } },
       "/api/research/notes": { get: { summary: "List user-scoped notes, tags, folders, and decision logs", responses: { "200": { description: "Notes" } } }, post: { summary: "Save a bounded research note or decision log", responses: { "201": { description: "Saved note" } } } },
+      "/api/research/feedback": { post: { summary: "Submit bounded public-beta feedback", responses: { "201": { description: "Feedback accepted" }, "400": { description: "Invalid feedback" }, "429": { description: "Feedback rate limit" } } } },
       "/api/research/validation": { get: { summary: "List external validation outcomes", responses: { "200": { description: "Validation outcomes" } } }, post: { summary: "Record measured validation results without bypassing the strict gate", responses: { "201": { description: "Persisted VALIDATED, INVESTIGATE, or KILLED outcome" } } } },
       "/api/mcp": { post: { summary: "MCP Streamable HTTP endpoint", responses: { "200": { description: "MCP response" } } } },
-      "/api/mcp/health": { get: { summary: "Provider, storage, protection, and tool diagnostics", responses: { "200": { description: "Health snapshot without secrets" } } } },
+      "/api/mcp/health": { get: { summary: "Redacted public readiness status", responses: { "200": { description: "Readiness snapshot without secrets, event history, provider identity, or exact quotas" } } } },
     },
   }, { headers: { "Cache-Control": "public, max-age=3600" } });
 }

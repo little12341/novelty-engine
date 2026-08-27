@@ -4,7 +4,7 @@ import { runResearch } from "../research/pipeline.ts";
 import { getResearchResultById } from "../research/store.ts";
 import type { ResearchResult } from "../research/types.ts";
 import { activelyFalsifyOpportunity } from "./falsify.ts";
-import { recordMcpCall } from "./observability.ts";
+import { currentMcpRequestId, recordMcpCall } from "./observability.ts";
 import { compareIdeas } from "../research/comparison.ts";
 import { compareResearchRuns } from "../research/changes.ts";
 import { exportResearchResult } from "../research/exports.ts";
@@ -38,7 +38,13 @@ function toolError(error: unknown) {
       : error instanceof RangeError ? "INVALID_OR_MISSING_RUN"
         : /malformed/i.test(message) ? "MALFORMED_PROVIDER_RESPONSE"
           : /abort|time(?:d)?\s*out/i.test(message) ? "RESEARCH_TIMEOUT" : "RESEARCH_PROVIDER_ERROR";
-  const value: Record<string, unknown> = { error: message, code, fabricatedEvidence: false };
+  const publicMessage = error instanceof ResearchConfigurationError ? error.message
+    : code === "RESEARCH_CANCELLED" ? "Research was cancelled before completion."
+      : code === "INVALID_QUERY" || code === "INVALID_OR_MISSING_RUN" ? message
+        : code === "MALFORMED_PROVIDER_RESPONSE" ? "The search provider returned a malformed response."
+          : code === "RESEARCH_TIMEOUT" ? "The research provider or run timed out."
+            : "The search provider request failed. Use the request ID to find the privacy-safe server log.";
+  const value: Record<string, unknown> = { error: publicMessage, code, requestId: currentMcpRequestId(), fabricatedEvidence: false };
   if (error instanceof ResearchConfigurationError) value.requiredEnvironmentVariables = error.requiredEnvironmentVariables;
   return { content: [{ type: "text" as const, text: JSON.stringify(value) }], structuredContent: value, isError: true };
 }
@@ -88,7 +94,7 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
 
   server.registerTool("research_market", {
     title: "Research a market",
-    description: "Run Novelty Engine's complete V2.1 market map, source-quality, evidence gate, active counterevidence, competitor/substitute, deduplication, falsification, scoring-with-reasons, and 24–72 hour validation pipeline. It may return insufficient_evidence instead of ideas.",
+    description: "Run Novelty Engine's complete V2.2 market map, source-quality, evidence gate, active counterevidence, competitor/substitute, deduplication, falsification, scoring-with-reasons, and 24–72 hour validation pipeline. It may return insufficient_evidence instead of ideas.",
     inputSchema: researchMarketInput,
     annotations,
   }, ({ query, depth, founder_constraints }, context) => observed("research_market", async () => summarizeResearch(await deps.research(query, { depth, userContext: founder_constraints, signal: context.mcpReq.signal }))));

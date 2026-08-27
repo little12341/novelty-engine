@@ -32,6 +32,14 @@ test("missing provider credentials fail explicitly instead of selecting fixtures
   assert.throws(() => getConfiguredProvider({ NODE_ENV: "test" }), (error) => error instanceof ResearchConfigurationError && /not configured/i.test(error.message));
 });
 
+test("obvious placeholder provider keys are unconfigured and auto mode can use the other valid provider", () => {
+  assert.throws(
+    () => getConfiguredProvider({ NODE_ENV: "test", SEARCH_PROVIDER: "brave", BRAVE_SEARCH_API_KEY: "your_brave_key" }),
+    (error) => error instanceof ResearchConfigurationError && /not configured/i.test(error.message),
+  );
+  assert.equal(getConfiguredProvider({ NODE_ENV: "test", SEARCH_PROVIDER: "auto", BRAVE_SEARCH_API_KEY: "your_brave_key", TAVILY_API_KEY: "tvly-valid-test-value" }).id, "tavily");
+});
+
 test("deduplication prevents repeated URLs from inflating evidence", () => {
   const angles = deriveSearchAngles("find AI tools for contractors", 2);
   const sources = normalizeResults([

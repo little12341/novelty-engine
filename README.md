@@ -2,7 +2,7 @@
 
 Novelty Engine 2.2 is an evidence-driven search-and-elimination platform plus a Claude Skill. Its core loop is `search → discover → gather evidence → challenge → falsify → expand → validate → report survivors`. It preserves the V2.1 public result schema while adding persisted candidate lifecycles and kill reasons, adjacent-search expansion, configurable evidence gates, independent Bull/Bear/Judge records, specialist task graphs, assumption ledgers, founder constraints, separate opportunity/novelty/evidence-confidence scores, one next-best action, richer exports, and an architecturally separate financial-signal backtester. Claude consumes the same structured contract exposed by MCP instead of pretending a prompt performed research.
 
-Production website: [https://novelty-engine.com](https://novelty-engine.com)
+Production website: [https://www.novelty-engine.com](https://www.novelty-engine.com)
 
 It never treats missing search results as proof of demand, and it never fills unsupported competitors, prices, complaints, or citations from model memory. Claims remain `VERIFIED`, `INFERRED`, or `UNKNOWN`; fact records also distinguish `KNOWN`, `INFERRED`, `UNKNOWN`, and `CONTRADICTED`. Normal research can end at `SURVIVED/VALIDATING`, but never `VALIDATED` unless both the strict evidence gate and external validation evidence pass. An `insufficient_evidence` stop produces no forced ideas.
 
@@ -94,11 +94,13 @@ Configure one provider. Both are server-side only and are never referenced by cl
 | `MCP_FALSIFICATION_MAX_QUERIES` | No; default/hard cap 4 | Focused searches made by `falsify_opportunity` |
 | `MCP_ALLOW_INSTANCE_LOCAL_PUBLIC` | No; default false on Vercel | Explicit preview-only override for nondistributed public research |
 | `NOVELTY_MCP_ACCESS_TOKEN` | No | Optional bearer token for non-browser clients; public Claude connector mode leaves this unset |
-| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Recommended on Vercel | Durable runs/cache and distributed counters |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Required for authless public Vercel research | Durable runs/cache and distributed counters |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Alternative | Vercel/Upstash-compatible aliases for the durable store |
 | `NOVELTY_RESEARCH_DEPTH` | No; default `standard` | Claude Code helper default: `fast`, `standard`, or `deep` |
 
-Brave and Tavily both offer entry-level plans suitable for development, but current quotas and pricing should be checked with the provider. Secrets belong only in `.env.local` or Vercel environment settings. `.env*` and `.research-runs/` are ignored by Git; `.env.example` is the deliberately committed key template.
+For the authless public-beta deployment on Vercel, the exact required environment contract is: **one** of `TAVILY_API_KEY` or `BRAVE_SEARCH_API_KEY`, plus `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Tavily alone is supported; Brave is not an additional requirement. `SEARCH_PROVIDER` may be omitted (`auto`) or set to the matching provider. Leave `MCP_ALLOW_INSTANCE_LOCAL_PUBLIC=false` and leave `NOVELTY_MCP_ACCESS_TOKEN` unset for Claude’s authless custom-connector flow. Every other variable above is an optional bounded tuning control.
+
+Brave and Tavily both offer entry-level plans suitable for development, but current quotas and pricing should be checked with the provider. Secrets belong only in `.env.local` or Vercel environment settings and must never use a `NEXT_PUBLIC_` prefix. Obvious placeholder values such as `your_brave_key` are treated as unconfigured; in `auto` mode the engine can still select the other valid provider. `.env*` and `.research-runs/` are ignored by Git; `.env.example` is the deliberately committed key template.
 
 Without a configured key, `POST /api/research` returns HTTP 503 with `RESEARCH_NOT_CONFIGURED`. It does not substitute mock data or ask a model to invent results.
 
@@ -134,7 +136,7 @@ Successful local runs are saved twice under `.research-runs/`: an immutable run-
 
 ## Research API
 
-The production research endpoint is `https://novelty-engine.com/api/research`. Keep relative `/api/research` calls inside the deployed application so they remain same-origin.
+The production research endpoint is `https://www.novelty-engine.com/api/research`. Keep relative `/api/research` calls inside the deployed application so they remain same-origin.
 
 `GET /api/research` reports provider readiness without exposing keys. `POST /api/research` accepts:
 
@@ -157,12 +159,12 @@ The backward-compatible `ResearchResult` schema now carries `engineVersion: 2.2.
 The production connector endpoint is:
 
 ```text
-https://novelty-engine.com/api/mcp
+https://www.novelty-engine.com/api/mcp
 ```
 
 It uses Vercel's `mcp-handler` 2.x implementation pattern with the official MCP TypeScript SDK v2: stateless Streamable HTTP, native MCP `2026-07-28`, and built-in stateless compatibility for 2025-era Streamable HTTP clients. Deprecated HTTP+SSE is not exposed. `GET /api/mcp/health` checks readiness without starting a paid research run.
 
-Existing connectors configured with `https://novelty-engine.vercel.app/api/mcp` remain supported for backward compatibility. Use the canonical `novelty-engine.com` endpoints for every new installation.
+Existing connectors configured with the apex-domain redirect or `https://novelty-engine.vercel.app/api/mcp` remain supported for backward compatibility. Use the redirect-free canonical `www.novelty-engine.com` endpoints for every new installation.
 
 The deliberate tool surface is:
 
@@ -188,14 +190,22 @@ If Upstash Redis REST is configured, run retrieval, exact-query cache records, c
 
 ## Claude Skill
 
-### Install as a local Claude Skill
+### Install the Claude Skill
 
-From beside the repository folder, run:
+For Claude on the web or desktop, download [the current Skill package](https://www.novelty-engine.com/novelty-engine.zip), then:
+
+1. Open **Customize → Skills**.
+2. Choose **+ Create skill → Upload a skill**.
+3. Upload the ZIP directly and enable Novelty Engine.
+
+For Claude Code, extract the ZIP and run these commands from beside the extracted `novelty-engine` folder:
 
 ```bash
 mkdir -p ~/.claude/skills
 cp -R novelty-engine ~/.claude/skills/
 ```
+
+On Windows with Claude Code, extract the archive so the resulting folder is `%USERPROFILE%\.claude\skills\novelty-engine` and confirm that `SKILL.md` is directly inside it. Repository contributors can instead run `cp -R skill/novelty-engine ~/.claude/skills/` from the repository root.
 
 See [Claude's current custom Skill instructions](https://support.claude.com/en/articles/12512180-use-skills-in-claude) for plan-specific organization controls.
 
@@ -203,15 +213,15 @@ See [Claude's current custom Skill instructions](https://support.claude.com/en/a
 
 After deployment:
 
-1. Install the Novelty Engine Skill with the local setup commands above.
-2. In Claude, open **Settings → Connectors**. On Team/Enterprise, an Owner or Primary Owner first uses the **Organization connectors** view.
-3. Choose **Add custom connector**, name it `Novelty Engine`, and paste `https://novelty-engine.com/api/mcp`.
-4. In a chat, open **Search and tools**, enable the Novelty Engine connector/tools, then invoke `/novelty-engine` or ask for market-gap/invention research normally.
-5. Test the connection with `GET https://novelty-engine.com/api/mcp/health`, then confirm a live call in `https://novelty-engine.com/research-debug`.
+1. Upload and enable the Novelty Engine ZIP under **Customize → Skills** as described above.
+2. On individual plans (Free/Pro/Max), open **Customize → Connectors**, click **+**, then choose **Add custom connector**. On Team/Enterprise, an Owner or Primary Owner first uses **Organization settings → Connectors → Add → Custom → Web**; members then connect it under **Customize → Connectors**.
+3. Name it `Novelty Engine` and paste `https://www.novelty-engine.com/api/mcp`.
+4. In a chat, use the **+** button at lower left, open **Connectors**, and enable Novelty Engine for the conversation. Then type a Novelty intent or ask for market-gap research normally.
+5. Open `https://www.novelty-engine.com/api/mcp/health`, then make one small research request and confirm Claude returns a Novelty `research_…` run ID with citations. The internal `/research-debug` inspector intentionally returns 404 in production.
 
 Claude's remote connector supports authless and OAuth servers. This project initially defaults to authless public access protected by distributed limits when Upstash is configured. Leave `NOVELTY_MCP_ACCESS_TOKEN` unset for that browser flow. The optional static bearer token is useful for programmable MCP clients, but Claude's custom-connector form does not provide a general custom-header field; add OAuth at the isolated auth wrapper before requiring authentication in Claude browser.
 
-See [Anthropic's current custom connector instructions](https://support.anthropic.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp) if labels differ on your Claude plan or organization.
+See [Anthropic's current custom connector instructions](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) if labels differ on your Claude plan or organization.
 
 ### Claude Code
 
@@ -223,12 +233,14 @@ cp -R skill/novelty-engine ~/.claude/skills/
 Set the backend URL in the environment used by Claude Code:
 
 ```bash
-export NOVELTY_RESEARCH_API_URL="https://novelty-engine.com/api/research"
+export NOVELTY_RESEARCH_API_URL="https://www.novelty-engine.com/api/research"
 ```
 
 The Skill’s `scripts/research.mjs` helper posts the complete ideation request to the backend and returns structured JSON. It consumes ranked survivor records before writing the response. When the backend is unavailable, the Skill uses a bounded local process but must label market openings as hypothesis-led, not research-backed; fixtures are never a fallback.
 
 The Skill's research order is remote MCP first, the `NOVELTY_RESEARCH_API_URL` helper second, and clearly labeled non-researched local methodology last. Browser users therefore need neither a local environment variable nor PowerShell setup.
+
+Novelty’s slash-like commands are plain-text **Skill intents**. They route through the Skill to the intended MCP tool, but they do not appear in Claude’s native prompt-bar slash autocomplete unless Claude itself provides that interface. Use `/commands` for the full catalog and `/help <command>` for one command’s usage and example.
 
 Example prompts include “find AI tools for contractors,” “find underserved creator software markets,” and “give me 5 business ideas in home services.” Adding a concrete user, workflow, region, budget, or hard constraint improves both search precision and ideas.
 
@@ -241,6 +253,7 @@ npm test
 npm run test:mcp
 npm run validate:skill
 npm run build
+npm run verify:production-security
 ```
 
 Unit tests use checked-in search-result fixtures and make no live or paid API requests. They cover the prior graph, evidence, falsification, budget, citation, and failure-recovery contracts plus V2.2 lifecycle transitions, exact kill persistence, strict validation gating, Bull/Bear independence, score separation, assumption ledgers, founder rejection, adjacent expansion, Agent Shield URL policy, command routing, and financial-signal killing.
@@ -252,6 +265,12 @@ npm run test:mcp:client -- http://localhost:3000/api/mcp "Find 3 opportunities f
 ```
 
 Run `npm run benchmark:retrieval` for the deterministic 20-market competitor-recall benchmark (recall, precision, major-player misses, source diversity, direct-vs-substitute accuracy, and collision calibration). For the full production-server regression (build manifests, browser health GET, protocol GET semantics, MCP initialization, exact tool discovery, and a fixture-backed `research_market` call), run `npm run test:production`.
+
+## Beta feedback and operational diagnostics
+
+The homepage feedback form stores reports through the existing `/api/research/feedback` platform store. Supported public reports cover bad research runs, installation problems, incorrect competitors, source-quality problems, and MCP failures. Research-result reports require the `research_…` run ID; installation and MCP reports do not. Feedback is rate-limited, bounded to 1,000 characters, treated as user-provided context rather than public evidence, and should not contain secrets or private customer data.
+
+Privacy-safe structured logs cover MCP failures, provider errors, research failures, rate-limit events, and deep/high-cost runs. Logs contain event categories, request/run IDs, provider IDs, counts, and timings—not prompts, source text, authorization headers, or credential values. Provider HTTP 429/quota failures remain visible as `RATE_LIMIT`/provider-rate-limit categories and include safe retry guidance; use the request ID and provider dashboard to diagnose exhaustion.
 
 ## Three-mode evaluation
 
@@ -277,7 +296,7 @@ npm run eval:score -- evals/results/local.json
 3. Add `SEARCH_PROVIDER` and one provider API key in **Project Settings → Environment Variables**. Do not use `NEXT_PUBLIC_` prefixes.
 4. Add an Upstash Redis integration (required for authless public research on a multi-instance Vercel deployment) and expose its REST URL/token variables.
 5. Tune the MCP per-client, daily, monthly, concurrency, search, and cache budgets for the provider plan.
-6. Deploy, check `GET https://novelty-engine.com/api/mcp/health`, connect `https://novelty-engine.com/api/mcp` in Claude, and run a request from Claude plus `https://novelty-engine.com/research-debug`.
+6. Deploy, check `GET https://www.novelty-engine.com/api/mcp/health`, connect `https://www.novelty-engine.com/api/mcp` in Claude, and confirm a Claude research request returns a Novelty run ID and citations. Verify `/research-debug` returns 404.
 
 Vercel functions cannot rely on local files for cross-instance history. This build uses Upstash Redis REST when configured and falls back to warm-instance memory on Vercel. Public production use should configure Redis; memory-only limits are suitable for local/single-instance evaluation, not a distributed free service. OAuth/per-user authorization remains intentionally outside the tool definitions so it can be added without rewriting them. No deploy or push is performed by repository scripts.
 

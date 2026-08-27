@@ -1,16 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveResearchFeedback } from "@/lib/research/feedback";
 import type { FeedbackKind } from "@/lib/research/types";
+import { BoundedJsonError, clientNetworkIdentity, operationalLog, readBoundedJson, safeErrorCategory } from "@/lib/http-safety";
+import { acquireProtection } from "@/lib/research/protection";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  let body: { runId?: unknown; kind?: unknown; targetId?: unknown; note?: unknown };
   try {
-    const body = await request.json() as { runId?: unknown; userId?: unknown; kind?: unknown; targetId?: unknown; note?: unknown };
-    if (typeof body.runId !== "string" || typeof body.kind !== "string") return NextResponse.json({ error: "runId and kind are required." }, { status: 400 });
-    const feedback = await saveResearchFeedback({ runId: body.runId, kind: body.kind as FeedbackKind, userId: typeof body.userId === "string" ? body.userId : undefined, targetId: typeof body.targetId === "string" ? body.targetId : undefined, note: typeof body.note === "string" ? body.note : undefined });
-    return NextResponse.json(feedback, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+    body = await readBoundedJson<typeof body>(request, 2_048);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid feedback." }, { status: error instanceof RangeError ? 400 : 500 });
+    const bounded = error instanceof BoundedJsonError ? error : new BoundedJsonError(400, "INVALID_JSON", "Request body must be valid JSON.");
+    return NextResponse.json({ error: bounded.message, code: bounded.code }, { status: bounded.status });
+  }
+  if (typeof body.kind !== "string" || typeof body.note !== "string") return NextResponse.json({ error: "kind and note are required." }, { status: 400 });
+  const permit = await acquireProtection(`${clientNetworkIdentity(request)}:feedback`, false);
+  if (!permit.allowed) {
+    operationalLog("warn", "feedback_rate_limited", { reason: permit.reason, backend: permit.backend });
+    return NextResponse.json({ error: "Feedback request limit reached.", code: permit.reason.toUpperCase() }, { status: 429, headers: { "Retry-After": String(permit.retryAfterSeconds) } });
+  }
+  try {
+    const feedback = await saveResearchFeedback({
+      runId: typeof body.runId === "string" ? body.runId : undefined,
+      kind: body.kind as FeedbackKind,
+      targetId: typeof body.targetId === "string" ? body.targetId : undefined,
+      note: body.note,
+    });
+    operationalLog("info", "beta_feedback_received", { kind: feedback.kind, hasRunId: feedback.runId !== null });
+    return NextResponse.json({ accepted: true, id: feedback.id }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    if (error instanceof RangeError) return NextResponse.json({ error: error.message }, { status: 400 });
+    operationalLog("error", "feedback_save_failed", { category: safeErrorCategory(error) });
+    return NextResponse.json({ error: "Unable to save feedback." }, { status: 500 });
+  } finally {
+    await permit.release();
   }
 }

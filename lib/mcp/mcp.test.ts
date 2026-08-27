@@ -4,8 +4,8 @@ import test from "node:test";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "mcp-handler";
-import { handleMcpHttp } from "./http.ts";
-import { mcpHealthSnapshot } from "./observability.ts";
+import { handleMcpHttp, requestIdentifier } from "./http.ts";
+import { mcpHealthSnapshot, publicMcpHealthSnapshot } from "./observability.ts";
 import { researchMarketInput, findMarketGapsInput, MCP_TOOL_NAMES } from "./schemas.ts";
 import { summarizeResearch } from "./summaries.ts";
 import { registerNoveltyTools } from "./tools.ts";
@@ -192,6 +192,34 @@ test("provider unavailability is a clear MCP tool error and never fixture fallba
   });
 });
 
+test("unexpected MCP provider errors are categorized without exposing their message", async () => {
+  const secret = "super-secret-upstream-detail";
+  await withClient({ research: async () => { throw new Error(`provider failed with ${secret}`); } }, async (client) => {
+    const called = await client.callTool({ name: "research_market", arguments: { query: "Research a sufficiently specific market" } });
+    const text = called.content[0]?.type === "text" ? called.content[0].text : "";
+    assert.equal(called.isError, true);
+    assert.match(text, /RESEARCH_PROVIDER_ERROR/);
+    assert.doesNotMatch(text, new RegExp(secret));
+  });
+});
+
+test("public identity ignores client headers and query manipulation", () => {
+  const first = new Request("https://example.test/api/mcp?client=one", { headers: { "x-forwarded-for": "192.0.2.44", "x-novelty-client-id": "rotated-one" } });
+  const second = new Request("https://example.test/api/mcp?client=two", { headers: { "x-forwarded-for": "192.0.2.44", "x-novelty-client-id": "rotated-two" } });
+  assert.equal(requestIdentifier(first), requestIdentifier(second));
+  assert.equal(requestIdentifier(first), "192.0.2.44");
+});
+
+test("MCP enforces actual body size without trusting Content-Length", async () => {
+  let called = false;
+  const response = await handleMcpHttp(new Request("https://example.test/api/mcp", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payload: "x".repeat(17_000) }),
+  }), async () => { called = true; return Response.json({ ok: true }); });
+  assert.equal(response.status, 413);
+  assert.equal(called, false);
+  assert.match(await response.text(), /REQUEST_TOO_LARGE/);
+});
+
 test("HTTP protection returns explicit 429 after the configured per-client limit", async () => {
   const previous = process.env.MCP_RATE_LIMIT_PER_HOUR;
   process.env.MCP_RATE_LIMIT_PER_HOUR = "1";
@@ -317,4 +345,6 @@ test("health and MCP summaries never expose configured secret values", async () 
   assert.doesNotMatch(JSON.stringify(health), new RegExp(secret));
   assert.doesNotMatch(JSON.stringify(health), /another-secret/);
   assert.doesNotMatch(JSON.stringify(summarizeResearch(await getFixtureRun())), /TAVILY_API_KEY|BRAVE_SEARCH_API_KEY/);
+  const publicHealth = JSON.stringify(await publicMcpHealthSnapshot());
+  assert.doesNotMatch(publicHealth, /recentCalls|recentErrors|perClientPerHour|globalDailyResearch|supported|selected/);
 });

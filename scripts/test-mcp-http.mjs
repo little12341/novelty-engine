@@ -60,6 +60,34 @@ try {
   assert.equal(health.healthEndpoint, "/api/mcp/health");
   assert.equal(health.providerConfigured, true);
   assert.equal(health.toolCount, expectedTools.length);
+  assert.equal(health.protectionMode, "local-development");
+  assert.equal("recentCalls" in health, false);
+  assert.equal("recentErrors" in health, false);
+  assert.equal("provider" in health, false);
+  assert.equal("protection" in health, false);
+
+  const debug = await fetch(new URL("/research-debug", origin), { redirect: "manual" });
+  assert.equal(debug.status, 404, "Production research inspector must remain unavailable");
+
+  const malformedResearch = await fetch(new URL("/api/research", origin), {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{not-json",
+  });
+  assert.equal(malformedResearch.status, 400);
+  const malformedPayload = await malformedResearch.json();
+  assert.equal(malformedPayload.code, "INVALID_JSON");
+  assert.doesNotMatch(JSON.stringify(malformedPayload), /SyntaxError|Unexpected token|stack/i);
+
+  const oversizedResearch = await fetch(new URL("/api/research", origin), {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: "x".repeat(5_000) }),
+  });
+  assert.equal(oversizedResearch.status, 413);
+
+  const feedback = await fetch(new URL("/api/research/feedback", origin), {
+    method: "POST", headers: { "Content-Type": "application/json", "x-forwarded-for": "192.0.2.88" },
+    body: JSON.stringify({ kind: "mcp_failure", note: "Fixture MCP connection failed during setup." }),
+  });
+  assert.equal(feedback.status, 201);
+  assert.equal((await feedback.json()).accepted, true);
 
   const plainGet = await fetch(endpoint, { headers: { Accept: "application/json, text/event-stream" } });
   assert.equal(plainGet.status, 405, "Stateless MCP GET must be protocol 405, not an application 404");

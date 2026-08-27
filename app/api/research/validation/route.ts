@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listValidationOutcomes, recordValidationOutcome } from "@/lib/research/validation-outcomes";
 import type { ValidationExperiment } from "@/lib/research/types";
+import { BoundedJsonError, operationalLog, readBoundedJson, safeErrorCategory } from "@/lib/http-safety";
 
 export const runtime = "nodejs";
 
@@ -11,12 +12,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (Number(request.headers.get("content-length") ?? "0") > 12_288) return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
   try {
-    const body = await request.json() as { runId?: string; candidateId?: string; experimentType?: ValidationExperiment["type"]; success?: boolean; observedMetrics?: string[]; artifactUrls?: string[] };
+    const body = await readBoundedJson<{ runId?: string; candidateId?: string; experimentType?: ValidationExperiment["type"]; success?: boolean; observedMetrics?: string[]; artifactUrls?: string[] }>(request, 12_288);
     if (typeof body.runId !== "string" || typeof body.candidateId !== "string" || typeof body.experimentType !== "string" || typeof body.success !== "boolean" || !Array.isArray(body.observedMetrics)) return NextResponse.json({ error: "runId, candidateId, experimentType, success, and observedMetrics are required." }, { status: 400 });
     return NextResponse.json(await recordValidationOutcome({ runId: body.runId, candidateId: body.candidateId, experimentType: body.experimentType, success: body.success, observedMetrics: body.observedMetrics, artifactUrls: Array.isArray(body.artifactUrls) ? body.artifactUrls : undefined }), { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to record validation." }, { status: error instanceof RangeError ? 400 : 500 });
+    if (error instanceof BoundedJsonError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    if (error instanceof RangeError) return NextResponse.json({ error: error.message }, { status: 400 });
+    operationalLog("error", "validation_record_failed", { category: safeErrorCategory(error) });
+    return NextResponse.json({ error: "Unable to record validation." }, { status: 500 });
   }
 }

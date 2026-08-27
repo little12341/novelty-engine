@@ -1,19 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { acquireProtection } from "@/lib/research/protection";
 import { checkWatchlist } from "@/lib/research/watchlists";
+import { BoundedJsonError, clientNetworkIdentity, operationalLog, readBoundedJson, safeErrorCategory } from "@/lib/http-safety";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null) as { watchlistId?: unknown } | null;
+  let body: { watchlistId?: unknown } | null = null;
+  try {
+    body = await readBoundedJson<{ watchlistId?: unknown }>(request, 2_048);
+  } catch (error) {
+    if (error instanceof BoundedJsonError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+  }
   if (!body || typeof body.watchlistId !== "string") return NextResponse.json({ error: "watchlistId is required." }, { status: 400 });
-  const identifier = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "local";
+  const identifier = clientNetworkIdentity(request);
   const permit = await acquireProtection(`${identifier}:watchlist-check`, true);
-  if (!permit.allowed) return NextResponse.json({ error: "Research budget reached.", code: permit.reason.toUpperCase(), retryAfterSeconds: permit.retryAfterSeconds }, { status: 429 });
+  if (!permit.allowed) {
+    operationalLog("warn", "watchlist_rate_limited", { reason: permit.reason, backend: permit.backend });
+    return NextResponse.json({ error: "Research budget reached.", code: permit.reason.toUpperCase(), retryAfterSeconds: permit.retryAfterSeconds }, { status: 429, headers: { "Retry-After": String(permit.retryAfterSeconds) } });
+  }
   try {
     return NextResponse.json(await checkWatchlist(body.watchlistId), { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Watchlist check failed." }, { status: error instanceof RangeError ? 400 : 502 });
+    if (error instanceof RangeError) return NextResponse.json({ error: error.message }, { status: 400 });
+    operationalLog("error", "watchlist_check_failed", { category: safeErrorCategory(error) });
+    return NextResponse.json({ error: "Watchlist check failed." }, { status: 502 });
   } finally { await permit.release(); }
 }

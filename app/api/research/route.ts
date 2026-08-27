@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { runResearch } from "@/lib/research/pipeline";
-import { providerConfiguration, ResearchConfigurationError } from "@/lib/research/providers";
+import { publicProviderConfiguration, ResearchConfigurationError } from "@/lib/research/providers";
 import { acquireProtection } from "@/lib/research/protection";
 import { durableStoreConfiguration } from "@/lib/research/durable";
 import { RESEARCH_ENGINE_VERSION, RESEARCH_SCHEMA_VERSION } from "@/lib/research/types";
@@ -9,6 +10,7 @@ import { CLAUDE_COMMAND_ROUTES, NOVELTY_COMMAND_CATALOG, NoveltyCommandError, pa
 import { compareIdeas } from "@/lib/research/comparison";
 import { getResearchMemory, mergeResearchContext } from "@/lib/research/memory";
 import { sanitizeFounderContext } from "@/lib/research/founder-fit";
+import { BoundedJsonError, clientNetworkIdentity, operationalLog, readBoundedJson, safeErrorCategory } from "@/lib/http-safety";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -18,7 +20,7 @@ export function GET() {
     service: "Novelty Engine research API",
     schemaVersion: RESEARCH_SCHEMA_VERSION,
     engineVersion: RESEARCH_ENGINE_VERSION,
-    provider: providerConfiguration(),
+    provider: publicProviderConfiguration(),
     commands: RESEARCH_COMMANDS,
     commandRoutes: CLAUDE_COMMAND_ROUTES,
     commandCatalog: NOVELTY_COMMAND_CATALOG,
@@ -27,13 +29,13 @@ export function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const contentLength = Number(request.headers.get("content-length") ?? "0");
-  if (contentLength > 4_096) return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
+  const requestId = request.headers.get("x-vercel-id")?.slice(0, 160) || randomUUID();
   let body: { query?: unknown; mode?: unknown; depth?: unknown; ideas?: unknown; bypassCache?: unknown; memoryProfileId?: unknown; userId?: unknown; userContext?: unknown };
   try {
-    body = await request.json() as typeof body;
+    body = await readBoundedJson<typeof body>(request, 4_096);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Request body must be valid JSON." }, { status: 400 });
+    const bounded = error instanceof BoundedJsonError ? error : new BoundedJsonError(400, "INVALID_JSON", "Request body must be valid JSON.");
+    return NextResponse.json({ error: bounded.message, code: bounded.code }, { status: bounded.status, headers: { "X-Request-Id": requestId } });
   }
   const validModes = new Set<ResearchMode>(Object.values(RESEARCH_COMMANDS));
   if (body.mode !== undefined && (typeof body.mode !== "string" || !validModes.has(body.mode as ResearchMode))) return NextResponse.json({ error: "Unsupported research mode." }, { status: 400 });
@@ -44,13 +46,16 @@ export async function POST(request: NextRequest) {
   if (process.env.VERCEL && !durableStoreConfiguration().distributed && process.env.MCP_ALLOW_INSTANCE_LOCAL_PUBLIC !== "true") {
     return NextResponse.json({ error: "Distributed rate limiting is required before public research is enabled on Vercel.", code: "DURABLE_PROTECTION_REQUIRED" }, { status: 503 });
   }
-  const identifier = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "local";
+  const identifier = clientNetworkIdentity(request);
   const permit = await acquireProtection(`${identifier}:research-api`, true);
-  if (!permit.allowed) return NextResponse.json({ error: "Research request limit or public budget reached.", code: permit.reason.toUpperCase(), retryAfterSeconds: permit.retryAfterSeconds }, { status: 429, headers: { "Retry-After": String(permit.retryAfterSeconds) } });
+  if (!permit.allowed) {
+    operationalLog("warn", "research_rate_limited", { requestId, reason: permit.reason, backend: permit.backend });
+    return NextResponse.json({ error: "Research request limit or public budget reached.", code: permit.reason.toUpperCase(), retryAfterSeconds: permit.retryAfterSeconds }, { status: 429, headers: { "Retry-After": String(permit.retryAfterSeconds), "X-Request-Id": requestId } });
+  }
   try {
     if (body.mode === "compare_ideas" || Array.isArray(body.ideas)) {
       const comparison = await compareIdeas(body.ideas as string[]);
-      return NextResponse.json(comparison, { headers: { "X-RateLimit-Remaining": String(permit.remaining), "Cache-Control": "private, no-store" } });
+      return NextResponse.json(comparison, { headers: { "X-RateLimit-Remaining": String(permit.remaining), "X-Request-Id": requestId, "Cache-Control": "private, no-store" } });
     }
     const intent = parseResearchIntent(body.query as string, body.mode as ResearchMode | undefined);
     if (intent.mode === "compare_ideas") return NextResponse.json({ error: "The /compare-ideas command requires the structured ideas array." }, { status: 400 });
@@ -62,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
     const userContext = sanitizeFounderContext(body.userContext) as ResearchUserContext | undefined;
     const result = await runResearch(intent.query, { bypassCache: body.bypassCache === true, mode: intent.mode, depth: body.depth as "fast" | "standard" | "deep" | undefined, userContext: mergeResearchContext(memory, userContext), signal: request.signal });
-    return NextResponse.json(result, { headers: { "X-RateLimit-Remaining": String(permit.remaining), "Cache-Control": "private, no-store" } });
+    return NextResponse.json(result, { headers: { "X-RateLimit-Remaining": String(permit.remaining), "X-Request-Id": requestId, "Cache-Control": "private, no-store" } });
   } catch (error) {
     if (error instanceof NoveltyCommandError) {
       return NextResponse.json({ error: error.message, code: error.code, command: error.command, suggestions: error.suggestions }, { status: 400 });
@@ -71,8 +76,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message, code: "RESEARCH_NOT_CONFIGURED", requiredEnvironmentVariables: error.requiredEnvironmentVariables }, { status: 503 });
     }
     if (error instanceof RangeError || error instanceof SyntaxError) return NextResponse.json({ error: error.message, code: "INVALID_QUERY" }, { status: 400 });
-    console.error("Research request failed", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Research failed." }, { status: 502 });
+    const category = safeErrorCategory(error);
+    operationalLog("error", "research_request_failed", { requestId, category });
+    return NextResponse.json({ error: "Research failed. Use the request ID to find the privacy-safe server log.", code: category === "RATE_LIMIT" ? "RESEARCH_PROVIDER_RATE_LIMIT" : "RESEARCH_PROVIDER_ERROR", requestId }, { status: 502, headers: { "X-Request-Id": requestId } });
   } finally {
     await permit.release();
   }

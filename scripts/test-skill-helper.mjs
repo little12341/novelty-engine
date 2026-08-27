@@ -26,7 +26,10 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const address = server.address();
 if (!address || typeof address === "string") throw new Error("Fixture server did not expose a TCP port.");
 try {
-  const helper = path.join(process.cwd(), "skill", "novelty-engine", "scripts", "research.mjs");
+  const skillRoot = process.env.NOVELTY_SKILL_ROOT
+    ? path.resolve(process.env.NOVELTY_SKILL_ROOT)
+    : path.join(process.cwd(), "skill", "novelty-engine");
+  const helper = path.join(skillRoot, "scripts", "research.mjs");
   const query = "/research-market find a carefully bounded local service opportunity";
   const { stdout, stderr } = await execFileAsync(process.execPath, [helper, query], {
     cwd: process.cwd(), env: { ...process.env, NOVELTY_RESEARCH_API_URL: `http://127.0.0.1:${address.port}/api/research` },
@@ -35,7 +38,7 @@ try {
   assert.equal(received.query, query);
   const parsed = JSON.parse(stdout);
   assert.equal(parsed.stopDecision.status, "insufficient_evidence");
-  const skill = await readFile(path.join(process.cwd(), "skill", "novelty-engine", "SKILL.md"), "utf8");
+  const skill = await readFile(path.join(skillRoot, "SKILL.md"), "utf8");
   assert.match(skill, /slash-like strings as Novelty intents/i);
   assert.match(skill, /\/source-check.*must call `Novelty:source_check`/i);
   assert.match(skill, /does not register these in Claude's native slash-command UI/i);

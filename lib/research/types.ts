@@ -1140,11 +1140,11 @@ export interface ResearchMemoryProfile extends ResearchUserContext {
 export type FeedbackKind =
   | "useful" | "wrong" | "irrelevant" | "already_known" | "missing_competitor"
   | "competitor_does_not_solve_job" | "opportunity_already_exists" | "source_is_weak"
-  | "validation_result_success" | "validation_result_failure";
+  | "validation_result_success" | "validation_result_failure" | "installation_problem" | "mcp_failure";
 
 export interface ResearchFeedback {
   id: string;
-  runId: string;
+  runId: string | null;
   userId: string | null;
   kind: FeedbackKind;
   targetId: string | null;

@@ -1,4 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { clientNetworkIdentity } from "../http-safety.ts";
 import { acquireProtection } from "../research/protection.ts";
 import { durableStoreConfiguration } from "../research/durable.ts";
 import { recordMcpCall, withMcpRequestContext } from "./observability.ts";
@@ -8,10 +9,7 @@ const COSTLY_TOOLS = new Set(["research_market", "inspect_competitors", "falsify
 type McpPayload = { id?: unknown; method?: unknown; params?: { name?: unknown; arguments?: unknown } };
 
 export function requestIdentifier(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const ip = forwarded || request.headers.get("x-real-ip") || "unknown-ip";
-  const client = request.headers.get("x-novelty-client-id")?.slice(0, 120) || "mcp-client";
-  return `${ip}:${client}`;
+  return clientNetworkIdentity(request);
 }
 
 function bearerAuthorized(request: Request): boolean {
@@ -36,7 +34,7 @@ async function handleMcpHttpInner(request: Request, handler: (request: Request) 
     return new Response(null, { status: 204, headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "authorization, content-type, mcp-protocol-version, mcp-session-id, x-novelty-client-id",
+      "Access-Control-Allow-Headers": "authorization, content-type, mcp-protocol-version, mcp-session-id",
       "Access-Control-Expose-Headers": "mcp-protocol-version, mcp-session-id, retry-after, x-ratelimit-remaining",
       "Access-Control-Max-Age": "86400",
     } });

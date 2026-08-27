@@ -75,6 +75,9 @@ test("opt-in memory is scoped, current instructions override it, and feedback st
     assert.doesNotMatch(memory.userId, /test-user/);
     const feedback = await saveResearchFeedback({ runId: "research_20260825120000_abcd1234", kind: "missing_competitor", note: "ExampleCo was omitted" });
     assert.equal(feedback.evidenceStatus, "USER_PROVIDED_CONTEXT_NOT_PUBLIC_EVIDENCE");
+    const installFeedback = await saveResearchFeedback({ kind: "installation_problem", note: "The archive could not be extracted." });
+    assert.equal(installFeedback.runId, null);
+    await assert.rejects(() => saveResearchFeedback({ kind: "wrong", note: "This run was bad." }), /run ID is required/i);
   } finally {
     if (previousDir === undefined) delete process.env.RESEARCH_RUNS_DIR; else process.env.RESEARCH_RUNS_DIR = previousDir;
   }

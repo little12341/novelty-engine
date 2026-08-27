@@ -1,6 +1,6 @@
 ---
 name: novelty-engine
-description: Evidence-first market-gap, company, competitor, customer-pain, pricing, trend, falsification, business-finding, and differentiated-opportunity research. Trigger for startup/business ideas, market gaps, "what should I build?", validate/falsify an idea, inspect competitors, find real businesses to sell to, research pricing or complaints, compare opportunities, and rerun/export prior research.
+description: Evidence-first market-gap and opportunity research. Use for startup ideas, market gaps, competitors, customer pain, pricing, trends, validation, falsification, company research, reruns, and exports.
 ---
 
 # Novelty Engine
@@ -32,14 +32,14 @@ Use research paths in this order:
 node scripts/research.mjs "<the user's complete research or ideation request>"
 ```
 
-   The helper calls `NOVELTY_RESEARCH_API_URL`, which should point to the deployed `https://novelty-engine.com/api/research` endpoint (and defaults to that canonical production URL). It prints the structured research JSON. If direct HTTP tools are available instead, send `POST {"query":"..."}` to that endpoint.
+   The helper calls `NOVELTY_RESEARCH_API_URL`, which should point to the deployed `https://www.novelty-engine.com/api/research` endpoint (and defaults to that canonical production URL). It prints the structured research JSON. If direct HTTP tools are available instead, send `POST {"query":"..."}` to that endpoint.
 3. **Local methodology (last fallback):** If neither MCP nor the direct helper is available, continue with this Skill's bounded local methodology and clearly label every result as **non-researched, hypothesis-led ideation**. Do not imply that live evidence was checked.
 
-Claude browser users should install this Skill and connect `https://novelty-engine.com/api/mcp` once under **Settings → Connectors → Add custom connector**. They can test server readiness at `https://novelty-engine.com/api/mcp/health`. They do not need `NOVELTY_RESEARCH_API_URL`, PowerShell configuration, or a Tavily/Brave key. Provider credentials stay on the Novelty Engine server.
+Claude browser users should upload the packaged Skill ZIP under **Customize → Skills → + Create skill → Upload a skill**, enable it, and connect `https://www.novelty-engine.com/api/mcp` once under **Customize → Connectors → + → Add custom connector**. Team/Enterprise owners add the connector under **Organization settings → Connectors** before members connect it. Users can test server readiness at `https://www.novelty-engine.com/api/mcp/health`. They do not need `NOVELTY_RESEARCH_API_URL`, PowerShell configuration, or a Tavily/Brave key. Provider credentials stay on the Novelty Engine server.
 
 ## Command discovery and routing
 
-Treat slash-like strings as Novelty intents even when they appear as ordinary message text. Novelty Engine does not register these in Claude's native slash-command UI or provide native Claude autocomplete. Intercept the text before ordinary answering or browsing, resolve the current Novelty run when the intent is stored-run based, and call the mapped `Novelty:<tool>` MCP tool. Never describe these as native custom Claude slash commands, and never replace a mapped call with Claude's independent web search.
+Treat slash-like strings as Novelty intents even when they appear as ordinary message text. Novelty Engine does not register these in Claude's native slash-command UI or prompt-bar autocomplete; they appear there only if Claude itself supports that interface. Intercept the text before ordinary answering or browsing, resolve the current Novelty run when the intent is stored-run based, and call the mapped `Novelty:<tool>` MCP tool. Never describe these as native custom Claude slash commands, and never replace a mapped call with Claude's independent web search.
 
 `/commands` is a Skill-level intent. Return the complete catalog below with exactly one line per command: command plus Description. Do not call MCP or browse. `/help` is also Skill-level: return only this concise guidance: use `/commands` to list intents; put a market, company, or idea after new-research commands; stored-run commands use the most recent run or an explicit `research_…` ID; use `/help <command>` for details. For `/help <command>` (with or without the target's leading slash), return that command's Description and route-sensitive usage, then show its single Example from the catalog. Do not dump the full catalog for `/help <command>`.
 
@@ -219,7 +219,7 @@ Evaluate each candidate internally on:
 
 Treat similarity as a risk to investigate, not a positive score. Reject candidates that are generic, derivative, vague, novelty theater, unsupported demand stories, impractical without a reason to accept that risk, or solutions whose economics and user behavior do not fit the gap.
 
-With the V2.1 backend, honor each structured falsification outcome across demand, economics, feasibility, competition, distribution, behavior, trust, regulation, liability, defensibility, switching cost, and incumbent response. For every candidate with competitors, preserve `residualUnmetDemand`: repeated unresolved complaints, workaround prevalence, switching behavior, underserved segments, price/performance gaps, trust failures, distribution gaps, and whether the mechanism materially changes the outcome. Competition may lower differentiation and defensibility, but treat it as decisive only when close substitutes adequately solve the same job for the same user with no meaningful residual gap. Separate `argumentsFor` from `argumentsAgainst`, surface `decisiveRisks`, and preserve `unknownCriticalCount`. An unknown falsification dimension remains unknown; absence of counterevidence is not evidence that the risk is cleared.
+With the V2.2 backend (which preserves the V2.1 public result schema), honor each structured falsification outcome across demand, economics, feasibility, competition, distribution, behavior, trust, regulation, liability, defensibility, switching cost, and incumbent response. For every candidate with competitors, preserve `residualUnmetDemand`: repeated unresolved complaints, workaround prevalence, switching behavior, underserved segments, price/performance gaps, trust failures, distribution gaps, and whether the mechanism materially changes the outcome. Competition may lower differentiation and defensibility, but treat it as decisive only when close substitutes adequately solve the same job for the same user with no meaningful residual gap. Separate `argumentsFor` from `argumentsAgainst`, surface `decisiveRisks`, and preserve `unknownCriticalCount`. An unknown falsification dimension remains unknown; absence of counterevidence is not evidence that the risk is cleared.
 
 ## 8. Mutate the strongest survivors
 

@@ -15,6 +15,7 @@ import { buildCompanyProfile } from "./company.ts";
 import { deriveExpansionBranches } from "./expansion.ts";
 import { RESEARCH_ENGINE_VERSION, type ResearchDepth, type SearchAngle, type SearchBranch } from "./types.ts";
 import { buildCompetitorRecallReport, credibleCompetitor, establishedCategory, planCompetitorDiscovery } from "./competitor-discovery.ts";
+import { operationalLog, safeErrorCategory } from "../http-safety.ts";
 
 const absoluteMax = (raw: string | undefined, fallback: number, max: number) => {
   const value = Number.parseInt(raw ?? "", 10);
@@ -98,9 +99,13 @@ function ideationContext(result: Omit<ResearchResult, "ideationContext">): Ideat
 }
 
 function providerFailure(error: unknown): { category: string; message: string; retryable: boolean } {
-  const message = error instanceof Error ? error.message : "unknown provider error";
-  const category = /abort|time(?:d)?\s*out/i.test(message) ? "TIMEOUT" : /429|rate/i.test(message) ? "RATE_LIMIT"
-    : /json|malformed|schema|array/i.test(message) ? "MALFORMED_RESPONSE" : /HTTP 5\d\d/i.test(message) ? "UPSTREAM_5XX" : "PROVIDER_ERROR";
+  const category = safeErrorCategory(error);
+  const message = category === "TIMEOUT" ? "The provider request timed out."
+    : category === "RATE_LIMIT" ? "The provider rate limit or quota was reached; check the provider dashboard and server logs."
+      : category === "PROVIDER_AUTH" ? "The provider rejected its server-side credentials."
+        : category === "MALFORMED_RESPONSE" ? "The provider returned a malformed response."
+          : category === "UPSTREAM_5XX" ? "The provider returned a server error."
+            : "The provider request failed.";
   return { category, message, retryable: ["TIMEOUT", "RATE_LIMIT", "UPSTREAM_5XX"].includes(category) };
 }
 
@@ -152,6 +157,7 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
       if (item.status === "rejected") {
         const detail = providerFailure(item.reason);
         failures.push(`Search angle ${angles[index].kind} failed [${detail.category}]: ${detail.message}`);
+        operationalLog("warn", "provider_failure", { provider: provider.id, angleKind: angles[index].kind, category: detail.category, retryable: detail.retryable });
       }
     });
     return settled.flatMap((item) => item.status === "fulfilled" ? [item.value] : []);
@@ -412,6 +418,20 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   if (options.persist !== false) {
     const stored = await saveResearchResult(completeResult, ttl);
     if (!stored.durable) completeResult.warnings.push("This Vercel-compatible build uses in-memory cache in serverless mode; configure external durable storage before relying on run history across instances.");
+  }
+  if (failures.length) {
+    operationalLog("warn", "research_partial_failure", { runId: completeResult.id, provider: provider.id, failureCount: failures.length, stopStatus: stopDecision.status });
+  }
+  if (depth === "deep" || providerCalls >= 20 || providerCalls >= Math.ceil(limits.maxProviderCalls * 0.75)) {
+    operationalLog("info", "research_high_cost_run", {
+      runId: completeResult.id,
+      depth,
+      provider: provider.id,
+      providerCalls,
+      estimatedProviderCredits: opportunity.budgetUsage.estimatedProviderCredits,
+      durationMs: Date.now() - wallStartedAt,
+      sourceCount: sources.length,
+    });
   }
   return completeResult;
 }

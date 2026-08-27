@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { getDurableRedis } from "./durable.ts";
+import { operationalLog, safeErrorCategory } from "../http-safety.ts";
 
 type Counter = { count: number; resetsAt: number };
 type ProtectionState = {
@@ -142,7 +143,7 @@ export async function acquireProtection(identifier: string, costly: boolean, now
         release: costly ? async () => { await redis.eval(redisReleaseScript, [keys[3]], []); } : async () => {},
       };
     } catch (error) {
-      console.error("Distributed protection unavailable; denying cost-bearing request", error instanceof Error ? error.message : "unknown error");
+      operationalLog("error", "distributed_protection_unavailable", { category: safeErrorCategory(error), costly });
       if (costly) return { allowed: false, reason: "concurrency", retryAfterSeconds: 30, backend: "upstash-redis-rest" };
       // Read-only requests may use the conservative instance-local limiter when Redis has a transient fault.
     }

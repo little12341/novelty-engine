@@ -149,7 +149,7 @@ export function HeroInstallPanel() {
         </span>
         <div className="hero-install-content">
           <h2 id="hero-skill-title">Install as a Claude Skill</h2>
-          <p>Creates the skills folder and copies Novelty Engine into it.</p>
+          <p><a href="/novelty-engine.zip" download>Download the Skill package</a>. Upload the ZIP in Claude under <strong>Customize → Skills</strong>, or extract it for Claude Code.</p>
           <pre><code>{installCommands}</code></pre>
         </div>
         <button className="hero-copy-button liquid-glass" type="button" onClick={() => copyText("commands", installCommands)} aria-label="Copy both Claude Skill setup commands">
@@ -203,18 +203,19 @@ export function InstallPanel() {
         </div>
         <div>
           <p className="option-kicker">Claude Skill</p>
-          <h3>Install the local Skill.</h3>
-          <p>Run both commands beside the Novelty Engine folder to add it to Claude’s local skills directory.</p>
+          <h3>Upload or install the Skill.</h3>
+          <p><a href="/novelty-engine.zip" download>Download the current Skill package</a>. In Claude, use <strong>Customize → Skills → + Create skill → Upload a skill</strong>. For Claude Code, extract it and run:</p>
         </div>
         <div className="command-block">
           <div className="command-header">
-            <span>Manual install</span>
+            <span>Claude Code local install</span>
             <button type="button" onClick={() => copyText("commands", installCommands)} aria-label="Copy both Claude Skill setup commands">
               <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><rect x="6" y="6" width="8" height="8" rx="1"/><path d="M12 6V4.8c0-.5-.4-.8-.8-.8H4.8c-.4 0-.8.3-.8.8v6.4c0 .4.4.8.8.8H6"/></svg>
               {label("commands")}
             </button>
           </div>
           <pre><code>{installCommands}</code></pre>
+          <p className="archive-contents"><span>Windows</span>Extract to <code>%USERPROFILE%\.claude\skills\novelty-engine</code>.</p>
         </div>
         <span className="sr-only" role="status" aria-live="polite">
           {copyState.target === "commands" && copyState.status === "copied" ? "Both install commands copied to clipboard." : copyState.target === "commands" && copyState.status === "error" ? "Could not copy the install commands." : ""}
@@ -229,7 +230,7 @@ export function InstallPanel() {
         <div>
           <p className="option-kicker">Claude browser</p>
           <h3>Connect live research once.</h3>
-          <p>Install the Skill, then open <strong>Settings → Connectors → Add custom connector</strong> and paste the deployed MCP endpoint. No Tavily key or local environment variable is needed.</p>
+          <p>After enabling the Skill, open <strong>Customize → Connectors → + → Add custom connector</strong> and paste the MCP endpoint. Team/Enterprise owners add it under Organization settings first.</p>
         </div>
         <div className="command-block mcp-command">
           <div className="command-header">

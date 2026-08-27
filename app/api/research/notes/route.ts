@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listResearchNotes, saveResearchNote } from "@/lib/research/notes";
+import { BoundedJsonError, operationalLog, readBoundedJson, safeErrorCategory } from "@/lib/http-safety";
 
 export const runtime = "nodejs";
 
@@ -17,13 +18,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const length = Number(request.headers.get("content-length") ?? "0");
-  if (length > 8_192) return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
   try {
-    const body = await request.json() as { runId?: string; userId?: string; candidateId?: string; kind?: "research_note" | "decision_log"; title?: string; body?: string; tags?: string[]; folder?: string };
+    const body = await readBoundedJson<{ runId?: string; userId?: string; candidateId?: string; kind?: "research_note" | "decision_log"; title?: string; body?: string; tags?: string[]; folder?: string }>(request, 8_192);
     if (typeof body.runId !== "string" || typeof body.userId !== "string" || typeof body.title !== "string" || typeof body.body !== "string") return NextResponse.json({ error: "runId, userId, title, and body are required." }, { status: 400 });
     return NextResponse.json(await saveResearchNote({ runId: body.runId, userId: body.userId, candidateId: body.candidateId, kind: body.kind, title: body.title, body: body.body, tags: Array.isArray(body.tags) ? body.tags : undefined, folder: body.folder }), { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save note." }, { status: error instanceof RangeError ? 400 : 500 });
+    if (error instanceof BoundedJsonError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    if (error instanceof RangeError) return NextResponse.json({ error: error.message }, { status: 400 });
+    operationalLog("error", "research_note_save_failed", { category: safeErrorCategory(error) });
+    return NextResponse.json({ error: "Unable to save note." }, { status: 500 });
   }
 }

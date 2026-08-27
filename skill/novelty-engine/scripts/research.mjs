@@ -6,7 +6,7 @@ if (query.length < 8) {
   process.exit(2);
 }
 
-const base = process.env.NOVELTY_RESEARCH_API_URL || "https://novelty-engine.com/api/research";
+const base = process.env.NOVELTY_RESEARCH_API_URL || "https://www.novelty-engine.com/api/research";
 let endpoint;
 try {
   endpoint = new URL(base);

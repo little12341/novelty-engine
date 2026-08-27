@@ -73,6 +73,28 @@ export async function mcpHealthSnapshotWithConnectivity() {
   };
 }
 
+export async function publicMcpHealthSnapshot() {
+  const internal = await mcpHealthSnapshotWithConnectivity();
+  const protectionMode = internal.protection.distributed ? "distributed"
+    : internal.authentication.mode === "bearer-token" ? "authenticated-instance-local"
+      : process.env.VERCEL ? "not-ready" : "local-development";
+  return {
+    service: internal.service,
+    ok: internal.providerConfigured && internal.publicResearchEnabled && internal.redisReachable !== false,
+    endpoint: internal.endpoint,
+    healthEndpoint: internal.healthEndpoint,
+    transport: internal.transport,
+    toolContractVersion: internal.toolContractVersion,
+    toolCount: internal.toolCount,
+    providerConfigured: internal.providerConfigured,
+    publicResearchEnabled: internal.publicResearchEnabled,
+    protectionMode,
+    storageConfigured: internal.storage.configured,
+    storageReachable: internal.redisReachable,
+    secretsExposed: false,
+  };
+}
+
 export function clearMcpObservability() {
   calls.length = 0;
 }
