@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ResearchResult } from "./types.ts";
-import { RESEARCH_SCHEMA_VERSION } from "./types.ts";
+import { RESEARCH_ENGINE_VERSION, RESEARCH_SCHEMA_VERSION } from "./types.ts";
 import { querySimilarity } from "./normalize.ts";
 import { getDurableRedis } from "./durable.ts";
 
@@ -13,6 +13,8 @@ const memoryCache = globalState.__noveltyResearchCache ??= new Map<string, Cache
 
 function normalizeStoredResult(raw: ResearchResult): ResearchResult {
   const result = structuredClone(raw);
+  result.engineVersion ??= RESEARCH_ENGINE_VERSION;
+  result.depth ??= "standard";
   result.mode ??= "research_market";
   result.sources = (result.sources ?? []).map((source) => ({
     ...source,
@@ -50,11 +52,29 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
     missingSourceFamilyWarnings: result.coverage.missingCriticalSourceFamilies,
   };
   result.companyProfile ??= null;
+  result.searchBranches ??= [];
+  result.candidateLifecycles ??= [];
+  result.evidenceGates ??= [];
+  result.assumptionLedger ??= [];
+  result.adversarialReviews ??= [];
+  result.taskGraph ??= {
+    depth: result.depth, resumable: true, checkpointId: `checkpoint_legacy_${result.id.slice(-12)}`,
+    cancelled: false, agents: [], dependencies: [],
+  };
+  result.nextBestAction ??= {
+    candidateId: result.finalOpportunities[0]?.candidate.id ?? null,
+    action: result.finalOpportunities[0]?.validationExperiment.action ?? "Run a new incremental research pass to resolve the missing evidence.",
+    reason: "This historical record predates explicit next-best-action ranking.", resolvesAssumptionIds: [],
+    expectedInformationGain: 0, estimatedCost: "unknown", estimatedTime: "unknown",
+    successCriterion: result.finalOpportunities[0]?.validationExperiment.successThreshold ?? "New independent evidence resolves a critical unknown.",
+    killCriterion: result.finalOpportunities[0]?.validationExperiment.failureThreshold ?? "The configured hard research budget is exhausted without a survivor.",
+  };
   return result;
 }
 
 function hasCurrentShape(result: ResearchResult): boolean {
   return result.schemaVersion === RESEARCH_SCHEMA_VERSION
+    && result.engineVersion === RESEARCH_ENGINE_VERSION
     && Array.isArray(result.finalOpportunities) && Array.isArray(result.opportunityGraph?.nodes)
     && Array.isArray(result.falsificationResults) && Boolean(result.coverage) && Boolean(result.stopDecision) && Boolean(result.output)
     && Array.isArray(result.roleOutputs) && Array.isArray(result.checkpoints) && Boolean(result.evidenceSnapshot);
@@ -205,6 +225,16 @@ export async function listResearchRuns(limit = 20): Promise<Array<Pick<ResearchR
     id: item.id, query: item.query, mode: item.mode, status: item.status, completedAt: item.completedAt,
     provider: item.provider, stopDecision: item.stopDecision, budgetUsage: item.budgetUsage,
   }));
+}
+
+export async function searchResearchRuns(query: string, limit = 20) {
+  const normalized = query.trim();
+  if (normalized.length < 2) return [];
+  const runs = await listResearchRuns(100);
+  return runs.map((run) => ({ ...run, similarity: querySimilarity(normalized, run.query) }))
+    .filter((run) => run.similarity >= .15 || run.query.toLowerCase().includes(normalized.toLowerCase()))
+    .sort((a, b) => b.similarity - a.similarity || b.completedAt.localeCompare(a.completedAt))
+    .slice(0, Math.max(1, Math.min(50, Math.trunc(limit))));
 }
 
 export function clearMemoryResearchCache(): void {

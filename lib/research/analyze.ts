@@ -42,6 +42,11 @@ function extractTargetCustomer(text: string): string | null {
   return match?.[1] ?? null;
 }
 
+function snippets(items: Evidence[], pattern: RegExp, limit = 4): { values: string[]; ids: string[] } {
+  const matched = items.filter((item) => pattern.test(`${item.title} ${item.summary}`)).slice(0, limit);
+  return { values: matched.map((item) => item.summary), ids: matched.map((item) => item.id) };
+}
+
 export function extractCompetitors(evidence: Evidence[]): Competitor[] {
   const eligible = evidence.filter((item) => ["official_company", "pricing", "documentation", "product_directory", "app_marketplace"].includes(item.sourceType));
   const grouped = new Map<string, Evidence[]>();
@@ -64,7 +69,19 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
     const hostStem = host.split(".")[0];
     const weaknessEvidence = evidence.filter((item) => DISCUSSION_TYPES.has(item.sourceType) && new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b|\\b${hostStem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(`${item.title} ${item.summary}`));
     const target = extractTargetCustomer(allText);
-    const completeIds = [...new Set([...ids, ...weaknessEvidence.map((item) => item.id)])];
+    const mentions = evidence.filter((item) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b|\\b${hostStem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(`${item.title} ${item.summary}`));
+    const funding = snippets(mentions, /raised|funding|series [a-z]|venture|seed round/i, 2);
+    const headcount = mentions.find((item) => /\b\d+[,+]? employees|headcount|team of \d+/i.test(`${item.title} ${item.summary}`));
+    const hiring = snippets(mentions, /hiring|job opening|careers|recruit/i);
+    const traffic = mentions.find((item) => /monthly visits|traffic|unique visitors|web visits/i.test(`${item.title} ${item.summary}`));
+    const reviews = snippets(mentions, /review|rated|stars?|g2|capterra|trustpilot/i);
+    const complaints = snippets(mentions.filter((item) => DISCUSSION_TYPES.has(item.sourceType)), /missing|too expensive|unreliable|poor|broken|cancel|switched|manual|complain/i);
+    const partnerships = snippets(mentions, /partner|partnership|alliance|reseller/i);
+    const integrations = snippets(mentions, /integrat|api|connector|webhook/i);
+    const channels = snippets(mentions, /marketplace|agency|partner channel|direct sales|self.serve|app store/i);
+    const launches = snippets(mentions, /launch|released|introduced|announced|new product/i);
+    const strategic = mentions.find((item) => /strategy|roadmap|expanding|focus|positioning|mission/i.test(`${item.title} ${item.summary}`));
+    const completeIds = [...new Set([...ids, ...weaknessEvidence.map((item) => item.id), ...mentions.map((item) => item.id)])];
     return {
       id: stableId("comp", host),
       name: supported(name, [primary.id], 0.72),
@@ -76,6 +93,19 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
       positioning: supported(positioning, [primary.id], 0.65),
       likelyStrengths: supported(features.length ? features.slice(0, 3) : null, features.length ? ids : [], features.length ? 0.55 : 0),
       likelyWeaknesses: supported(weaknessEvidence.length ? weaknessEvidence.slice(0, 3).map((item) => item.summary) : null, weaknessEvidence.map((item) => item.id), weaknessEvidence.length ? 0.65 : 0),
+      intelligence: {
+        funding: supported(funding.values[0] ?? null, funding.ids, funding.ids.length ? .6 : 0),
+        headcount: supported(headcount?.summary ?? null, headcount ? [headcount.id] : [], headcount ? .6 : 0),
+        hiring: supported(hiring.values.length ? hiring.values : null, hiring.ids, hiring.ids.length ? .65 : 0),
+        traffic: supported(traffic?.summary ?? null, traffic ? [traffic.id] : [], traffic ? .5 : 0),
+        reviews: supported(reviews.values.length ? reviews.values : null, reviews.ids, reviews.ids.length ? .65 : 0),
+        complaints: supported(complaints.values.length ? complaints.values : null, complaints.ids, complaints.ids.length ? .68 : 0),
+        partnerships: supported(partnerships.values.length ? partnerships.values : null, partnerships.ids, partnerships.ids.length ? .6 : 0),
+        integrations: supported(integrations.values.length ? integrations.values : null, integrations.ids, integrations.ids.length ? .7 : 0),
+        channels: supported(channels.values.length ? channels.values : null, channels.ids, channels.ids.length ? .6 : 0),
+        launches: supported(launches.values.length ? launches.values : null, launches.ids, launches.ids.length ? .6 : 0),
+        strategicDirection: supported(strategic?.summary ?? null, strategic ? [strategic.id] : [], strategic ? .5 : 0),
+      },
       evidenceIds: completeIds,
     };
   });
@@ -153,6 +183,11 @@ export function clusterComplaints(evidence: Evidence[]): ComplaintCluster[] {
       gapType: isIsolated ? "isolated" : rule.type,
       isIsolated,
       currentWorkaround: workarounds[0] ?? null,
+      requestedFeatures: items.filter((item) => /feature request|wish (?:it|they)|should add|needs? (?:an?|to)/i.test(`${item.title} ${item.summary}`)).slice(0, 5).map((item) => item.summary),
+      willingnessToPaySignals: items.filter((item) => /would pay|pay for|budget|price|cost|hiring|consultant/i.test(`${item.title} ${item.summary}`)).slice(0, 5).map((item) => item.summary),
+      churnReasons: items.filter((item) => /cancel|churn|switched|went back|abandon|stopped using/i.test(`${item.title} ${item.summary}`)).slice(0, 5).map((item) => item.summary),
+      buyingObjections: items.filter((item) => /too expensive|not worth|procurement|security review|hard to use|too complex|trust/i.test(`${item.title} ${item.summary}`)).slice(0, 5).map((item) => item.summary),
+      jobsToBeDone: items.filter((item) => /need to|trying to|so (?:we|i) can|job|workflow|reconcile|coordinate|schedule|invoice/i.test(`${item.title} ${item.summary}`)).slice(0, 5).map((item) => item.summary),
     };
   }).sort((a, b) => b.evidenceCount - a.evidenceCount);
 }

@@ -1,7 +1,7 @@
 {
   "name": "novelty-engine",
   "type": "module",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "description": "A free Claude Skill for discovering market gaps and generating differentiated ideas.",
   "scripts": {
@@ -15,7 +15,7 @@
     "verify:links": "node scripts/verify-links.mjs",
     "verify:routes": "node scripts/verify-production-routes.mjs",
     "test": "npm run test:unit && npm run package:skill && npm run verify:package && npm run verify:links && npm run validate:skill && npm run test:skill && node scripts/evaluate.mjs",
-    "test:unit": "node --test lib/research/research.test.ts lib/research/v2.test.ts lib/research/regression.test.ts lib/research/platform.test.ts lib/mcp/mcp.test.ts",
+    "test:unit": "node --test lib/research/research.test.ts lib/research/v2.test.ts lib/research/v2.2.test.ts lib/research/regression.test.ts lib/research/platform.test.ts lib/mcp/mcp.test.ts",
     "test:mcp": "node --test lib/mcp/mcp.test.ts",
     "test:regression": "node --test lib/research/regression.test.ts",
     "test:mcp:client": "node scripts/test-mcp-client.mjs",

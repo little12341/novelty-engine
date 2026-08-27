@@ -20,10 +20,12 @@ if (!['http:', 'https:'].includes(endpoint.protocol)) {
 }
 
 try {
+  const configuredDepth = process.env.NOVELTY_RESEARCH_DEPTH || "standard";
+  if (!["fast", "standard", "deep"].includes(configuredDepth)) throw new Error("NOVELTY_RESEARCH_DEPTH must be fast, standard, or deep");
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, depth: configuredDepth }),
     signal: AbortSignal.timeout(65_000),
   });
   const text = await response.text();

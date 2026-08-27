@@ -1,10 +1,12 @@
-import type { CandidateGap, ClaimStatus, Evidence, FalsificationResult, GraphHole, IdeaCandidate, OpportunityScore, OpportunityScoreFactors, ScoreFactorAssessment, SimilarityResult, WeakSignal, WorkflowStitchingPattern } from "./types.ts";
+import type { CandidateGap, ClaimStatus, Evidence, FalsificationResult, GraphHole, IdeaCandidate, OpportunityScore, OpportunityScoreFactors, ResearchUserContext, ScoreFactorAssessment, SimilarityResult, WeakSignal, WorkflowStitchingPattern } from "./types.ts";
 import { clamp } from "./utils.ts";
 import { independentEvidenceCount } from "./quality.ts";
+import { buildDecisionIntelligence, buildEvidenceConfidence, buildNoveltyScore, buildStructuredScorecard } from "./intelligence.ts";
 
 export function scoreOpportunity(candidate: IdeaCandidate, input: {
   gaps: CandidateGap[]; holes: GraphHole[]; stitching: WorkflowStitchingPattern[]; signals: WeakSignal[];
   similarities: SimilarityResult[]; falsification: FalsificationResult; evidence: Evidence[]; competitorIds?: string[];
+  founderContext?: ResearchUserContext;
 }): OpportunityScore {
   const gap = input.gaps.find((item) => candidate.sourceGapIds.includes(item.id));
   const hole = input.holes.find((item) => candidate.sourceGraphHoleIds.includes(item.id));
@@ -60,5 +62,18 @@ export function scoreOpportunity(candidate: IdeaCandidate, input: {
     confidence: factor(confidenceLabel === "evidence-backed" ? 8 : confidenceLabel === "plausible" ? 6 : 3, candidate.evidenceIds, "Overall calibration label derived from evidence provenance and gap support, not the aggregate opportunity score."),
   };
   const writtenReasoning = `Evidence ${decisionFactors.evidenceStrength.status.toLowerCase()} (${decisionFactors.evidenceStrength.rationale}) Demand ${decisionFactors.demandSignal.status.toLowerCase()}. Decisive unresolved risks: ${input.falsification.decisiveRisks.map((item) => item.dimension).join(", ") || "none recorded"}.`;
-  return { candidateId: candidate.id, score: Math.round(clamp(score, 0, 100)), factors, penalties, confidenceLabel, heuristic: true, decisionFactors, writtenReasoning };
+  const referenced = [
+    ...candidate.evidenceIds,
+    ...input.falsification.hypotheses.flatMap((item) => [...item.supportingEvidenceIds, ...item.counterEvidenceIds]),
+  ];
+  const known = new Set(input.evidence.map((item) => item.id));
+  const citationCoverage = referenced.length ? referenced.filter((id) => known.has(id)).length / referenced.length : 0;
+  const evidenceConfidence = buildEvidenceConfidence(candidate, input.evidence, citationCoverage);
+  const noveltyScore = buildNoveltyScore(candidate, input.similarities, input.competitorIds ?? []);
+  const scorecard = buildStructuredScorecard(candidate, {
+    gap, evidence: input.evidence, falsification: input.falsification, evidenceConfidence,
+    novelty: noveltyScore, founderContext: input.founderContext,
+  });
+  const intelligence = buildDecisionIntelligence(scorecard, evidenceConfidence);
+  return { candidateId: candidate.id, score: Math.round(clamp(score, 0, 100)), factors, penalties, confidenceLabel, heuristic: true, decisionFactors, writtenReasoning, evidenceConfidence, noveltyScore, scorecard, intelligence };
 }

@@ -1,10 +1,10 @@
 # Novelty Engine
 
-Novelty Engine V2.1+ is an evidence-driven business-opportunity research platform plus a Claude Skill. It keeps the canonical V2.1 pipeline and report while adding intent modes, deterministic research-role boundaries, company research, qualitative idea comparison, immutable evidence snapshots, opt-in memory, history, feedback, watchlists/change detection, source-trust and prompt-injection metadata, usage controls, and JSON/Markdown/print-ready exports. Claude consumes the same structured contract exposed by MCP instead of pretending a prompt performed research.
+Novelty Engine 2.2 is an evidence-driven search-and-elimination platform plus a Claude Skill. Its core loop is `search → discover → gather evidence → challenge → falsify → expand → validate → report survivors`. It preserves the V2.1 public result schema while adding persisted candidate lifecycles and kill reasons, adjacent-search expansion, configurable evidence gates, independent Bull/Bear/Judge records, specialist task graphs, assumption ledgers, founder constraints, separate opportunity/novelty/evidence-confidence scores, one next-best action, richer exports, and an architecturally separate financial-signal backtester. Claude consumes the same structured contract exposed by MCP instead of pretending a prompt performed research.
 
 Production website: [https://novelty-engine.com](https://novelty-engine.com)
 
-It never treats missing search results as proof of demand, and it never fills unsupported competitors, prices, complaints, or citations from model memory. Claims remain `VERIFIED`, `INFERRED`, or `UNKNOWN`, and an `insufficient_evidence` stop produces no forced ideas.
+It never treats missing search results as proof of demand, and it never fills unsupported competitors, prices, complaints, or citations from model memory. Claims remain `VERIFIED`, `INFERRED`, or `UNKNOWN`; fact records also distinguish `KNOWN`, `INFERRED`, `UNKNOWN`, and `CONTRADICTED`. Normal research can end at `SURVIVED/VALIDATING`, but never `VALIDATED` unless both the strict evidence gate and external validation evidence pass. An `insufficient_evidence` stop produces no forced ideas.
 
 Competitors validate that a job or market may exist; their existence is never an automatic rejection. Every candidate in a competitive landscape receives an explicit residual-unmet-demand assessment covering repeated unresolved complaints, workaround prevalence, switching behavior, underserved segments, price/performance gaps, trust failures, distribution gaps, and whether the proposed mechanism materially changes the outcome. Similarity can reduce differentiation and defensibility, but competition is decisive only when close substitutes already solve the same job for the same user with no meaningful residual gap.
 
@@ -19,9 +19,10 @@ Claude browser / Claude Code -> Novelty Engine Skill -> remote MCP (/api/mcp)
   -> source quality/independence/repetition assessment -> competitor + substitute map
   -> complaint/workaround mining -> Opportunity Graph -> graph-hole detection
   -> weak signals -> failed-attempt mining -> assumption contradictions
-  -> evidence gate + stop decision -> candidate generation -> novelty fingerprints
-  -> active counterevidence + 11-dimension falsification -> one bounded mutation
-  -> 9 decision assessments with written reasoning -> 24-72 hour validation tests
+  -> evidence gate + stop decision -> candidate lifecycle -> novelty/collision fingerprints
+  -> independent Bull/Bear/Judge + 11-dimension falsification -> adjacent search / bounded mutation
+  -> 29-factor scorecard + evidence confidence + decision intelligence + moat/counterfactual tests
+  -> assumption ledger -> strict validation gate -> one next-best action + 24-72 hour validation plan
   -> quality checkpoints -> evidence snapshot -> consistent final output + durable history
 ```
 
@@ -32,8 +33,10 @@ Important locations:
 - `app/api/research/route.ts` — `GET` configuration status and `POST` research endpoint.
 - `app/api/mcp/route.ts` — stateless MCP Streamable HTTP endpoint for Claude and other remote clients.
 - `app/api/mcp/health/route.ts` — secret-free MCP health, tool, storage, and protection status.
+- `app/api/research/openapi/route.ts` — OpenAPI 3.1 discovery document for the stable HTTP boundary.
 - `app/research-debug/` — internal inspector for every V2 artifact, budget, lineage, score, outcome, and citation.
 - `lib/research/` — typed schemas and one module per pipeline concern. See [`docs/architecture.md`](docs/architecture.md).
+- `lib/financial-signals/` — separate timestamped hypothesis persistence and 1/5/30-day benchmark-relative backtesting.
 - `skill/novelty-engine/` — installable Claude Skill and backend helper.
 - `lib/research/fixtures/` — representative test-only provider results; never a production fallback.
 - `evals/` — three-mode evaluation cases and rubric.
@@ -70,8 +73,11 @@ Configure one provider. Both are server-side only and are never referenced by cl
 | `RESEARCH_COMPARISON_MAX_PROVIDER_CALLS` | No; default 30, hard cap 40 | Shared search-call ceiling across a 2–5 idea comparison |
 | `RESEARCH_MAX_CANDIDATES` | No; default 30, hard cap 48 | Initial plus survivor-mutation candidates |
 | `RESEARCH_MAX_SURVIVOR_ITERATIONS` | No; default/hard cap 1 | One tightly bounded mutation/retest round; one dimension per root |
+| `RESEARCH_MAX_EXPANSION_BRANCHES` | No; standard default 2, hard cap 4 | Adjacent segment/workflow branches when the initial niche is weak |
 | `RESEARCH_MAX_MODEL_ITERATIONS` | No; default 0, hard cap 6 | Reserved model-provider budget; deterministic engine currently uses 0 |
 | `RESEARCH_TIMEOUT_MS` | No; default 15000, hard cap 30000 | Per-provider-call timeout |
+| `RESEARCH_MAX_RUN_DURATION_MS` | No; standard default 55000, hard cap 120000 | Hard wall-clock research budget |
+| `EVIDENCE_GATE_MIN_*` | No; see `.env.example` | Strict validation thresholds for pain, spend, competitors, segments, timing, source diversity, citation coverage, and fatal risks |
 | `RESEARCH_RATE_LIMIT_PER_HOUR` | No | Legacy alias used when `MCP_RATE_LIMIT_PER_HOUR` is unset |
 | `RESEARCH_CACHE_TTL_SECONDS` | No; default 86400, hard cap 604800 | Exact/high-similarity result cache TTL |
 | `RESEARCH_HISTORY_TTL_SECONDS` | No; default/hard cap 31536000 | Durable Redis run/snapshot history retention; local files persist until removed |
@@ -88,6 +94,7 @@ Configure one provider. Both are server-side only and are never referenced by cl
 | `NOVELTY_MCP_ACCESS_TOKEN` | No | Optional bearer token for non-browser clients; public Claude connector mode leaves this unset |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Recommended on Vercel | Durable runs/cache and distributed counters |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Alternative | Vercel/Upstash-compatible aliases for the durable store |
+| `NOVELTY_RESEARCH_DEPTH` | No; default `standard` | Claude Code helper default: `fast`, `standard`, or `deep` |
 
 Brave and Tavily both offer entry-level plans suitable for development, but current quotas and pricing should be checked with the provider. Secrets belong only in `.env.local` or Vercel environment settings. `.env*` and `.research-runs/` are ignored by Git; `.env.example` is the deliberately committed key template.
 
@@ -133,13 +140,15 @@ The production research endpoint is `https://novelty-engine.com/api/research`. K
 {
   "query": "give me 5 business ideas in home services",
   "mode": "find_business",
+  "depth": "standard",
+  "userContext": { "teamSize": 2, "timeToMvpWeeks": 6, "riskTolerance": "low" },
   "bypassCache": false
 }
 ```
 
-The same endpoint accepts `/find-business`, `/research-market`, `/research-company`, `/find-competitors`, `/find-gaps`, `/falsify`, and `/validate-idea` prefixes. For comparison, send `{ "mode": "compare_ideas", "ideas": ["...", "..."] }`. Current-run `userContext` overrides any explicitly selected opt-in memory profile. Supporting service endpoints are `GET /api/research/history`, `GET /api/research/export`, `POST/GET /api/research/memory`, `POST /api/research/feedback`, `POST /api/research/watchlists`, and `POST /api/research/watchlists/check`.
+The same endpoint accepts the documented research command prefixes. For comparison, send `{ "mode": "compare_ideas", "ideas": ["...", "..."] }`. Current-run `userContext` overrides any explicitly selected opt-in memory profile. Supporting endpoints cover searchable history, exports, notes/tags/folders/decision logs, measured validation outcomes, filtered saved-run feeds, memory, feedback, watchlists, and explicit watchlist checks; inspect `GET /api/research/openapi` for the current contract.
 
-The versioned `ResearchResult` contains source assessments, coverage, a stop decision, competitor/complaint/gap records, graph and holes, assumptions and contradictions, stitching patterns, weak signals, failed attempts, candidates, bounded mutations, fingerprints, falsification results, rejected ideas, lineages, written decision scores, validation experiments, and a consistent `finalOutput`. The concise order is Research Landscape → Signals → Structural Gaps → Candidate Ideas → Rejected Ideas + Why → Survivors → Evidence Lineage → Decisive Risks → 24–72 Hour Validation Tests.
+The backward-compatible `ResearchResult` schema now carries `engineVersion: 2.2.0`, depth, search branches, lifecycle histories, evidence gates, assumption ledgers, independent adversarial reviews, task-graph/checkpoint records, one next-best action, novelty and evidence-confidence scores, counterfactual scale requirements, and moat stress tests in addition to every V2.1 field. `GET /api/research/openapi` describes the HTTP surface.
 
 ## Remote MCP
 
@@ -157,15 +166,18 @@ The deliberate tool surface is:
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
-| `research_market` | `{ query: string }` | Complete V2.1 output schema, coverage/stop decision, citations, warnings, budgets, and run ID; may return no ideas |
-| `find_market_gaps` | `{ run_id: string, limit?: 1..10 }` | Ranked gaps with supporting/counter citations and explicit unknowns |
-| `inspect_competitors` | `{ run_id: string, limit?: 1..15 }` | Evidence-carrying competitor map; unsupported fields stay `null` |
+| `research_market` | `{ query, depth?, founder_constraints? }` | Complete compatible output schema, gates, lifecycle, citations, warnings, budgets, and run ID; may return no ideas |
+| `find_market_gaps` | `{ run_id, limit?, cursor? }` | Paginated ranked gaps with supporting/counter citations and explicit unknowns |
+| `inspect_competitors` | `{ run_id, limit?, cursor? }` | Paginated evidence-carrying competitor intelligence; unsupported fields stay `null` |
 | `falsify_opportunity` | `{ opportunity: string, run_id?: string, candidate_id?: string }` | Up to four fresh counterevidence searches plus the falsification result |
 | `get_research_run` | `{ run_id: string, include_full?: boolean }` | Concise summary by default; complete internal JSON only when explicitly requested |
-| `run_research_mode` | `{ mode, query }` | Shared pipeline for business, market, company, competitor, gap, falsification, and validation intents |
+| `run_research_mode` | `{ mode, query, depth?, founder_constraints? }` | Shared pipeline for business, market, company, competitor, gap, falsification, and validation intents |
 | `compare_ideas` | `{ ideas: string[2..5] }` | Qualitative cross-idea comparison under one shared provider-call budget |
-| `export_research_run` | `{ run_id, format }` | JSON, Markdown, or print/PDF-ready report representation |
+| `export_research_run` | `{ run_id, format }` | JSON, Markdown, print, CSV, competitor matrix, validation plan, brief, memo, or bibliography |
 | `compare_research_runs` | `{ baseline_run_id, comparison_run_id }` | Material snapshot deltas with trivial/syndicated changes suppressed |
+| `rerun_research` | `{ run_id, depth? }` | Fresh incremental rerun plus material-change and opportunity-evolution comparison |
+| `source_check` | `{ run_id }` | Citation integrity, source quality/diversity, duplicates, contradictions, and unknowns |
+| `next_best_action` | `{ run_id }` | Single highest-information validation or search action with success/kill criteria |
 
 Tool errors are structured and say when the provider is not configured or unavailable. They never substitute fixtures or model-generated research. Cost-bearing calls are bounded by request length, source/result limits, provider timeouts, search-call caps, per-client rate limits, daily/monthly global budgets, and a concurrent-run semaphore. Budget denial returns HTTP `429` with `Retry-After` and a machine-readable reason.
 
@@ -228,7 +240,7 @@ npm run validate:skill
 npm run build
 ```
 
-Unit tests use checked-in search-result fixtures and make no live or paid API requests. They cover graph construction and holes, contradiction extraction, mutation lineage, workflow stitching, weak-signal uncertainty, failed blockers, fingerprints and similarity, falsification, survivor budgets, factor scoring, validation experiments, citation preservation, deduplication, unknown fields, and cost limits, plus the V1.1 evidence regression suite.
+Unit tests use checked-in search-result fixtures and make no live or paid API requests. They cover the prior graph, evidence, falsification, budget, citation, and failure-recovery contracts plus V2.2 lifecycle transitions, exact kill persistence, strict validation gating, Bull/Bear independence, score separation, assumption ledgers, founder rejection, adjacent expansion, Agent Shield URL policy, command routing, and financial-signal killing.
 
 With a local server and provider key configured, exercise the same remote transport as a Claude client:
 
@@ -246,7 +258,7 @@ The evaluation harness compares:
 2. Novelty Engine with the backend unavailable;
 3. Novelty Engine with the structured research payload.
 
-It scores market-gap evidence, idea diversity, mechanism novelty, competitor similarity, source validity, falsification quality, lineage clarity, validation usefulness, requested-count fidelity, unsupported-claim rate, and core quality dimensions. See `evals/rubric.md` for the blinded protocol.
+It includes 100 matrix-generated representative tasks plus curated edge cases and tracks competitor recall, source/citation accuracy, hallucination control, opportunity novelty, falsification effectiveness, confidence calibration, latency, provider calls, and cost alongside the original quality dimensions. See `evals/rubric.md` for the blinded protocol.
 
 ```bash
 npm run eval
@@ -268,9 +280,9 @@ Vercel functions cannot rely on local files for cross-instance history. This bui
 
 ## Current scope
 
-Fully functional without model calls: schemas, normalized/deduplicated evidence, Opportunity Graph construction, graph-hole detection, contradiction transforms, stitching scores, weak-signal normalization, failed-blocker comparison, deterministic candidate/mutation records, fingerprint similarity, falsification penalties, survivor limits, factor scoring, lineage, experiments, caching, API, remote MCP protocol/tool routing, inspector, packaging, and fixture tests.
+Fully functional without model calls: schemas, normalized/deduplicated evidence, Opportunity Graph construction, graph-hole detection, contradiction transforms, stitching scores, weak-signal normalization, market archaeology, candidate lifecycle/kill memory, bounded adjacent expansion, fingerprint collision checks, independent adversarial records, evidence gates, founder-fit rejection, 29-factor scoring, novelty/evidence confidence, assumption ledgers, counterfactual/moat tests, next-action selection, validation plans, caching, HTTP/OpenAPI, remote MCP routing, exports, and the separate financial backtester.
 
-Fixture-backed/heuristic: semantic extraction from search snippets, entity resolution, complaint grouping, assumption detection, failure-cause extraction, acceleration proxies, candidate language, similarity, falsification risk, opportunity scores, and the end-to-end MCP fixture test. These are inspectable heuristics, never proof. Live public-web evidence requires a Brave or Tavily key. Distributed persistence/protection additionally requires Upstash-compatible Redis. OAuth, full-page retrieval, and an optional swappable model provider remain integrations rather than mocked capabilities.
+Fixture-backed/heuristic: extraction from search snippets, entity resolution, complaint grouping, assumption detection, failure-cause extraction, acceleration proxies, candidate language, similarity, falsification risk, and scores. These are inspectable heuristics, never proof. Live public-web evidence requires Brave or Tavily. Distributed persistence/protection additionally requires Upstash-compatible Redis. Background schedulers, OAuth/team accounts, full-page archiving/dead-link revalidation, SEC/news/price ingestion, SDK publication, webhooks/billing, and a swappable model provider remain explicit integrations rather than fake functionality.
 
 ## License
 

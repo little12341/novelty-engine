@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Evidence, ProviderSearchResult, SearchAngle, SourceType } from "./types.ts";
 import { sanitizeUntrustedResearchText } from "./governance.ts";
+import { validateExternalResearchUrl } from "./url-policy.ts";
 
 const TRACKING_PARAMS = new Set([
   "fbclid", "gclid", "mc_cid", "mc_eid", "ref", "ref_src", "source",
@@ -25,9 +26,9 @@ export function querySimilarity(left: string, right: string): number {
 
 export function normalizeUrl(rawUrl: string): string | null {
   try {
-    const url = new URL(rawUrl);
-    if (!['http:', 'https:'].includes(url.protocol)) return null;
-    url.protocol = "https:";
+    const decision = validateExternalResearchUrl(rawUrl);
+    if (!decision.allowed || !decision.normalizedUrl) return null;
+    const url = new URL(decision.normalizedUrl);
     url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
     url.hash = "";
     for (const key of [...url.searchParams.keys()]) {

@@ -15,6 +15,13 @@ function safeContext(input: ResearchUserContext): ResearchUserContext {
     resources: list(input.resources, 20),
     previouslyResearchedMarkets: list(input.previouslyResearchedMarkets, 30),
     previouslyRejectedMechanisms: list(input.previouslyRejectedMechanisms, 50),
+    teamSize: input.teamSize === undefined ? undefined : Math.max(1, Math.min(100, Math.trunc(input.teamSize))),
+    timeToMvpWeeks: input.timeToMvpWeeks === undefined ? undefined : Math.max(1, Math.min(260, Math.trunc(input.timeToMvpWeeks))),
+    technicalLimits: list(input.technicalLimits, 20),
+    industryExclusions: list(input.industryExclusions, 30),
+    geographyExclusions: list(input.geographyExclusions, 30),
+    riskTolerance: input.riskTolerance,
+    distributionChannels: list(input.distributionChannels, 20),
   };
 }
 

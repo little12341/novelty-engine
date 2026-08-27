@@ -19,6 +19,10 @@ function unknownCompetitorFields(competitor: Competitor) {
   return fields.filter((field) => competitor[field].value === null);
 }
 
+function unknownCompetitorIntelligenceFields(competitor: Competitor) {
+  return Object.entries(competitor.intelligence ?? {}).filter(([, value]) => value.value === null).map(([field]) => field);
+}
+
 export function summarizeGap(gap: CandidateGap, result: ResearchResult) {
   return {
     id: gap.id, rankScore: gap.score, confidence: gap.confidenceLabel,
@@ -44,6 +48,8 @@ export function summarizeCompetitor(competitor: Competitor, result: ResearchResu
     pricing: competitor.pricing.value, keyFeatures: competitor.keyFeatures.value,
     positioning: competitor.positioning.value, likelyStrengths: competitor.likelyStrengths.value,
     likelyWeaknesses: competitor.likelyWeaknesses.value, unknownFields: unknownCompetitorFields(competitor),
+    intelligence: competitor.intelligence,
+    unknownIntelligenceFields: unknownCompetitorIntelligenceFields(competitor),
     citations: citationsFor(competitor.evidenceIds, result),
   };
 }
@@ -67,13 +73,23 @@ export function summarizeResearch(result: ResearchResult) {
       evidenceIds: opportunity.candidate.evidenceIds,
       evidenceLineage: opportunity.lineage,
       decisionFactors: opportunity.score.decisionFactors,
+      evidenceConfidence: opportunity.score.evidenceConfidence,
+      noveltyScore: opportunity.score.noveltyScore,
+      structuredScorecard: opportunity.score.scorecard,
+      intelligenceScores: opportunity.score.intelligence,
       writtenReasoning: opportunity.score.writtenReasoning,
       validationExperiment: opportunity.validationExperiment,
+      lifecycle: opportunity.lifecycle,
+      evidenceGate: opportunity.evidenceGate,
+      assumptionLedger: opportunity.assumptionLedger,
+      whyNotBuilt: opportunity.whyNotBuilt,
+      adversarialReview: opportunity.adversarialReview,
+      validationPlan: opportunity.validationPlan,
     };
   });
   result.gaps.slice(0, 5).flatMap((gap) => [...gap.supportingEvidenceIds, ...gap.counterEvidenceIds]).forEach((id) => evidenceIds.add(id));
   return {
-    schemaVersion: result.schemaVersion, runId: result.id, query: result.query, status: result.status,
+    schemaVersion: result.schemaVersion, engineVersion: result.engineVersion, depth: result.depth, runId: result.id, query: result.query, status: result.status,
     provider: result.provider, cache: result.cache, completedAt: result.completedAt,
     researchLandscape: result.output.researchLandscape,
     signals: result.output.signals,
@@ -88,6 +104,10 @@ export function summarizeResearch(result: ResearchResult) {
     companyProfile: result.companyProfile,
     researchRoles: result.roleOutputs,
     qualityCheckpoints: result.checkpoints,
+    taskGraph: result.taskGraph,
+    searchBranches: result.searchBranches,
+    candidateLifecycles: result.candidateLifecycles,
+    nextBestAction: result.nextBestAction,
     stopDecision: result.stopDecision,
     citations: citationsFor([...evidenceIds], result, 20), warnings: result.warnings,
     budgetUsage: result.budgetUsage,
@@ -96,10 +116,12 @@ export function summarizeResearch(result: ResearchResult) {
   };
 }
 
-export function summarizeGaps(result: ResearchResult, limit: number) {
-  return { runId: result.id, query: result.query, gaps: result.gaps.slice(0, limit).map((gap) => summarizeGap(gap, result)), warnings: result.warnings };
+export function summarizeGaps(result: ResearchResult, limit: number, cursor = 0) {
+  const gaps = result.gaps.slice(cursor, cursor + limit).map((gap) => summarizeGap(gap, result));
+  return { runId: result.id, query: result.query, gaps, cursor, nextCursor: cursor + gaps.length < result.gaps.length ? cursor + gaps.length : null, total: result.gaps.length, warnings: result.warnings };
 }
 
-export function summarizeCompetitors(result: ResearchResult, limit: number) {
-  return { runId: result.id, query: result.query, competitors: result.competitors.slice(0, limit).map((item) => summarizeCompetitor(item, result)), warnings: result.warnings };
+export function summarizeCompetitors(result: ResearchResult, limit: number, cursor = 0) {
+  const competitors = result.competitors.slice(cursor, cursor + limit).map((item) => summarizeCompetitor(item, result));
+  return { runId: result.id, query: result.query, competitors, cursor, nextCursor: cursor + competitors.length < result.competitors.length ? cursor + competitors.length : null, total: result.competitors.length, warnings: result.warnings };
 }

@@ -52,9 +52,19 @@ export function compareResearchRuns(before: ResearchResult, after: ResearchResul
     beforeEvidenceIds: before.sources.map((item) => item.id), afterEvidenceIds: after.sources.map((item) => item.id),
     statusBefore: status(before, before.sources.map((item) => item.id)), statusAfter: status(after, after.sources.map((item) => item.id)),
   });
+  const beforeOpportunities = new Map(before.finalOpportunities.map((item) => [item.candidate.mechanismFamily, item]));
+  const afterOpportunities = new Map(after.finalOpportunities.map((item) => [item.candidate.mechanismFamily, item]));
+  const opportunityEvolution = [...new Set([...beforeOpportunities.keys(), ...afterOpportunities.keys()])].map((mechanismFamily) => {
+    const left = beforeOpportunities.get(mechanismFamily); const right = afterOpportunities.get(mechanismFamily);
+    const beforeScore = left?.score.score ?? null; const afterScore = right?.score.score ?? null;
+    const status = !left ? "appeared" as const : !right ? "disappeared" as const
+      : afterScore! >= beforeScore! + 5 ? "strengthened" as const : afterScore! <= beforeScore! - 5 ? "weakened" as const : "stable" as const;
+    return { mechanismFamily, beforeScore, afterScore, beforeEvidenceConfidence: left?.score.evidenceConfidence?.score ?? null, afterEvidenceConfidence: right?.score.evidenceConfidence?.score ?? null, status };
+  });
   return {
     baselineRunId: before.id, comparisonRunId: after.id, comparedAt: now.toISOString(), materialChanges,
     ignoredTrivialChanges,
     summary: materialChanges.length ? `${materialChanges.length} material change(s) surfaced; ${ignoredTrivialChanges} trivial or syndicated differences were suppressed.` : "No material change was supported by the two snapshots; this is not proof that the market was unchanged.",
+    opportunityEvolution,
   };
 }

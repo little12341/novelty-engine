@@ -8,9 +8,10 @@ import { recordMcpCall } from "./observability.ts";
 import { compareIdeas } from "../research/comparison.ts";
 import { compareResearchRuns } from "../research/changes.ts";
 import { exportResearchResult } from "../research/exports.ts";
+import { recordValidationOutcome } from "../research/validation-outcomes.ts";
 import {
   compareIdeasInput, compareResearchRunsInput, exportResearchRunInput, falsifyOpportunityInput, findMarketGapsInput,
-  getResearchRunInput, inspectCompetitorsInput, researchMarketInput, runResearchModeInput,
+  getResearchRunInput, inspectCompetitorsInput, inspectRunInput, recordValidationOutcomeInput, rerunResearchInput, researchMarketInput, runResearchModeInput,
 } from "./schemas.ts";
 import { summarizeCompetitors, summarizeGaps, summarizeResearch } from "./summaries.ts";
 
@@ -30,6 +31,7 @@ function textResult<T extends object>(value: T) {
 function toolError(error: unknown) {
   const message = error instanceof Error ? error.message : "Novelty Engine tool failed.";
   const code = error instanceof ResearchConfigurationError ? "RESEARCH_NOT_CONFIGURED"
+    : error instanceof DOMException && error.name === "AbortError" || /cancel|aborted/i.test(message) ? "RESEARCH_CANCELLED"
     : error instanceof RangeError && /research query/i.test(message) ? "INVALID_QUERY"
       : error instanceof RangeError ? "INVALID_OR_MISSING_RUN"
         : /malformed/i.test(message) ? "MALFORMED_PROVIDER_RESPONSE"
@@ -42,6 +44,7 @@ function toolError(error: unknown) {
 function errorCode(error: unknown) {
   const message = error instanceof Error ? error.message : "";
   return error instanceof ResearchConfigurationError ? "RESEARCH_NOT_CONFIGURED"
+    : error instanceof DOMException && error.name === "AbortError" || /cancel|aborted/i.test(message) ? "RESEARCH_CANCELLED"
     : error instanceof RangeError && /research query/i.test(message) ? "INVALID_QUERY"
       : error instanceof RangeError ? "INVALID_OR_MISSING_RUN"
         : /malformed/i.test(message) ? "MALFORMED_PROVIDER_RESPONSE"
@@ -86,21 +89,21 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
     description: "Run Novelty Engine's complete V2.1 market map, source-quality, evidence gate, active counterevidence, competitor/substitute, deduplication, falsification, scoring-with-reasons, and 24–72 hour validation pipeline. It may return insufficient_evidence instead of ideas.",
     inputSchema: researchMarketInput,
     annotations,
-  }, ({ query }) => observed("research_market", async () => summarizeResearch(await deps.research(query))));
+  }, ({ query, depth, founder_constraints }, context) => observed("research_market", async () => summarizeResearch(await deps.research(query, { depth, userContext: founder_constraints, signal: context.mcpReq.signal }))));
 
   server.registerTool("find_market_gaps", {
     title: "Find ranked market gaps",
     description: "Return the strongest evidence-backed, plausible, or speculative gaps from a completed Novelty Engine run, with supporting and counter citations and explicit unknowns.",
     inputSchema: findMarketGapsInput,
     annotations,
-  }, ({ run_id, limit }) => observed("find_market_gaps", async () => summarizeGaps(await requiredRun(deps.getRun, run_id), limit)));
+  }, ({ run_id, limit, cursor }) => observed("find_market_gaps", async () => summarizeGaps(await requiredRun(deps.getRun, run_id), limit, cursor)));
 
   server.registerTool("inspect_competitors", {
     title: "Inspect competitors",
     description: "Return the cited competitor map from a completed research run. Unsupported factual fields remain explicit nulls and are listed as unknown.",
     inputSchema: inspectCompetitorsInput,
     annotations,
-  }, ({ run_id, limit }) => observed("inspect_competitors", async () => summarizeCompetitors(await requiredRun(deps.getRun, run_id), limit)));
+  }, ({ run_id, limit, cursor }) => observed("inspect_competitors", async () => summarizeCompetitors(await requiredRun(deps.getRun, run_id), limit, cursor)));
 
   server.registerTool("falsify_opportunity", {
     title: "Falsify an opportunity",
@@ -124,7 +127,7 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
     description: "Use the shared V2.1+ pipeline for find-business, market/company research, competitor/gap finding, falsification, or idea validation. Roles share one normalized evidence set and bounded counterevidence budget.",
     inputSchema: runResearchModeInput,
     annotations,
-  }, ({ mode, query }) => observed("run_research_mode", async () => summarizeResearch(await deps.research(query, { mode }))));
+  }, ({ mode, query, depth, founder_constraints }, context) => observed("run_research_mode", async () => summarizeResearch(await deps.research(query, { mode, depth, userContext: founder_constraints, signal: context.mcpReq.signal }))));
 
   server.registerTool("compare_ideas", {
     title: "Compare 2–5 ideas",
@@ -148,4 +151,44 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
   }, ({ baseline_run_id, comparison_run_id }) => observed("compare_research_runs", async () => compareResearchRuns(
     await requiredRun(deps.getRun, baseline_run_id), await requiredRun(deps.getRun, comparison_run_id),
   )));
+
+  server.registerTool("rerun_research", {
+    title: "Rerun research incrementally",
+    description: "Rerun a stored query against current evidence with cache bypass, preserving the baseline run for material-change comparison.",
+    inputSchema: rerunResearchInput, annotations,
+  }, ({ run_id, depth }, context) => observed("rerun_research", async () => {
+    const baseline = await requiredRun(deps.getRun, run_id);
+    const rerun = await deps.research(baseline.query, { mode: baseline.mode, depth, bypassCache: true, signal: context.mcpReq.signal });
+    return { baselineRunId: baseline.id, result: summarizeResearch(rerun), materialChanges: compareResearchRuns(baseline, rerun) };
+  }));
+
+  server.registerTool("source_check", {
+    title: "Audit evidence and citations",
+    description: "Inspect citation coverage, source quality/diversity, duplicate and stale warnings, contradictions, and unresolved claim states for a stored run.",
+    inputSchema: inspectRunInput, annotations: { ...annotations, openWorldHint: false },
+  }, ({ run_id }) => observed("source_check", async () => {
+    const run = await requiredRun(deps.getRun, run_id);
+    return {
+      runId: run.id, coverage: run.coverage, checkpoint: run.checkpoints.find((item) => item.name === "citation_validation"),
+      snapshotWarnings: { duplicates: run.evidenceSnapshot.duplicateWarnings, missingFamilies: run.evidenceSnapshot.missingSourceFamilyWarnings },
+      unsupportedClaims: run.evidenceSnapshot.normalizedClaims.filter((item) => item.status === "UNKNOWN"),
+      contradictions: run.assumptionLedger.filter((item) => item.factState === "CONTRADICTED"),
+      sources: run.sources.map((item) => ({ id: item.id, url: item.sourceUrl, assessment: item.sourceAssessment, security: item.security })),
+    };
+  }));
+
+  server.registerTool("next_best_action", {
+    title: "Get the single next-best action",
+    description: "Return the highest-information validation or search-expansion action and its success/kill criteria from a stored run.",
+    inputSchema: inspectRunInput, annotations: { ...annotations, openWorldHint: false },
+  }, ({ run_id }) => observed("next_best_action", async () => ({ runId: run_id, nextBestAction: (await requiredRun(deps.getRun, run_id)).nextBestAction })));
+
+  server.registerTool("record_validation_outcome", {
+    title: "Record an external validation outcome",
+    description: "Persist measured validation results. A success becomes VALIDATED only when the strict research evidence gate also passed and an inspectable public artifact URL is supplied; otherwise it remains INVESTIGATE.",
+    inputSchema: recordValidationOutcomeInput,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  }, ({ run_id, candidate_id, experiment_type, success, observed_metrics, artifact_urls }) => observed("record_validation_outcome", async () => recordValidationOutcome({
+    runId: run_id, candidateId: candidate_id, experimentType: experiment_type, success, observedMetrics: observed_metrics, artifactUrls: artifact_urls,
+  })));
 }

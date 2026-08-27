@@ -29,6 +29,17 @@ export function sanitizeUntrustedResearchText(value: string): {
 } {
   let text = value.replace(/\0/g, "").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " [script removed] ");
   const categories: string[] = [];
+  const secretPatterns = [
+    /\bsk-[a-zA-Z0-9_-]{16,}\b/g,
+    /\b(?:ghp|github_pat)_[a-zA-Z0-9_]{16,}\b/g,
+    /\bAKIA[A-Z0-9]{16}\b/g,
+    /\b(?:api[_ -]?key|access[_ -]?token|secret)\s*[:=]\s*[a-zA-Z0-9_\-./+]{12,}\b/gi,
+  ];
+  for (const pattern of secretPatterns) {
+    if (pattern.test(text)) categories.push("secret_material");
+    pattern.lastIndex = 0;
+    text = text.replace(pattern, "[redacted untrusted secret-like material]");
+  }
   for (const item of INJECTION_PATTERNS) {
     item.pattern.lastIndex = 0;
     if (item.pattern.test(text)) categories.push(item.category);
@@ -104,6 +115,10 @@ export function validateEvidenceReferences(result: Pick<ResearchResult,
       ...item.candidate.evidenceIds,
       ...item.lineage.evidenceIds,
       ...item.falsification.hypotheses.flatMap((hypothesis) => [...hypothesis.supportingEvidenceIds, ...hypothesis.counterEvidenceIds]),
+      ...item.assumptionLedger.flatMap((assumption) => [...assumption.supportingEvidenceIds, ...assumption.contradictingEvidenceIds]),
+      ...item.whyNotBuilt.explanations.flatMap((explanation) => explanation.evidenceIds),
+      ...item.counterfactual.requiredConditions.flatMap((condition) => condition.evidenceIds),
+      ...[item.adversarialReview.bull, item.adversarialReview.bear, item.adversarialReview.judge].flatMap((review) => review.claims.flatMap((claim) => claim.evidenceIds)),
     ]),
     ...result.falsificationResults.flatMap((item) => [
       ...item.argumentsFor.flatMap((argument) => argument.evidenceIds),
@@ -120,6 +135,9 @@ export function assertSurvivorGates(result: Pick<ResearchResult, "finalOpportuni
     if (rejected.has(survivor.candidate.id)) errors.push(`${survivor.candidate.id} is both rejected and a survivor.`);
     if (!survivor.lineage.evidenceIds.length) errors.push(`${survivor.candidate.id} lacks evidence lineage.`);
     if (survivor.falsification.outcome !== "survived") errors.push(`${survivor.candidate.id} did not survive falsification.`);
+    if (!survivor.evidenceGate.survivalGatePassed) errors.push(`${survivor.candidate.id} did not clear the explicit survival evidence gate.`);
+    if (survivor.lifecycle.currentState === "KILLED") errors.push(`${survivor.candidate.id} is final but its lifecycle is KILLED.`);
+    if (survivor.evidenceGate.classification === "validated" && !survivor.evidenceGate.externallyValidated) errors.push(`${survivor.candidate.id} was called validated without external validation evidence.`);
     if (survivor.falsification.unknownCriticalCount > 0 && !survivor.falsification.hypotheses.some((item) => item.unknown)) {
       errors.push(`${survivor.candidate.id} hides critical unknowns.`);
     }

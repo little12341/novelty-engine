@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "conditions": [
     "ordinary_model_ideation",
     "novelty_engine_local_only",

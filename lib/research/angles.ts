@@ -14,6 +14,19 @@ const ANGLES: Array<{ kind: SearchAngleKind; suffix: string; purpose: string; do
   { kind: "jobs_procurement", suffix: 'jobs hiring consultant procurement RFP manual coordinator specialist', purpose: "Job postings, procurement, paid labor, and organizational workarounds that reveal budget", domains: [] },
 ];
 
+const BUSINESS_ANGLES: Array<{ kind: SearchAngleKind; suffix: string; purpose: string; domains: string[] }> = [
+  { kind: "direct_competitors", suffix: "business directory companies locations contact website services", purpose: "Real operating businesses and observable public identity", domains: [] },
+  { kind: "customer_complaints", suffix: 'reviews "poor service" OR "never responded" OR "outdated" OR "hard to book"', purpose: "Poor reviews and repeated customer-facing failures", domains: ["google.com", "yelp.com", "trustpilot.com"] },
+  { kind: "workflow_fragmentation", suffix: '"spreadsheet" OR "paper forms" OR "manual entry" OR "call us" OR "fax"', purpose: "Observable outdated systems and repetitive manual workflows", domains: [] },
+  { kind: "poor_integrations", suffix: '"no online booking" OR "no portal" OR "no API" OR "does not integrate"', purpose: "Missing software, booking, portals, and integrations", domains: [] },
+  { kind: "pricing_complaints", suffix: "pricing estimate quote procurement budget software spend", purpose: "Spend, buying intent, and price friction", domains: [] },
+  { kind: "research_regulation", suffix: "compliance violation consent order new regulation audit deadline license", purpose: "Compliance burdens and regulation-created demand", domains: [] },
+  { kind: "jobs_procurement", suffix: 'hiring coordinator administrator "data entry" operations manager procurement RFP', purpose: "Hiring and procurement signals that reveal paid manual work", domains: ["linkedin.com", "indeed.com", "greenhouse.io"] },
+  { kind: "change_signals", suffix: "recent funding expansion new locations rapid growth acquisition hiring 2026", purpose: "Funding, growth, and organizational change that creates buying capacity", domains: [] },
+  { kind: "underserved_segments", suffix: "local small business owner operator rural region accessibility language underserved", purpose: "Reachable local and underserved business segments", domains: [] },
+  { kind: "customer_language", suffix: '"looking for software" OR "recommend a tool" OR "need help automating" OR "switching from"', purpose: "Observable buying intent in the customer’s language", domains: ["reddit.com", "facebook.com"] },
+];
+
 const SYNONYMS: Array<[RegExp, string]> = [
   [/\bsmall business(?:es)?\b/i, "SMB OR independent OR owner-operator"],
   [/\bsoftware\b/i, "tool OR platform OR system OR workflow"],
@@ -35,6 +48,14 @@ export function deriveSearchAngles(query: string, limit = 10): SearchAngle[] {
     query: `${query}${customerLanguageExpansion(query)} ${angle.suffix}`,
     purpose: angle.purpose,
     targetedDomains: angle.domains,
+  }));
+}
+
+export function deriveBusinessSearchAngles(query: string, limit = 10): SearchAngle[] {
+  return BUSINESS_ANGLES.slice(0, Math.max(1, Math.min(limit, BUSINESS_ANGLES.length))).map((angle, index) => ({
+    id: `business_${String(index + 1).padStart(2, "0")}_${createHash("sha1").update(`${query}:${angle.kind}:${angle.purpose}`).digest("hex").slice(0, 6)}`,
+    kind: angle.kind, query: `${query}${customerLanguageExpansion(query)} ${angle.suffix}`,
+    purpose: angle.purpose, targetedDomains: angle.domains,
   }));
 }
 

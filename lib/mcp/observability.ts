@@ -44,6 +44,8 @@ export function mcpHealthSnapshot(env: NodeJS.ProcessEnv = process.env) {
     endpoint: "/api/mcp",
     healthEndpoint: "/api/mcp/health",
     transport: "MCP Streamable HTTP (stateless; 2026-07-28 native with 2025-era compatibility)",
+    toolContractVersion: "2.2.0",
+    capabilities: { cancellation: true, pagination: true, partialResults: true, resumableRunRecords: true, requestDeduplication: true, progress: "transport-dependent" },
     toolCount: MCP_TOOL_CATALOG.length,
     tools: MCP_TOOL_CATALOG,
     provider: providerConfiguration(env),

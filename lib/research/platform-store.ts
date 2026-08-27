@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getDurableRedis } from "./durable.ts";
 
-export type PlatformNamespace = "memory" | "feedback" | "watchlists" | "changes" | "comparisons";
+export type PlatformNamespace = "memory" | "feedback" | "watchlists" | "changes" | "comparisons" | "notes" | "validation" | "financial_signals";
 
 const safe = (value: string) => /^[a-zA-Z0-9_-]{3,120}$/.test(value);
 const key = (namespace: PlatformNamespace, id: string) => `novelty:platform:${namespace}:${id}`;

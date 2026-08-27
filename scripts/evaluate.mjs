@@ -3,6 +3,13 @@ import path from "node:path";
 
 const casesPath = path.join(process.cwd(), "evals", "cases.json");
 const { cases, version, conditions, researchProtocol } = JSON.parse(await readFile(casesPath, "utf8"));
+const matrixPath = path.join(process.cwd(), "evals", "task-matrix.json");
+const matrix = JSON.parse(await readFile(matrixPath, "utf8"));
+const matrixCases = matrix.domains.flatMap((domain) => matrix.objectives.map((objective) => ({
+  id: `benchmark-${domain.id}-${objective.id}`, category: domain.category,
+  prompt: objective.prompt.replaceAll("{domain}", domain.label), commonDirections: objective.commonDirections,
+})));
+const benchmarkCases = [...cases, ...matrixCases];
 const metrics = [
   "specificity",
   "evidenceQuality",
@@ -18,6 +25,15 @@ const metrics = [
   "unsupportedClaimRate",
   "feasibility",
   "differentiation"
+  ,"competitorRecall"
+  ,"sourceAccuracy"
+  ,"citationAccuracy"
+  ,"hallucinationControl"
+  ,"opportunityNovelty"
+  ,"falsificationEffectiveness"
+  ,"confidenceCalibration"
+  ,"latencyEfficiency"
+  ,"costEfficiency"
 ];
 const args = process.argv.slice(2);
 
@@ -29,13 +45,14 @@ if (args[0] === "--init") {
     createdAt: new Date().toISOString(),
     notes: "Keep model, settings, and prompts identical. Only the skill and structured research context vary by condition.",
     researchProtocol,
-    results: cases.flatMap(({ id }) => conditions.map((condition) => ({
+    results: benchmarkCases.flatMap(({ id }) => conditions.map((condition) => ({
       caseId: id,
       condition,
       researchRunId: condition === "novelty_engine_evidence_v2" ? null : undefined,
       scores: Object.fromEntries(metrics.map((metric) => [metric, null])),
       calibrationFailure: false,
-      rationale: ""
+      rationale: "",
+      telemetry: condition === "novelty_engine_evidence_v2" ? { latencyMs: null, providerCalls: null, estimatedProviderCredits: null } : undefined
     })))
   };
   await mkdir(path.dirname(path.resolve(target)), { recursive: true });
@@ -48,7 +65,7 @@ if (args[0] === "--score") {
   const target = args[1];
   if (!target) throw new Error("Usage: npm run eval:score -- <results.json>");
   const data = JSON.parse(await readFile(path.resolve(target), "utf8"));
-  const expected = cases.length * conditions.length;
+  const expected = benchmarkCases.length * conditions.length;
   if (!Array.isArray(data.results) || data.results.length !== expected) throw new Error(`Expected ${expected} scored responses`);
   const means = {};
   for (const condition of conditions) {
@@ -69,15 +86,15 @@ if (args[0] === "--score") {
   process.exit(0);
 }
 
-if (!Array.isArray(cases) || cases.length < 6) throw new Error("Evaluation suite needs representative cases");
+if (!Array.isArray(cases) || cases.length < 6 || matrixCases.length !== 100) throw new Error("Evaluation suite needs the 100-task representative benchmark matrix plus curated cases");
 if (!Array.isArray(conditions) || conditions.join(",") !== "ordinary_model_ideation,novelty_engine_local_only,novelty_engine_evidence_v2") throw new Error("Evaluation suite must define ordinary model, local-only, and evidence-driven V2 modes");
-for (const testCase of cases) {
+for (const testCase of benchmarkCases) {
   if (!testCase.id || !testCase.prompt || !Array.isArray(testCase.commonDirections)) throw new Error(`Invalid evaluation case: ${testCase.id ?? "unknown"}`);
 }
-if (!cases.some((item) => item.category === "market-gap discovery")) throw new Error("Evaluation suite needs a dedicated market-gap case");
-if (!cases.some((item) => /preserve the requested count|Generate \d|Propose \d|Develop \d/i.test(item.prompt))) throw new Error("Evaluation suite needs requested-count coverage");
+if (!benchmarkCases.some((item) => item.category === "market-gap discovery")) throw new Error("Evaluation suite needs a dedicated market-gap case");
+if (!benchmarkCases.some((item) => /preserve the requested count|Generate \d|Propose \d|Develop \d/i.test(item.prompt))) throw new Error("Evaluation suite needs requested-count coverage");
 for (const required of ["marketGapStrength", "ideaDiversity", "mechanismNovelty", "competitorSimilarity", "sourceValidity", "falsificationQuality", "lineageClarity", "validationUsefulness", "requestedCountFidelity", "unsupportedClaimRate"]) {
   if (!metrics.includes(required)) throw new Error(`Evaluation metrics missing ${required}`);
 }
-console.log(`Validated evaluation suite v${version}: ${cases.length} cases across ${new Set(cases.map((item) => item.category)).size} categories.`);
+console.log(`Validated evaluation suite v${version}: ${benchmarkCases.length} cases (${matrixCases.length} matrix + ${cases.length} curated) across ${new Set(benchmarkCases.map((item) => item.category)).size} categories.`);
 console.log("Run `npm run eval:init` to create a scoring sheet; see evals/rubric.md for the blinded comparison protocol.");

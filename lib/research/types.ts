@@ -1,6 +1,9 @@
 export const RESEARCH_SCHEMA_VERSION = "2.1.0" as const;
+export const RESEARCH_ENGINE_VERSION = "2.2.0" as const;
 
 export type ClaimStatus = "VERIFIED" | "INFERRED" | "UNKNOWN";
+export type FactState = "KNOWN" | "INFERRED" | "UNKNOWN" | "CONTRADICTED";
+export type ResearchDepth = "fast" | "standard" | "deep";
 
 export type ResearchMode =
   | "find_business" | "research_market" | "research_company" | "find_competitors"
@@ -10,6 +13,33 @@ export type ResearchRole =
   | "market_mapping" | "competitor_analysis" | "complaint_workaround_mining"
   | "structural_gap_detection" | "adversarial_falsification" | "source_verification"
   | "company_analysis" | "opportunity_synthesis";
+
+export type SpecialistAgent =
+  | "scout" | "competitor" | "gap" | "skeptic" | "evidence" | "pricing"
+  | "customer_pain" | "market_sizing" | "trend" | "distribution" | "regulatory"
+  | "technical_feasibility" | "business_model" | "bull" | "bear" | "judge" | "final_judge";
+
+export type CandidateLifecycleState =
+  | "DISCOVERED" | "RESEARCHING" | "CHALLENGED" | "FALSIFICATION"
+  | "SURVIVED" | "VALIDATING" | "VALIDATED" | "KILLED";
+
+export interface CandidateLifecycleEvent {
+  candidateId: string;
+  state: CandidateLifecycleState;
+  at: string;
+  reason: string;
+  evidenceIds: string[];
+  killCode: string | null;
+}
+
+export interface CandidateLifecycleRecord {
+  candidateId: string;
+  currentState: CandidateLifecycleState;
+  classification: "discovered" | "promising" | "survived" | "validated" | "killed";
+  events: CandidateLifecycleEvent[];
+  exactKillReason: string | null;
+  failureFeedback: string[];
+}
 
 export type PipelineCheckpointName =
   | "source_validation_deduplication" | "competitor_substitute_check"
@@ -164,6 +194,20 @@ export interface SupportedValue<T> {
   confidence: number;
 }
 
+export interface CompetitorIntelligence {
+  funding: SupportedValue<string>;
+  headcount: SupportedValue<string>;
+  hiring: SupportedValue<string[]>;
+  traffic: SupportedValue<string>;
+  reviews: SupportedValue<string[]>;
+  complaints: SupportedValue<string[]>;
+  partnerships: SupportedValue<string[]>;
+  integrations: SupportedValue<string[]>;
+  channels: SupportedValue<string[]>;
+  launches: SupportedValue<string[]>;
+  strategicDirection: SupportedValue<string>;
+}
+
 export interface Competitor {
   id: string;
   name: SupportedValue<string>;
@@ -175,6 +219,7 @@ export interface Competitor {
   positioning: SupportedValue<string>;
   likelyStrengths: SupportedValue<string[]>;
   likelyWeaknesses: SupportedValue<string[]>;
+  intelligence: CompetitorIntelligence;
   evidenceIds: string[];
 }
 
@@ -190,6 +235,11 @@ export interface ComplaintCluster {
   gapType: GapType;
   isIsolated: boolean;
   currentWorkaround: string | null;
+  requestedFeatures: string[];
+  willingnessToPaySignals: string[];
+  churnReasons: string[];
+  buyingObjections: string[];
+  jobsToBeDone: string[];
 }
 
 export interface UnderservedSegment {
@@ -255,6 +305,19 @@ export interface ResearchLimits {
   maxConcurrency: number;
   maxRetriesPerSearch: number;
   timeoutMs: number;
+  maxExpansionBranches: number;
+  maxRunDurationMs: number;
+}
+
+export interface SearchBranch {
+  id: string;
+  parentId: string | null;
+  dimension: "segment" | "workflow" | "vertical" | "geography" | "business_model" | "upstream" | "downstream" | "sub_niche";
+  query: string;
+  reason: string;
+  learnedFromKillReasons: string[];
+  status: "searched" | "skipped_budget" | "no_new_evidence";
+  searchAngleIds: string[];
 }
 
 export type GraphNodeType =
@@ -557,6 +620,10 @@ export interface OpportunityScore {
     confidence: ScoreFactorAssessment;
   };
   writtenReasoning: string;
+  evidenceConfidence: EvidenceConfidenceScore;
+  noveltyScore: NoveltyScore;
+  scorecard: StructuredOpportunityScorecard;
+  intelligence: DecisionIntelligenceScores;
 }
 
 export interface ScoreFactorAssessment {
@@ -564,6 +631,180 @@ export interface ScoreFactorAssessment {
   status: ClaimStatus;
   rationale: string;
   evidenceIds: string[];
+}
+
+export interface EvidenceConfidenceScore {
+  score: number;
+  label: "low" | "moderate" | "high";
+  evidenceDensity: number;
+  independentSourceCount: number;
+  sourceDiversity: number;
+  citationCoverage: number;
+  freshness: number;
+  contradictionPenalty: number;
+  rationale: string;
+  heuristic: true;
+}
+
+export interface NoveltyScore {
+  score: number;
+  overlap: {
+    feature: number;
+    positioning: number;
+    customer: number;
+    workflow: number;
+    technology: number;
+    businessModel: number;
+  };
+  closestCompetitorId: string | null;
+  collisionDetected: boolean;
+  rationale: string;
+  heuristic: true;
+}
+
+export type StructuredScoreDimension =
+  | "painSeverity" | "painFrequency" | "existingSpend" | "willingnessToPay"
+  | "marketGrowth" | "marketSize" | "competition" | "saturation" | "differentiation"
+  | "distributionDifficulty" | "customerAccessibility" | "technicalDifficulty"
+  | "regulatoryRisk" | "capitalRequirements" | "timeToMvp" | "defensibility"
+  | "switchingCosts" | "recurringRevenue" | "margins" | "retentionPotential"
+  | "founderFit" | "evidenceQuality" | "evidenceQuantity" | "sourceDiversity"
+  | "confidence" | "timing" | "incumbentVulnerability" | "fragmentation"
+  | "aiCommoditizationRisk";
+
+export type StructuredOpportunityScorecard = Record<StructuredScoreDimension, ScoreFactorAssessment>;
+
+export interface DecisionIntelligenceScores {
+  evidenceDensity: number;
+  consensusVsContrarian: number;
+  opportunityHalfLife: number;
+  demandAuthenticity: number;
+  painToSpendRatio: number;
+  marketFragmentation: number;
+  incumbentVulnerability: number;
+  switchingFriction: number;
+  timing: number;
+  regulatoryTailwind: number;
+  manualLaborReplacement: number;
+  distributionViability: number;
+  aiCommoditization: number;
+  definitions: Record<string, string>;
+  heuristic: true;
+}
+
+export interface EvidenceGateThresholds {
+  minIndependentPainSignals: number;
+  minIndependentSpendSignals: number;
+  minCompetitorsAnalyzed: number;
+  minUnderservedSegments: number;
+  minTimingSignals: number;
+  minSourceTypes: number;
+  minCitationCoverage: number;
+  maxUnresolvedFatalFalsifications: number;
+}
+
+export interface EvidenceGateResult {
+  candidateId: string;
+  thresholds: EvidenceGateThresholds;
+  observed: {
+    independentPainSignals: number;
+    independentSpendSignals: number;
+    competitorsAnalyzed: number;
+    underservedSegments: number;
+    timingSignals: number;
+    sourceTypes: number;
+    citationCoverage: number;
+    unresolvedFatalFalsifications: number;
+  };
+  checks: Record<"pain" | "spend" | "competition" | "segment" | "timing" | "sourceDiversity" | "citationCoverage" | "fatalFalsification", boolean>;
+  survivalGatePassed: boolean;
+  validationEvidenceGatePassed: boolean;
+  externallyValidated: boolean;
+  classification: "discovered" | "promising" | "survived" | "validated" | "killed";
+  blockers: string[];
+  rationale: string;
+}
+
+export type AssumptionLedgerStatus = "UNTESTED" | "WEAK" | "SUPPORTED" | "DISPROVEN" | "CRITICAL";
+
+export interface AssumptionLedgerEntry {
+  id: string;
+  candidateId: string;
+  assumption: string;
+  dimension: "customer_pain" | "pain_frequency" | "existing_spend" | "buyer_access" | "incumbent_weakness" | "switching" | "technology" | "regulation" | "market_size";
+  status: AssumptionLedgerStatus;
+  factState: FactState;
+  supportingEvidenceIds: string[];
+  contradictingEvidenceIds: string[];
+  researchToResolve: string | null;
+  killCriterion: string;
+}
+
+export interface WhyNotBuiltAnalysis {
+  candidateId: string;
+  verdict: "recently_viable" | "persistent_trap" | "possibly_overlooked" | "unknown";
+  explanations: Array<{
+    factor: "technology" | "regulation" | "market_size" | "distribution_economics" | "willingness_to_pay" | "prior_failure" | "incumbent_distribution" | "switching_cost" | "fake_pain" | "overlooked";
+    state: FactState;
+    rationale: string;
+    evidenceIds: string[];
+  }>;
+  unresolvedQuestion: string;
+}
+
+export interface CounterfactualResearch {
+  candidateId: string;
+  targetOutcome: string;
+  requiredConditions: Array<{ condition: string; factState: FactState; test: string; killCriterion: string; evidenceIds: string[] }>;
+  verdict: "PLAUSIBLE_IF" | "CONTRADICTED" | "TOO_UNKNOWN";
+  rationale: string;
+}
+
+export interface MoatStressTest {
+  candidateId: string;
+  attackers: Array<"OpenAI" | "Anthropic" | "Google" | "Microsoft" | "Amazon" | "incumbent" | "open_source">;
+  coreCapabilityBecomesFree: {
+    remainingMoats: string[];
+    destroyedAdvantages: string[];
+    survivability: number;
+    verdict: "RESILIENT" | "EXPOSED" | "COMMODITIZED";
+  };
+  rationale: string;
+}
+
+export interface AdversarialAgentResult {
+  agent: "bull" | "bear" | "judge";
+  candidateId: string;
+  independentInputHash: string;
+  verdict: "SURVIVES" | "INVESTIGATE" | "KILL";
+  claims: Array<{ claim: string; factState: FactState; evidenceIds: string[] }>;
+  contradictions: string[];
+  unresolvedAssumptions: string[];
+  sourceQualityScore: number;
+  rationale: string;
+}
+
+export interface AgentExecutionRecord {
+  id: string;
+  agent: SpecialistAgent;
+  dependsOn: string[];
+  status: "complete" | "partial" | "skipped" | "failed" | "cancelled";
+  attempt: number;
+  startedAt: string;
+  completedAt: string;
+  inputRecordIds: string[];
+  outputRecordIds: string[];
+  permissions: ResearchRoleOutput["permissions"];
+  notes: string[];
+}
+
+export interface ResearchTaskGraph {
+  depth: ResearchDepth;
+  resumable: true;
+  checkpointId: string;
+  cancelled: boolean;
+  agents: AgentExecutionRecord[];
+  dependencies: Array<{ from: string; to: string }>;
 }
 
 export interface ValidationExperiment {
@@ -580,6 +821,40 @@ export interface ValidationExperiment {
   ethicsNote: string | null;
 }
 
+export interface ValidationPlan {
+  candidateId: string;
+  interviewTargets: string[];
+  outreachTargets: string[];
+  experiments: ValidationExperiment[];
+  milestones: Array<{ milestone: string; successCriterion: string; killCriterion: string }>;
+}
+
+export interface ExternalValidationOutcome {
+  id: string;
+  runId: string;
+  candidateId: string;
+  recordedAt: string;
+  experimentType: ValidationExperiment["type"];
+  success: boolean;
+  observedMetrics: string[];
+  artifactUrls: string[];
+  decision: "VALIDATED" | "KILLED" | "INVESTIGATE";
+  rationale: string;
+  lifecycleEvent: CandidateLifecycleEvent;
+}
+
+export interface NextBestAction {
+  candidateId: string | null;
+  action: string;
+  reason: string;
+  resolvesAssumptionIds: string[];
+  expectedInformationGain: number;
+  estimatedCost: string;
+  estimatedTime: string;
+  successCriterion: string;
+  killCriterion: string;
+}
+
 export interface FinalOpportunity {
   candidate: IdeaCandidate;
   fingerprint: NoveltyFingerprint;
@@ -588,12 +863,20 @@ export interface FinalOpportunity {
   lineage: IdeaLineage;
   score: OpportunityScore;
   validationExperiment: ValidationExperiment;
+  evidenceGate: EvidenceGateResult;
+  lifecycle: CandidateLifecycleRecord;
+  assumptionLedger: AssumptionLedgerEntry[];
+  whyNotBuilt: WhyNotBuiltAnalysis;
+  counterfactual: CounterfactualResearch;
+  moatStressTest: MoatStressTest;
+  adversarialReview: { bull: AdversarialAgentResult; bear: AdversarialAgentResult; judge: AdversarialAgentResult };
+  validationPlan: ValidationPlan;
 }
 
 export interface RejectedIdea {
   candidateId: string;
   name: string;
-  phase: "evidence_gate" | "deduplication" | "competitor_check" | "falsification" | "mutation" | "selection_cutoff";
+  phase: "evidence_gate" | "founder_constraint" | "deduplication" | "competitor_check" | "falsification" | "mutation" | "selection_cutoff";
   reason: string;
   evidenceIds: string[];
   decisiveRisks: FalsificationDimension[];
@@ -702,9 +985,11 @@ export interface IdeationContext {
 
 export interface ResearchResult {
   schemaVersion: typeof RESEARCH_SCHEMA_VERSION;
+  engineVersion: typeof RESEARCH_ENGINE_VERSION;
   id: string;
   query: string;
   mode: Exclude<ResearchMode, "compare_ideas">;
+  depth: ResearchDepth;
   canonicalQuery: string;
   status: "complete" | "partial";
   startedAt: string;
@@ -725,6 +1010,7 @@ export interface ResearchResult {
   stitchingPatterns: WorkflowStitchingPattern[];
   weakSignals: WeakSignal[];
   failedAttempts: FailedAttempt[];
+  searchBranches: SearchBranch[];
   candidates: IdeaCandidate[];
   mutations: MutationRecord[];
   fingerprints: NoveltyFingerprint[];
@@ -734,6 +1020,12 @@ export interface ResearchResult {
   opportunityScores: OpportunityScore[];
   validationExperiments: ValidationExperiment[];
   finalOpportunities: FinalOpportunity[];
+  candidateLifecycles: CandidateLifecycleRecord[];
+  evidenceGates: EvidenceGateResult[];
+  assumptionLedger: AssumptionLedgerEntry[];
+  adversarialReviews: AdversarialAgentResult[];
+  taskGraph: ResearchTaskGraph;
+  nextBestAction: NextBestAction;
   rejectedIdeas: RejectedIdea[];
   coverage: ResearchCoverage;
   stopDecision: StopDecision;
@@ -754,6 +1046,8 @@ export interface ResearchRequestOptions {
   persist?: boolean;
   mode?: Exclude<ResearchMode, "compare_ideas">;
   userContext?: ResearchUserContext;
+  depth?: ResearchDepth;
+  signal?: AbortSignal;
 }
 
 export interface ResearchUserContext {
@@ -767,6 +1061,13 @@ export interface ResearchUserContext {
   resources?: string[];
   previouslyResearchedMarkets?: string[];
   previouslyRejectedMechanisms?: string[];
+  teamSize?: number;
+  timeToMvpWeeks?: number;
+  technicalLimits?: string[];
+  industryExclusions?: string[];
+  geographyExclusions?: string[];
+  riskTolerance?: "low" | "medium" | "high";
+  distributionChannels?: string[];
 }
 
 export interface ResearchMemoryProfile extends ResearchUserContext {
@@ -792,6 +1093,20 @@ export interface ResearchFeedback {
   note: string | null;
   createdAt: string;
   evidenceStatus: "USER_PROVIDED_CONTEXT_NOT_PUBLIC_EVIDENCE";
+}
+
+export interface ResearchNote {
+  id: string;
+  runId: string;
+  userId: string;
+  candidateId: string | null;
+  kind: "research_note" | "decision_log";
+  title: string;
+  body: string;
+  tags: string[];
+  folder: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WatchlistConfig {
@@ -825,6 +1140,14 @@ export interface ChangeDetectionResult {
   materialChanges: MaterialChange[];
   ignoredTrivialChanges: number;
   summary: string;
+  opportunityEvolution: Array<{
+    mechanismFamily: string;
+    beforeScore: number | null;
+    afterScore: number | null;
+    beforeEvidenceConfidence: number | null;
+    afterEvidenceConfidence: number | null;
+    status: "appeared" | "strengthened" | "weakened" | "stable" | "disappeared";
+  }>;
 }
 
 export interface IdeaComparisonDimension {

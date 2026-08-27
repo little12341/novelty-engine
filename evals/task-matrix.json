@@ -1,0 +1,26 @@
+{
+  "domains": [
+    { "id": "field-service", "label": "small field-service contractors", "category": "local B2B operations" },
+    { "id": "clinical-ops", "label": "regulated clinical-trial site operations", "category": "regulated workflow" },
+    { "id": "devtools", "label": "developer infrastructure and open-source maintainers", "category": "developer tooling" },
+    { "id": "ecommerce", "label": "independent ecommerce brands and Shopify agencies", "category": "ecommerce" },
+    { "id": "food-waste", "label": "small food businesses reducing operational waste", "category": "sustainability" },
+    { "id": "elder-care", "label": "family and professional elder-care coordination", "category": "caregiving" },
+    { "id": "construction", "label": "specialty construction subcontractors", "category": "construction operations" },
+    { "id": "finance-ops", "label": "mid-market finance and compliance operations", "category": "financial operations" },
+    { "id": "education-admin", "label": "small education providers and school administrators", "category": "education administration" },
+    { "id": "manufacturing", "label": "regulated small and midsize manufacturers", "category": "industrial operations" }
+  ],
+  "objectives": [
+    { "id": "discover", "prompt": "Research {domain} and report at most 3 evidence-backed market-gap survivors after active falsification. Do not pad the result.", "commonDirections": ["generic AI assistant", "all-in-one dashboard", "marketplace"] },
+    { "id": "competitors", "prompt": "Inspect the competitor and substitute landscape for {domain}; identify feature, workflow, customer, pricing, and positioning overlap before naming any whitespace.", "commonDirections": ["feature matrix without citations", "no-competitor claim", "branding difference"] },
+    { "id": "pricing", "prompt": "Find pricing gaps and real spending or willingness-to-pay signals in {domain}; separate prices, labor spend, and inferred budget.", "commonDirections": ["invented TAM", "uncited price", "survey-only demand"] },
+    { "id": "pain", "prompt": "Mine recurring customer pain, workarounds, churn reasons, and requested outcomes in {domain}; require independent signals and named buyers.", "commonDirections": ["single anecdote", "generic inconvenience", "persona guess"] },
+    { "id": "archaeology", "prompt": "Research failed, discontinued, or abandoned attempts serving {domain}; test whether the historical blocker still exists before proposing a resurrection.", "commonDirections": ["copy failed startup", "ignore switching cost", "assume timing changed"] },
+    { "id": "timing", "prompt": "Test whether regulation, technology, distribution economics, or market change creates a credible now-reason in {domain}.", "commonDirections": ["AI is new", "market is growing", "regulation without primary source"] },
+    { "id": "distribution", "prompt": "Find opportunities in {domain} reachable through a specific existing channel and reject ideas whose buyers cannot be named or reached.", "commonDirections": ["paid ads", "viral growth", "generic partnerships"] },
+    { "id": "validate", "prompt": "Falsify and validate a proposed workflow-automation idea for {domain}; return one next-best action with success and kill criteria.", "commonDirections": ["talk to users", "build an MVP", "waitlist without threshold"] },
+    { "id": "find-business", "prompt": "Identify observable business-level buying signals in {domain}, including manual work, poor reviews, outdated systems, compliance burden, hiring, or rapid growth.", "commonDirections": ["scrape generic directory", "assume outdated website", "uncited lead list"] },
+    { "id": "expand", "prompt": "Start with {domain}; if the niche is saturated or weak, branch into adjacent segments, workflows, verticals, geographies, or business models until a survivor passes or the hard budget is exhausted.", "commonDirections": ["stop after first failure", "force one winner", "repeat same query"] }
+  ]
+}

@@ -41,6 +41,7 @@ export class BraveSearchProvider implements SearchProvider {
     const response = await fetch(url, {
       headers: { Accept: "application/json", "X-Subscription-Token": this.apiKey },
       signal: options.signal,
+      redirect: "error",
     });
     requireOk(response, this.displayName);
     const payload = await readJson<{ web?: { results?: Array<{ url?: string; title?: string; description?: string; age?: string }> } }>(response, this.displayName);
@@ -67,6 +68,7 @@ export class TavilySearchProvider implements SearchProvider {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ api_key: this.apiKey, query, search_depth: "advanced", max_results: options.limit, include_answer: false, include_raw_content: false }),
       signal: options.signal,
+      redirect: "error",
     });
     requireOk(response, this.displayName);
     const payload = await readJson<{ results?: Array<{ url?: string; title?: string; content?: string; published_date?: string; score?: number }> }>(response, this.displayName);

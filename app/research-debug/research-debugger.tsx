@@ -95,8 +95,12 @@ export default function ResearchDebugger({ initialConfiguration, initialMcpHealt
 function ResearchPanels({ result }: { result: ResearchResult }) {
   return (
     <div className="debug-results">
-      <div className="debug-summary"><strong>{result.sources.length}</strong> sources <strong>{result.opportunityGraph.nodes.length}</strong> nodes <strong>{result.candidates.length}</strong> candidates <strong>{result.finalOpportunities.length}</strong> survivors <span>{result.cache.hit ? "cache hit" : result.status}</span></div>
+      <div className="debug-summary"><strong>{result.sources.length}</strong> sources <strong>{result.opportunityGraph.nodes.length}</strong> nodes <strong>{result.candidates.length}</strong> candidates <strong>{result.finalOpportunities.length}</strong> survivors <strong>{result.evidenceGates.filter((item) => item.classification === "validated").length}</strong> validated <span>{result.depth} · {result.cache.hit ? "cache hit" : result.status}</span></div>
+      <details open><summary>Single next-best action</summary><pre>{JSON.stringify(result.nextBestAction, null, 2)}</pre></details>
+      <details open><summary>Candidate lifecycle and strict evidence gates</summary><pre>{JSON.stringify({ lifecycles: result.candidateLifecycles, gates: result.evidenceGates }, null, 2)}</pre></details>
       <details open><summary>Ranked survivors, lineage, scores, and validation</summary><pre>{JSON.stringify(result.finalOpportunities, null, 2)}</pre></details>
+      <details><summary>Bull / Bear / Judge and assumption ledger</summary><pre>{JSON.stringify({ adversarialReviews: result.adversarialReviews, assumptionLedger: result.assumptionLedger }, null, 2)}</pre></details>
+      <details><summary>Adjacent search branches and specialist task graph</summary><pre>{JSON.stringify({ searchBranches: result.searchBranches, taskGraph: result.taskGraph }, null, 2)}</pre></details>
       <details open><summary>Opportunity graph ({result.opportunityGraph.nodes.length} nodes / {result.opportunityGraph.edges.length} edges)</summary><GraphPreview result={result} /><pre>{JSON.stringify(result.opportunityGraph, null, 2)}</pre></details>
       <details><summary>Graph holes</summary><pre>{JSON.stringify(result.graphHoles, null, 2)}</pre></details>
       <details><summary>Market assumptions and contradictions</summary><pre>{JSON.stringify({ assumptions: result.assumptions, contradictions: result.contradictions }, null, 2)}</pre></details>

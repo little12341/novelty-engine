@@ -3,29 +3,32 @@ import { runResearch } from "@/lib/research/pipeline";
 import { providerConfiguration, ResearchConfigurationError } from "@/lib/research/providers";
 import { acquireProtection } from "@/lib/research/protection";
 import { durableStoreConfiguration } from "@/lib/research/durable";
-import { RESEARCH_SCHEMA_VERSION } from "@/lib/research/types";
+import { RESEARCH_ENGINE_VERSION, RESEARCH_SCHEMA_VERSION } from "@/lib/research/types";
 import type { ResearchMode, ResearchUserContext } from "@/lib/research/types";
-import { parseResearchIntent, RESEARCH_COMMANDS } from "@/lib/research/intents";
+import { CLAUDE_COMMAND_ROUTES, parseResearchIntent, RESEARCH_COMMANDS } from "@/lib/research/intents";
 import { compareIdeas } from "@/lib/research/comparison";
 import { getResearchMemory, mergeResearchContext } from "@/lib/research/memory";
+import { sanitizeFounderContext } from "@/lib/research/founder-fit";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export function GET() {
   return NextResponse.json({
     service: "Novelty Engine research API",
     schemaVersion: RESEARCH_SCHEMA_VERSION,
+    engineVersion: RESEARCH_ENGINE_VERSION,
     provider: providerConfiguration(),
     commands: RESEARCH_COMMANDS,
-    accepts: { method: "POST", contentType: "application/json", body: { query: "string", mode: "optional ResearchMode", ideas: "2-5 strings for compare_ideas", bypassCache: "optional boolean", memoryProfileId: "optional explicit opt-in profile", userContext: "optional current-run constraints" } },
+    commandRoutes: CLAUDE_COMMAND_ROUTES,
+    accepts: { method: "POST", contentType: "application/json", body: { query: "string", mode: "optional ResearchMode", depth: "optional fast|standard|deep", ideas: "2-5 strings for compare_ideas", bypassCache: "optional boolean", memoryProfileId: "optional explicit opt-in profile", userContext: "optional current-run founder constraints" } },
   });
 }
 
 export async function POST(request: NextRequest) {
   const contentLength = Number(request.headers.get("content-length") ?? "0");
   if (contentLength > 4_096) return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
-  let body: { query?: unknown; mode?: unknown; ideas?: unknown; bypassCache?: unknown; memoryProfileId?: unknown; userId?: unknown; userContext?: unknown };
+  let body: { query?: unknown; mode?: unknown; depth?: unknown; ideas?: unknown; bypassCache?: unknown; memoryProfileId?: unknown; userId?: unknown; userContext?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch (error) {
@@ -36,6 +39,7 @@ export async function POST(request: NextRequest) {
   if (body.mode === "compare_ideas" || Array.isArray(body.ideas)) {
     if (!Array.isArray(body.ideas) || body.ideas.some((item) => typeof item !== "string")) return NextResponse.json({ error: "compare_ideas requires an ideas array containing 2–5 strings." }, { status: 400 });
   } else if (typeof body.query !== "string") return NextResponse.json({ error: "Body must include a string query." }, { status: 400 });
+  if (body.depth !== undefined && !["fast", "standard", "deep"].includes(String(body.depth))) return NextResponse.json({ error: "depth must be fast, standard, or deep." }, { status: 400 });
   if (process.env.VERCEL && !durableStoreConfiguration().distributed && process.env.MCP_ALLOW_INSTANCE_LOCAL_PUBLIC !== "true") {
     return NextResponse.json({ error: "Distributed rate limiting is required before public research is enabled on Vercel.", code: "DURABLE_PROTECTION_REQUIRED" }, { status: 503 });
   }
@@ -55,8 +59,8 @@ export async function POST(request: NextRequest) {
       memory = await getResearchMemory(body.memoryProfileId, body.userId);
       if (!memory) return NextResponse.json({ error: "Memory profile was not found for this user." }, { status: 404 });
     }
-    const userContext = body.userContext && typeof body.userContext === "object" && !Array.isArray(body.userContext) ? body.userContext as ResearchUserContext : undefined;
-    const result = await runResearch(intent.query, { bypassCache: body.bypassCache === true, mode: intent.mode, userContext: mergeResearchContext(memory, userContext) });
+    const userContext = sanitizeFounderContext(body.userContext) as ResearchUserContext | undefined;
+    const result = await runResearch(intent.query, { bypassCache: body.bypassCache === true, mode: intent.mode, depth: body.depth as "fast" | "standard" | "deep" | undefined, userContext: mergeResearchContext(memory, userContext), signal: request.signal });
     return NextResponse.json(result, { headers: { "X-RateLimit-Remaining": String(permit.remaining), "Cache-Control": "private, no-store" } });
   } catch (error) {
     if (error instanceof ResearchConfigurationError) {

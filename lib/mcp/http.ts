@@ -2,9 +2,9 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { acquireProtection } from "../research/protection.ts";
 import { durableStoreConfiguration } from "../research/durable.ts";
 import { recordMcpCall, withMcpRequestContext } from "./observability.ts";
-import { compareIdeasInput, falsifyOpportunityInput, researchMarketInput, runResearchModeInput } from "./schemas.ts";
+import { compareIdeasInput, falsifyOpportunityInput, rerunResearchInput, researchMarketInput, runResearchModeInput } from "./schemas.ts";
 
-const COSTLY_TOOLS = new Set(["research_market", "falsify_opportunity", "run_research_mode", "compare_ideas"]);
+const COSTLY_TOOLS = new Set(["research_market", "falsify_opportunity", "run_research_mode", "compare_ideas", "rerun_research"]);
 type McpPayload = { id?: unknown; method?: unknown; params?: { name?: unknown; arguments?: unknown } };
 
 export function requestIdentifier(request: Request): string {
@@ -63,6 +63,7 @@ async function handleMcpHttpInner(request: Request, handler: (request: Request) 
     : tool === "falsify_opportunity" ? falsifyOpportunityInput.safeParse(payload?.params?.arguments).success
       : tool === "run_research_mode" ? runResearchModeInput.safeParse(payload?.params?.arguments).success
         : tool === "compare_ideas" ? compareIdeasInput.safeParse(payload?.params?.arguments).success
+          : tool === "rerun_research" ? rerunResearchInput.safeParse(payload?.params?.arguments).success
       : false;
   const costly = COSTLY_TOOLS.has(tool) && validCostlyRequest;
   const unsafePublicServerless = costly && Boolean(process.env.VERCEL) && !durableStoreConfiguration().distributed
@@ -72,7 +73,7 @@ async function handleMcpHttpInner(request: Request, handler: (request: Request) 
       code: "DURABLE_PROTECTION_REQUIRED", requiredEnvironmentVariables: ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
     });
   }
-  const permit = await acquireProtection(requestIdentifier(request), costly);
+  const permit = await acquireProtection(`${requestIdentifier(request)}:${tool}`, costly);
   if (!permit.allowed) {
     const message = permit.reason === "rate_limit" ? "Per-client MCP request limit reached."
       : permit.reason === "user_daily_budget" ? "This client's daily research quota is exhausted."

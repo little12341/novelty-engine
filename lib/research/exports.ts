@@ -7,11 +7,13 @@ export type PrintReadyReport = {
   html: string;
 };
 
+export type ResearchExportFormat = "json" | "markdown" | "print" | "csv" | "competitor_matrix" | "validation_plan" | "opportunity_brief" | "investor_memo" | "bibliography";
+
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]!));
 
 export function structuredExport(result: ResearchResult) {
   return {
-    schemaVersion: result.schemaVersion, runId: result.id, query: result.query, mode: result.mode, completedAt: result.completedAt,
+    schemaVersion: result.schemaVersion, engineVersion: result.engineVersion, depth: result.depth, runId: result.id, query: result.query, mode: result.mode, completedAt: result.completedAt,
     researchLandscape: result.output.researchLandscape, signals: result.output.signals,
     structuralGaps: result.output.structuralGaps, candidateIdeas: result.output.candidateIdeas,
     rejectedIdeas: result.output.rejectedIdeas, survivors: result.output.survivors,
@@ -19,6 +21,9 @@ export function structuredExport(result: ResearchResult) {
     coverageConfidence: { coverage: result.coverage, stopDecision: result.stopDecision, warnings: result.warnings },
     validationTests: result.output.validationTests, companyProfile: result.companyProfile,
     sources: result.sources, checkpoints: result.checkpoints, budgetUsage: result.budgetUsage,
+    candidateLifecycles: result.candidateLifecycles, evidenceGates: result.evidenceGates,
+    assumptionLedger: result.assumptionLedger, adversarialReviews: result.adversarialReviews,
+    searchBranches: result.searchBranches, taskGraph: result.taskGraph, nextBestAction: result.nextBestAction,
   };
 }
 
@@ -51,6 +56,41 @@ export function printReadyExport(result: ResearchResult): PrintReadyReport {
   return { title: `Novelty Engine — ${result.query}`, generatedAt: new Date().toISOString(), sections, html };
 }
 
-export function exportResearchResult(result: ResearchResult, format: "json" | "markdown" | "print") {
-  return format === "json" ? structuredExport(result) : format === "markdown" ? markdownExport(result) : printReadyExport(result);
+const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+const csvRows = (rows: unknown[][]) => rows.map((row) => row.map(csvCell).join(",")).join("\n");
+
+export function csvExport(result: ResearchResult): string {
+  return csvRows([
+    ["candidate_id", "name", "lifecycle", "opportunity_score", "evidence_confidence", "novelty_score", "demand_authenticity", "distribution_viability", "ai_commoditization_risk", "next_action"],
+    ...result.finalOpportunities.map((item) => [
+      item.candidate.id, item.candidate.name, item.lifecycle?.classification ?? "survived", item.score.score,
+      item.score.evidenceConfidence?.score ?? "", item.score.noveltyScore?.score ?? "",
+      item.score.intelligence?.demandAuthenticity ?? "", item.score.intelligence?.distributionViability ?? "",
+      item.score.intelligence?.aiCommoditization ?? "", result.nextBestAction?.candidateId === item.candidate.id ? result.nextBestAction.action : "",
+    ]),
+  ]);
+}
+
+export function competitorMatrixExport(result: ResearchResult): string {
+  return csvRows([
+    ["competitor", "website", "target_customer", "pricing", "features", "positioning", "weaknesses", "evidence_ids"],
+    ...result.competitors.map((item) => [item.name.value, item.website, item.targetCustomer.value, item.pricing.value, item.keyFeatures.value?.join("; "), item.positioning.value, item.likelyWeaknesses.value?.join("; "), item.evidenceIds.join("; ")]),
+  ]);
+}
+
+export function investorMemoExport(result: ResearchResult): string {
+  const opportunities = result.finalOpportunities.map((item) => `## ${item.candidate.name}\n\n**Status:** ${item.lifecycle?.classification ?? "survived"}, not validated unless the evidence gate explicitly says so.  \n**Opportunity score:** ${item.score.score}/100 (heuristic)  \n**Evidence confidence:** ${item.score.evidenceConfidence?.score ?? "unknown"}/100  \n**Novelty score:** ${item.score.noveltyScore?.score ?? "unknown"}/100  \n\n${item.candidate.summary}\n\n**Why now / why not built:** ${item.whyNotBuilt?.verdict ?? "unknown"}. ${item.whyNotBuilt?.unresolvedQuestion ?? "Historical blocker remains unknown."}\n\n**Bear/Judge:** ${item.adversarialReview?.bear.rationale ?? item.falsification.reason} ${item.adversarialReview?.judge.rationale ?? ""}\n\n**Next validation:** ${item.validationExperiment.action}\n\n**Kill threshold:** ${item.validationExperiment.failureThreshold}`).join("\n\n");
+  return `# Investor-style opportunity memo\n\nRun ${result.id}; ${result.completedAt}. This memo reports research survivors, not guaranteed businesses or investment outcomes.\n\n${opportunities || "No candidate survived. " + result.stopDecision.reasons.join(" ")}\n\n## Single next-best action\n\n${result.nextBestAction.action}\n`;
+}
+
+export function exportResearchResult(result: ResearchResult, format: ResearchExportFormat) {
+  if (format === "json") return structuredExport(result);
+  if (format === "markdown") return markdownExport(result);
+  if (format === "print") return printReadyExport(result);
+  if (format === "csv") return csvExport(result);
+  if (format === "competitor_matrix") return competitorMatrixExport(result);
+  if (format === "validation_plan") return { runId: result.id, nextBestAction: result.nextBestAction, plans: result.finalOpportunities.map((item) => item.validationPlan) };
+  if (format === "opportunity_brief") return result.finalOpportunities.map((item) => ({ candidate: item.candidate, lifecycle: item.lifecycle, evidenceGate: item.evidenceGate, score: item.score, whyNotBuilt: item.whyNotBuilt, decisiveRisks: item.falsification.decisiveRisks, nextValidation: item.validationExperiment }));
+  if (format === "bibliography") return result.sources.map((item) => ({ title: item.title, url: item.sourceUrl, retrievedAt: item.retrievedAt, sourceType: item.sourceType, quality: item.sourceAssessment, supports: item.supports }));
+  return investorMemoExport(result);
 }

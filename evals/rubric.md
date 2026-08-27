@@ -26,6 +26,15 @@ Score each metric from 1 (poor) to 5 (excellent):
 | Unsupported-claim rate | Many unsupported facts | Mostly calibrated with some leakage | No unsupported market facts; unknowns remain explicit |
 | Feasibility | Ignores constraints | Plausible with major unknowns | Proportional, implementation-aware, and testable |
 | Differentiation | Branding-only distinction | Names a nearest alternative | Explains the exact wedge and why alternatives fail to provide it |
+| Competitor recall | Misses obvious close products | Finds the main category | Recovers close direct, adjacent, free, manual, and failed substitutes |
+| Source accuracy | Sources do not support claims | Mostly relevant sources | Claims match source content, type, date, and provenance |
+| Citation accuracy | Missing or mismatched citations | Partial claim coverage | Every material factual claim maps to the correct source record |
+| Hallucination control | Fabricates facts or fills unknowns | Minor unsupported leakage | KNOWN/INFERRED/UNKNOWN/CONTRADICTED are preserved with no invented fill |
+| Opportunity novelty | Cosmetic clone | A real wedge with overlap | Low feature, positioning, customer, workflow, technology, and model collision |
+| Falsification effectiveness | Generic risk list | Finds some counterevidence | Bear finds fatal conditions and Judge kills weak cases consistently |
+| Confidence calibration | Confident regardless of evidence | Broad labels match quality | Evidence confidence and validation status track actual citation/source support |
+| Latency efficiency | Unbounded or unusably slow | Completes within mode expectation | Fast/standard/deep latency is proportional to useful evidence gained |
+| Cost efficiency | Cost not measured | Budget is visible | Provider calls/credits are bounded and incremental evidence justifies spend |
 
 Source validity is scored 1 for conditions without citations unless the response correctly says it has no research evidence and makes no research-backed claims; in that case a 2 is appropriate. For `unsupportedClaimRate`, a higher score means fewer unsupported claims. Fluent prose does not earn evidence credit without inspectable support.
 
@@ -37,5 +46,6 @@ Source validity is scored 1 for conditions without citations unless the response
 4. Have at least one reviewer score every metric; two reviewers are preferable.
 5. Flag calibration failures separately: fabricated competitor or price, fake citation, absolute uniqueness/patent/success claim, or fixture data represented as live.
 6. Run `npm run eval:init`, fill the scores, and run `npm run eval:score -- evals/results/local.json`.
+7. Fill `telemetry.latencyMs`, `providerCalls`, and `estimatedProviderCredits` from the stored run for the evidence-driven condition; do not infer them from prose.
 
 Report all per-metric means by condition. Do not collapse the result to one number: higher novelty can coexist with weaker feasibility, and polished citations can still be irrelevant.
