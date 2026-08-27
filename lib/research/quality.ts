@@ -48,12 +48,12 @@ export function assessCoverage(input: {
   const weighted = input.evidence.reduce((sum, item) => sum + item.sourceAssessment.overallWeight, 0);
   const duplicateClaimsCollapsed = input.evidence.reduce((sum, item) => sum + item.duplicateSourceUrls.length, 0);
   const kindsForFamily: Record<keyof ResearchCoverage["sourceFamilyCoverage"], SearchAngle["kind"][]> = {
-    competitor: ["direct_competitors", "adjacent_categories", "substitutes", "active_falsification_competition"],
-    user_voice: ["customer_complaints", "manual_workarounds", "pricing_complaints", "customer_language"],
-    technical: ["poor_integrations", "open_source_patents", "research_regulation", "active_falsification_constraints"],
-    institutional: ["research_regulation", "open_source_patents", "active_falsification_constraints"],
+    competitor: ["direct_competitors", "competitor_high_recall_primary", "competitor_high_recall_crosscheck", "competitor_recall_escalation", "adjacent_categories", "substitutes", "active_falsification_competition"],
+    user_voice: ["customer_complaints", "manual_workarounds", "pricing_complaints", "customer_language", "evidence_gap_pain"],
+    technical: ["poor_integrations", "open_source_patents", "research_regulation", "active_falsification_constraints", "evidence_gap_institutional"],
+    institutional: ["research_regulation", "open_source_patents", "active_falsification_constraints", "evidence_gap_institutional"],
     failed_attempt: ["failed_attempts", "active_falsification_constraints"],
-    commercial: ["direct_competitors", "pricing_complaints", "jobs_procurement"],
+    commercial: ["direct_competitors", "competitor_high_recall_primary", "competitor_high_recall_crosscheck", "competitor_recall_escalation", "pricing_complaints", "jobs_procurement", "evidence_gap_spend"],
   };
   const successful = new Set(input.successfulAngleIds);
   const sourceFamilyAttempts = Object.fromEntries(Object.entries(kindsForFamily).map(([family, kinds]) => {

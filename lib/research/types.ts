@@ -64,6 +64,9 @@ export interface ResearchRoleOutput {
 
 export type SearchAngleKind =
   | "direct_competitors"
+  | "competitor_high_recall_primary"
+  | "competitor_high_recall_crosscheck"
+  | "competitor_recall_escalation"
   | "adjacent_categories"
   | "customer_complaints"
   | "manual_workarounds"
@@ -80,7 +83,10 @@ export type SearchAngleKind =
   | "jobs_procurement"
   | "adjacent_mechanisms"
   | "active_falsification_competition"
-  | "active_falsification_constraints";
+  | "active_falsification_constraints"
+  | "evidence_gap_pain"
+  | "evidence_gap_spend"
+  | "evidence_gap_institutional";
 
 export type SourceType =
   | "official_company"
@@ -176,6 +182,7 @@ export interface Evidence {
     provenance: "company_controlled" | "government" | "research" | "user_generated" | "independent_secondary" | "marketplace";
     commercialBiasRisk: "low" | "medium" | "high" | "unknown";
     observationKind: "factual_market_observation" | "opinion_experience" | "company_claim" | "mixed";
+    discoveryOnly: boolean;
     rationale: string;
   };
 }
@@ -219,6 +226,7 @@ export interface Competitor {
   positioning: SupportedValue<string>;
   likelyStrengths: SupportedValue<string[]>;
   likelyWeaknesses: SupportedValue<string[]>;
+  relationship?: SupportedValue<"direct" | "substitute">;
   intelligence: CompetitorIntelligence;
   evidenceIds: string[];
 }
@@ -307,6 +315,8 @@ export interface ResearchLimits {
   timeoutMs: number;
   maxExpansionBranches: number;
   maxRunDurationMs: number;
+  minCredibleCompetitors: number;
+  competitorQueriesPerCandidate: number;
 }
 
 export interface SearchBranch {
@@ -481,6 +491,18 @@ export interface IdeaCandidate {
     structuralAnalogue: string;
     adaptationBoundary: string;
   } | null;
+  definition?: {
+    industry: string;
+    companyProfile: string;
+    buyer: string;
+    decisionMaker: string;
+    specificProblem: string;
+    currentWorkaround: string;
+    economicConsequence: string;
+    proposedMechanism: string;
+    whyExistingSolutionsFail: string;
+    evidenceIds: string[];
+  };
 }
 
 export interface MutationRecord {
@@ -503,6 +525,10 @@ export interface NoveltyFingerprint {
     technology: string | null; businessModel: string | null; distribution: string | null;
     dataSource: string | null; ownershipModel: string | null; workflowPosition: string;
     coreDifferentiator: string;
+    desiredOutcome?: string | null;
+    integrationsSystemBoundary?: string | null;
+    pricingBusinessModel?: string | null;
+    distributionContext?: string | null;
   };
   tokens: string[];
 }
@@ -512,6 +538,8 @@ export interface SimilarityResult {
   rightId: string;
   score: number;
   matchingDimensions: string[];
+  nonMatchingDimensions?: string[];
+  dimensionScores?: Record<string, number>;
   explanation: string;
   heuristic: true;
 }
@@ -716,7 +744,7 @@ export interface EvidenceGateResult {
     citationCoverage: number;
     unresolvedFatalFalsifications: number;
   };
-  checks: Record<"pain" | "spend" | "competition" | "segment" | "timing" | "sourceDiversity" | "citationCoverage" | "fatalFalsification", boolean>;
+  checks: Record<"pain" | "spend" | "competition" | "competitorRecall" | "buyerSpecificity" | "segment" | "timing" | "sourceDiversity" | "citationCoverage" | "fatalFalsification", boolean>;
   survivalGatePassed: boolean;
   validationEvidenceGatePassed: boolean;
   externallyValidated: boolean;
@@ -936,6 +964,35 @@ export interface PipelineBudgetUsage {
   sourceCount: number;
   exhausted: boolean;
   gracefulDegradation: "none" | "partial_provider_failure" | "counterevidence_budget_exhausted" | "insufficient_evidence";
+  expansionStopReason?: "not_needed" | "survivor_found" | "budget_exhausted" | "coverage_plateau" | "duplicate_branches" | "provider_limit" | "user_cancelled";
+}
+
+export interface CandidateCompetitorRecall {
+  candidateId: string;
+  structuralGroupId: string;
+  establishedCategory: boolean;
+  minimumCredibleCompetitors: number;
+  primaryQueryIds: string[];
+  crossCheckQueryIds: string[];
+  escalationQueryIds: string[];
+  primaryCompetitorIds: string[];
+  crossCheckCompetitorIds: string[];
+  escalationCompetitorIds: string[];
+  credibleCompetitorIds: string[];
+  materialNewDirectCompetitorIds: string[];
+  crossCheckComplete: boolean;
+  escalationTriggered: boolean;
+  escalationComplete: boolean;
+  recallSufficient: boolean;
+  explanation: string;
+}
+
+export interface CompetitorRecallReport {
+  minimumCredibleCompetitors: number;
+  primaryQueries: number;
+  crossCheckQueries: number;
+  escalationQueries: number;
+  candidates: CandidateCompetitorRecall[];
 }
 
 export interface EvidenceSnapshot {
@@ -1000,6 +1057,7 @@ export interface ResearchResult {
   searchAngles: SearchAngle[];
   sources: Evidence[];
   competitors: Competitor[];
+  competitorRecall: CompetitorRecallReport;
   complaintClusters: ComplaintCluster[];
   underservedSegments: UnderservedSegment[];
   gaps: CandidateGap[];

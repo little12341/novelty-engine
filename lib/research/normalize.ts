@@ -55,6 +55,7 @@ export function inferSourceType(urlString: string): SourceType {
   if (/arxiv\.|pubmed\.|nih\.gov|nature\.|sciencedirect\.|springer\.|jstor\.|doi\.org|semanticscholar\./.test(host)) return "research";
   if (/\.gov$|\.gov\.|europa\.eu$/.test(host)) return "regulator";
   if (/jobs\.|careers\.|indeed\.|greenhouse\.|lever\.co|workdayjobs\./.test(host) || /\/jobs?|\/careers?/.test(path)) return "job_posting";
+  if (/procurement|tenders?|solicitations?/.test(host) || /\/(?:rfp|procurement|tenders?|solicitations?)(?:\/|$)/.test(path)) return "marketplace";
   if (/amazon\.|etsy\.|ebay\.|alibaba\.|gumroad\./.test(host)) return "marketplace";
   if (/forum|community|discuss/.test(host) || /\/forum|\/community|\/discussions/.test(path)) return "forum";
   if (/pricing|plans|packages/.test(path)) return "pricing";
@@ -73,6 +74,17 @@ const SOURCE_QUALITY: Record<SourceType, number> = {
 function registrableHost(host: string): string {
   const parts = host.replace(/^www\./, "").split(".");
   return parts.slice(-2).join(".");
+}
+
+function competitorEntityScope(urlString: string, sourceType: SourceType): string {
+  const url = new URL(urlString);
+  if (["review", "product_directory", "app_marketplace"].includes(sourceType)) {
+    const parts = url.pathname.split("/").filter(Boolean);
+    const marker = parts.findIndex((part) => /products?|software|apps?/i.test(part));
+    const product = marker >= 0 ? parts[marker + 1] : parts[0];
+    return `${url.hostname}/${product ?? ""}`;
+  }
+  return registrableHost(url.hostname);
 }
 
 function independenceGroup(urlString: string, sourceType: SourceType): string {
@@ -120,6 +132,13 @@ function trustMetadata(sourceType: SourceType, angleKind: SearchAngle["kind"]): 
       : provenance === "user_generated" ? "opinion_experience"
         : ["regulator", "pricing", "job_posting", "patent"].includes(sourceType) ? "factual_market_observation" : "mixed";
   return { sourceFamily, provenance, commercialBiasRisk, observationKind };
+}
+
+function isVendorSeoListicle(urlString: string, title: string): boolean {
+  const url = new URL(urlString);
+  const text = `${url.pathname} ${title}`;
+  return /\/(?:blog|resources?|articles?|guides?)\//i.test(url.pathname)
+    && /\b(?:best|top|alternatives?|competitors?|software list|tools for)\b/i.test(text);
 }
 
 function claimTokens(value: string): Set<string> {
@@ -170,9 +189,13 @@ export function normalizeResults(
       const summary = screenedSummary.text;
       const title = screenedTitle.text;
       if (!summary || !title) continue;
+      const sourceType = inferSourceType(normalizedUrl);
+      const competitorLike = ["official_company", "pricing", "documentation", "review", "product_directory", "app_marketplace"].includes(sourceType);
       const claimKey = createHash("sha256").update(canonicalizeQuery(`${title} ${summary}`)).digest("hex");
       const existingClaim = claimRepresentatives.find((item) => item.claimFingerprint === claimKey
-        || claimSimilarity(`${item.title} ${item.summary}`, `${title} ${summary}`) >= .88);
+        || claimSimilarity(`${item.title} ${item.summary}`, `${title} ${summary}`) >= .88
+          && (!competitorLike || !["official_company", "pricing", "documentation", "review", "product_directory", "app_marketplace"].includes(item.sourceType)
+            || competitorEntityScope(item.normalizedUrl, item.sourceType) === competitorEntityScope(normalizedUrl, sourceType)));
       if (existingClaim) {
         if (!existingClaim.searchAngleIds.includes(angle.id)) existingClaim.searchAngleIds.push(angle.id);
         if (!existingClaim.duplicateSourceUrls.includes(result.url)) existingClaim.duplicateSourceUrls.push(result.url);
@@ -185,7 +208,6 @@ export function normalizeResults(
           + existingClaim.sourceAssessment.independence * .15) * 100) / 100;
         continue;
       }
-      const sourceType = inferSourceType(normalizedUrl);
       const publicationDate = normalizePublicationDate(result.publishedAt);
       const recency = recencyScore(publicationDate, retrievedAt);
       const quality = SOURCE_QUALITY[sourceType];
@@ -193,6 +215,7 @@ export function normalizeResults(
       const independence = .9;
       const overallWeight = Math.round((quality * .35 + directness * .3 + recency * .2 + independence * .15) * 100) / 100;
       const trust = trustMetadata(sourceType, angle.kind);
+      const discoveryOnly = isVendorSeoListicle(normalizedUrl, title);
       const ignoredDirectiveCategories = [...new Set([
         ...screenedTitle.ignoredDirectiveCategories,
         ...screenedSummary.ignoredDirectiveCategories,
@@ -222,8 +245,11 @@ export function normalizeResults(
           independenceGroup: independenceGroup(normalizedUrl, sourceType),
           isPrimary: ["official_company", "pricing", "documentation", "regulator", "research", "patent", "job_posting"].includes(sourceType),
           repetitionRisk: "none",
+          discoveryOnly,
           ...trust,
-          rationale: `Weighted by ${sourceType} quality, claim directness, publication recency, and publisher independence; search rank is not treated as truth.`,
+          rationale: discoveryOnly
+            ? "Vendor-authored SEO/listicle content is retained for discovery and context only; it cannot independently establish pain or willingness to pay."
+            : `Weighted by ${sourceType} quality, claim directness, publication recency, and publisher independence; search rank is not treated as truth.`,
         },
       };
       byUrl.set(normalizedUrl, normalized);

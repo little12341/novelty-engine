@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { SearchAngle, SearchAngleKind } from "./types.ts";
+import type { IdeaCandidate, SearchAngle, SearchAngleKind } from "./types.ts";
 
 const ANGLES: Array<{ kind: SearchAngleKind; suffix: string; purpose: string; domains: string[] }> = [
   { kind: "direct_competitors", suffix: "products services companies pricing features customers", purpose: "Direct competitors, positioning, capabilities, and public pricing", domains: [] },
@@ -76,6 +76,34 @@ export function deriveFalsificationAngles(query: string, candidateSummaries: str
   return angles.slice(0, Math.max(0, limit)).map((angle, index) => ({
     id: `falsify_${index + 1}_${createHash("sha1").update(`${query}:${focus}:${angle.kind}`).digest("hex").slice(0, 7)}`,
     kind: angle.kind, query: `${query} ${angle.suffix}`, purpose: angle.purpose, targetedDomains: [],
+  }));
+}
+
+export function deriveEvidenceGapAngles(query: string, candidates: IdeaCandidate[], blockers: string[], regulated: boolean, limit = 3): SearchAngle[] {
+  const focus = candidates.slice(0, 3).map((candidate) => `${candidate.definition?.companyProfile ?? candidate.targetCustomer ?? "buyer"}; ${candidate.definition?.specificProblem ?? candidate.jobToBeDone}`).join(" | ").slice(0, 650);
+  const requested = new Set(blockers);
+  const angles: Array<{ kind: SearchAngleKind; query: string; purpose: string; domains: string[] }> = [];
+  if (requested.has("pain") || requested.has("sourceDiversity")) angles.push({
+    kind: "evidence_gap_pain",
+    query: `${query} ${focus} user review complaint workaround "we use" "switched" "would pay"`,
+    purpose: "Evidence-gate feedback: retrieve first-hand pain, workaround, churn, and user-language evidence missing from candidate gates.",
+    domains: ["reddit.com", "g2.com", "capterra.com", "trustradius.com"],
+  });
+  if (requested.has("spend") || requested.has("timing")) angles.push({
+    kind: "evidence_gap_spend",
+    query: `${query} ${focus} pricing procurement RFP budget manual labor cost current tool spend hiring coordinator case study`,
+    purpose: "Evidence-gate feedback: retrieve pricing, procurement, budget, labor-cost, current-tool-spend, hiring, and customer-case evidence.",
+    domains: [],
+  });
+  if (regulated || requested.has("sourceDiversity")) angles.push({
+    kind: "evidence_gap_institutional",
+    query: `${query} ${focus} regulator government trade association industry body standard guidance compliance official`,
+    purpose: "Evidence-gate feedback: retrieve regulator, government, trade-association, and industry-body evidence.",
+    domains: [".gov", "nist.gov", "iso.org"],
+  });
+  return angles.slice(0, Math.max(0, limit)).map((angle, index) => ({
+    id: `gate_${angle.kind}_${index + 1}_${createHash("sha1").update(`${query}:${focus}:${angle.kind}`).digest("hex").slice(0, 7)}`,
+    kind: angle.kind, query: angle.query.slice(0, 1_000), purpose: angle.purpose, targetedDomains: angle.domains,
   }));
 }
 

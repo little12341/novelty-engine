@@ -36,19 +36,19 @@ export function buildNoveltyScore(candidate: IdeaCandidate, similarities: Simila
   const closest = relevant.sort((a, b) => b.score - a.score)[0];
   const matches = new Set(closest?.matchingDimensions ?? []);
   const overlap = {
-    feature: round((matches.has("mechanism") || matches.has("coreDifferentiator") ? 7 : 0) + (closest?.score ?? 0) * 3),
+    feature: round((matches.has("mechanism") || matches.has("desiredOutcome") ? 7 : 0) + (closest?.score ?? 0) * 3),
     positioning: round((matches.has("jobToBeDone") ? 7 : 0) + (closest?.score ?? 0) * 3),
     customer: round(matches.has("targetCustomer") ? 10 : (closest?.score ?? 0) * 4),
-    workflow: round((matches.has("workflowPosition") || matches.has("interface")) ? 10 : (closest?.score ?? 0) * 4),
-    technology: round(matches.has("technology") ? 10 : (closest?.score ?? 0) * 3),
-    businessModel: round(matches.has("businessModel") ? 10 : (closest?.score ?? 0) * 3),
+    workflow: round(matches.has("workflow") ? 10 : (closest?.score ?? 0) * 4),
+    technology: round((matches.has("integrationsSystemBoundary") || matches.has("mechanism")) ? 10 : (closest?.score ?? 0) * 3),
+    businessModel: round(matches.has("pricingBusinessModel") ? 10 : (closest?.score ?? 0) * 3),
   };
   const averageOverlap = Object.values(overlap).reduce((sum, value) => sum + value, 0) / 6;
   const score = closest ? Math.round(clamp((10 - averageOverlap) * 10, 0, 100)) : 0;
   return {
     score, overlap, closestCompetitorId: closest ? (closest.leftId === candidate.id ? closest.rightId : closest.leftId) : null,
-    collisionDetected: Boolean(closest && (closest.score >= .72 || averageOverlap >= 7)),
-    rationale: closest ? "Compares feature/mechanism, positioning/job, customer, workflow/interface, technology, and business-model overlap with the closest retrieved competitor fingerprint." : "No competitor fingerprint was available, so the score receives no absence-based novelty credit.",
+    collisionDetected: Boolean(closest && (closest.score >= .62 || averageOverlap >= 7)),
+    rationale: closest ? `Compares structured buyer, job, workflow, desired outcome, core mechanism, system boundary/integrations, pricing/business model, and distribution context. ${closest.explanation}` : "No competitor fingerprint was available, so the score receives no absence-based novelty credit.",
     heuristic: true,
   };
 }

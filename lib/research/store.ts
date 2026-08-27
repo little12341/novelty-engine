@@ -25,6 +25,7 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
       provenance: source.sourceAssessment.provenance ?? (source.sourceAssessment.isPrimary ? "company_controlled" : "independent_secondary"),
       commercialBiasRisk: source.sourceAssessment.commercialBiasRisk ?? "unknown",
       observationKind: source.sourceAssessment.observationKind ?? "mixed",
+      discoveryOnly: source.sourceAssessment.discoveryOnly ?? false,
     },
   }));
   result.coverage = {
@@ -39,6 +40,13 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
     agentCalls: result.budgetUsage.agentCalls ?? 0,
     estimatedProviderCredits: result.budgetUsage.estimatedProviderCredits ?? result.budgetUsage.providerCalls,
     gracefulDegradation: result.budgetUsage.gracefulDegradation ?? (result.stopDecision.status === "insufficient_evidence" ? "insufficient_evidence" : "none"),
+    expansionStopReason: result.budgetUsage.expansionStopReason ?? "not_needed",
+  };
+  result.limits.minCredibleCompetitors ??= 5;
+  result.limits.competitorQueriesPerCandidate ??= 2;
+  result.competitorRecall ??= {
+    minimumCredibleCompetitors: result.limits.minCredibleCompetitors,
+    primaryQueries: 0, crossCheckQueries: 0, escalationQueries: 0, candidates: [],
   };
   result.roleOutputs ??= [];
   result.checkpoints ??= [{

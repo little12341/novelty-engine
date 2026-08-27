@@ -6,6 +6,7 @@ import type { ProviderSearchResult, SearchProvider } from "./types.ts";
 
 type MarketId = "crowded_consumer" | "b2b_workflow" | "regulated_market" | "software_tooling" | "insufficient_evidence";
 const fixtures = JSON.parse(await readFile(new URL("./fixtures/regression-markets.json", import.meta.url), "utf8")) as Record<MarketId, ProviderSearchResult[]>;
+const coiFixture = JSON.parse(await readFile(new URL("./fixtures/coi-compliance.json", import.meta.url), "utf8")) as { primary: ProviderSearchResult[]; crossCheck: ProviderSearchResult[] };
 
 function providerFor(id: MarketId): SearchProvider {
   const rows = fixtures[id];
@@ -107,4 +108,29 @@ test("malformed or fully timed-out providers degrade to insufficient evidence wi
     assert.equal(result.candidates.length, 0);
     assert.equal(result.finalOpportunities.length, 0);
   }
+});
+
+test("COI/subcontractor compliance recall surfaces major direct players and the independent pass overturns low competition", async () => {
+  const queried: string[] = [];
+  const provider: SearchProvider = {
+    id: "fixture-coi-recall", displayName: "COI recall regression provider",
+    async search(query) {
+      queried.push(query);
+      return /replace spreadsheet consultant broker|vendor shortlist|who solves this/i.test(query)
+        ? coiFixture.crossCheck : coiFixture.primary;
+    },
+  };
+  const result = await runResearch("Find opportunities in COI and subcontractor insurance compliance software for general contractors", {
+    provider, persist: false, bypassCache: true, now: () => new Date("2026-08-27T12:00:00Z"),
+  });
+  const names = result.competitors.map((item) => item.name.value ?? "").join(" | ");
+  for (const expected of ["Jones", "TrustLayer", "Certificial", "SmartCompliance"]) assert.match(names, new RegExp(expected, "i"), expected);
+  assert.ok(queried.some((query) => /replace spreadsheet consultant broker|vendor shortlist/i.test(query)), "mandatory independent cross-check must execute");
+  const audits = result.competitorRecall.candidates;
+  assert.ok(audits.length > 0 && audits.every((item) => item.crossCheckComplete));
+  assert.ok(audits.some((item) => item.materialNewDirectCompetitorIds.length >= 2), "second pass must record material competitors absent from primary discovery");
+  assert.ok(result.competitors.length >= 5 && result.gaps.some((gap) => ["medium", "high"].includes(gap.competitiveDensity)), "mature COI category must not remain low-density or near-greenfield");
+  const competitorIds = new Set(result.competitors.map((item) => item.id));
+  const closest = result.similarities.filter((item) => competitorIds.has(item.leftId) || competitorIds.has(item.rightId)).reduce((max, item) => Math.max(max, item.score), 0);
+  assert.ok(closest >= .42, `structured collision similarity should reflect same-buyer/same-job competition, got ${closest}`);
 });

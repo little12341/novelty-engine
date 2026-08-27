@@ -47,7 +47,7 @@ export function summarizeCompetitor(competitor: Competitor, result: ResearchResu
     targetCustomer: competitor.targetCustomer.value, coreJobToBeDone: competitor.coreJobToBeDone.value,
     pricing: competitor.pricing.value, keyFeatures: competitor.keyFeatures.value,
     positioning: competitor.positioning.value, likelyStrengths: competitor.likelyStrengths.value,
-    likelyWeaknesses: competitor.likelyWeaknesses.value, unknownFields: unknownCompetitorFields(competitor),
+    likelyWeaknesses: competitor.likelyWeaknesses.value, relationship: competitor.relationship?.value ?? null, unknownFields: unknownCompetitorFields(competitor),
     intelligence: competitor.intelligence,
     unknownIntelligenceFields: unknownCompetitorIntelligenceFields(competitor),
     citations: citationsFor(competitor.evidenceIds, result),
@@ -62,6 +62,7 @@ export function summarizeResearch(result: ResearchResult) {
     return {
       candidateId: opportunity.candidate.id, name: opportunity.candidate.name,
       summary: opportunity.candidate.summary, targetCustomer: opportunity.candidate.targetCustomer,
+      definition: opportunity.candidate.definition,
       mechanism: opportunity.candidate.mechanism, opportunityScore: opportunity.score.score,
       confidence: opportunity.score.confidenceLabel, scoreIsHeuristic: opportunity.score.heuristic,
       falsification: {
@@ -106,12 +107,13 @@ export function summarizeResearch(result: ResearchResult) {
     qualityCheckpoints: result.checkpoints,
     taskGraph: result.taskGraph,
     searchBranches: result.searchBranches,
+    competitorRecall: result.competitorRecall,
     candidateLifecycles: result.candidateLifecycles,
     nextBestAction: result.nextBestAction,
     stopDecision: result.stopDecision,
     citations: citationsFor([...evidenceIds], result, 20), warnings: result.warnings,
     budgetUsage: result.budgetUsage,
-    unknowns: survivors.length === 0 ? [result.stopDecision.status === "insufficient_evidence" ? "Insufficient evidence for a compelling opportunity; no candidate was forced." : "No opportunity survived the bounded falsification loop."] : [],
+    unknowns: survivors.length === 0 ? [result.stopDecision.status === "insufficient_evidence" ? "Insufficient evidence for a compelling opportunity; no candidate was forced." : result.budgetUsage.exhausted ? "No opportunity survived after the configured retrieval and expansion budget was exhausted." : "No opportunity survived in the branches searched so far; this is not an exhaustive market rejection."] : [],
     retrievalHint: "Use get_research_run with include_full=true only when the full internal record is needed.",
   };
 }

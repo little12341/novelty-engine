@@ -50,7 +50,8 @@ function assessResidualUnmetDemand(candidate: IdeaCandidate, gap: CandidateGap |
   const competitorsPresent = explicitCompetitorIds.size > 0 || comparisons.length > 0;
   const sameJobSameUserSubstitute = comparisons.some((item) => {
     const dimensions = new Set(item.matchingDimensions);
-    return item.score >= .72 && dimensions.has("targetCustomer") && dimensions.has("jobToBeDone");
+    return item.score >= .42 && dimensions.has("targetCustomer") && dimensions.has("jobToBeDone")
+      || (item.dimensionScores?.targetCustomer ?? 0) >= .5 && (item.dimensionScores?.jobToBeDone ?? 0) >= .5;
   });
   const relevantIds = unique([...(gap?.supportingEvidenceIds ?? []), ...(gap?.counterEvidenceIds ?? []), ...candidate.evidenceIds]);
   const relevantEvidence = input.evidence.filter((item) => relevantIds.includes(item.id));
@@ -201,7 +202,7 @@ export function falsifyCandidate(candidate: IdeaCandidate, input: {
     }
     if (dimension === "defensibility") {
       counterEvidenceIds.push(...idsMatching(/incumbent|bundle|copy|open.source|commodity/i));
-      risk = maxSimilarity > 0.65 ? 8 : 6;
+      risk = maxSimilarity > 0.55 ? 8 : 6;
     }
     if (dimension === "regulation") {
       const regulatory = input.evidence.filter((item) => item.sourceType === "regulator" || /regulat|rule|policy/i.test(`${item.title} ${item.summary}`));

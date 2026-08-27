@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { deriveBusinessSearchAngles, deriveSearchAngles, deriveFalsificationAngles, buildProviderQuery } from "./angles.ts";
+import { deriveBusinessSearchAngles, deriveSearchAngles, deriveFalsificationAngles, deriveEvidenceGapAngles, buildProviderQuery } from "./angles.ts";
 import { clusterComplaints, detectUnderservedSegments, extractCompetitors } from "./analyze.ts";
 import { detectGaps } from "./gaps.ts";
 import { canonicalizeQuery, normalizeResults } from "./normalize.ts";
@@ -14,6 +14,7 @@ import { createEvidenceSnapshot } from "./snapshots.ts";
 import { buildCompanyProfile } from "./company.ts";
 import { deriveExpansionBranches } from "./expansion.ts";
 import { RESEARCH_ENGINE_VERSION, type ResearchDepth, type SearchAngle, type SearchBranch } from "./types.ts";
+import { buildCompetitorRecallReport, credibleCompetitor, establishedCategory, planCompetitorDiscovery } from "./competitor-discovery.ts";
 
 const absoluteMax = (raw: string | undefined, fallback: number, max: number) => {
   const value = Number.parseInt(raw ?? "", 10);
@@ -25,24 +26,26 @@ const absoluteMaxZero = (raw: string | undefined, fallback: number, max: number)
 };
 
 export function researchLimits(env: NodeJS.ProcessEnv = process.env, depth: ResearchDepth = "standard"): ResearchLimits {
-  const depthQueryCap = depth === "fast" ? 6 : 12;
-  const maxSearchQueries = Math.min(depthQueryCap, absoluteMax(env.RESEARCH_MAX_QUERIES, depthQueryCap, 12));
+  const depthQueryCap = depth === "fast" ? 12 : depth === "deep" ? 48 : 28;
+  const maxSearchQueries = Math.min(depthQueryCap, absoluteMax(env.RESEARCH_MAX_QUERIES, depthQueryCap, 48));
   const resultsPerQuery = absoluteMax(env.RESEARCH_RESULTS_PER_QUERY, depth === "fast" ? 4 : depth === "deep" ? 10 : 6, 10);
-  const maxProviderCalls = absoluteMax(env.RESEARCH_MAX_PROVIDER_CALLS, maxSearchQueries, 12);
+  const maxProviderCalls = absoluteMax(env.RESEARCH_MAX_PROVIDER_CALLS, maxSearchQueries, 48);
   return {
     maxQueryLength: 500, maxSearchQueries: Math.min(maxSearchQueries, maxProviderCalls), resultsPerQuery,
-    maxSources: Math.min(80, maxSearchQueries * resultsPerQuery), maxCandidates: absoluteMax(env.RESEARCH_MAX_CANDIDATES, 30, 48),
+    maxSources: Math.min(180, maxSearchQueries * resultsPerQuery), maxCandidates: absoluteMax(env.RESEARCH_MAX_CANDIDATES, 30, 48),
     maxModelIterations: absoluteMaxZero(env.RESEARCH_MAX_MODEL_ITERATIONS, 0, 6),
     maxSurvivorIterations: absoluteMax(env.RESEARCH_MAX_SURVIVOR_ITERATIONS, 1, 1),
     maxProviderCalls,
     maxCounterevidenceSearches: Math.min(depth === "fast" ? 1 : depth === "standard" ? 2 : 4, absoluteMax(env.RESEARCH_MAX_COUNTEREVIDENCE_SEARCHES, depth === "deep" ? 4 : 2, 4)),
     maxAgentCalls: absoluteMaxZero(env.RESEARCH_MAX_AGENT_CALLS, 0, 8),
-    maxProviderSpendCredits: absoluteMax(env.RESEARCH_MAX_PROVIDER_SPEND_CREDITS, maxProviderCalls, 12),
+    maxProviderSpendCredits: absoluteMax(env.RESEARCH_MAX_PROVIDER_SPEND_CREDITS, maxProviderCalls, 48),
     maxConcurrency: absoluteMax(env.RESEARCH_MAX_CONCURRENCY, 3, 6),
     maxRetriesPerSearch: absoluteMax(env.RESEARCH_MAX_RETRIES_PER_SEARCH, 1, 2),
     timeoutMs: absoluteMax(env.RESEARCH_TIMEOUT_MS, 15_000, 30_000),
-    maxExpansionBranches: depth === "fast" ? 0 : absoluteMaxZero(env.RESEARCH_MAX_EXPANSION_BRANCHES, depth === "deep" ? 4 : 2, 4),
-    maxRunDurationMs: absoluteMax(env.RESEARCH_MAX_RUN_DURATION_MS, depth === "fast" ? 20_000 : depth === "deep" ? 120_000 : 55_000, 120_000),
+    maxExpansionBranches: depth === "fast" ? 0 : absoluteMaxZero(env.RESEARCH_MAX_EXPANSION_BRANCHES, depth === "deep" ? 8 : 5, 8),
+    maxRunDurationMs: absoluteMax(env.RESEARCH_MAX_RUN_DURATION_MS, depth === "fast" ? 30_000 : depth === "deep" ? 120_000 : 75_000, 120_000),
+    minCredibleCompetitors: absoluteMax(env.RESEARCH_MIN_CREDIBLE_COMPETITORS, 5, 15),
+    competitorQueriesPerCandidate: absoluteMax(env.RESEARCH_COMPETITOR_QUERIES_PER_CANDIDATE, 2, 4),
   };
 }
 
@@ -182,8 +185,9 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   let focusComplaints = provisionalComplaints;
   let focusSegments = provisionalSegments;
   let focusGaps = provisionalGaps;
-  const weakInitialSurvivors = provisionalOpportunity.finalOpportunities.length === 0
-    || provisionalOpportunity.finalOpportunities.every((item) => item.adversarialReview.judge.verdict !== "SURVIVES");
+  let expansionStopReason: ResearchResult["budgetUsage"]["expansionStopReason"] = "not_needed";
+  const weakInitialSurvivors = provisionalOpportunity.candidates.length === 0
+    || !provisionalOpportunity.falsificationResults.some((item) => item.outcome === "survived");
   if (weakInitialSurvivors && limits.maxExpansionBranches > 0) {
     const available = Math.min(limits.maxExpansionBranches, limits.maxSearchQueries - landscapeAngles.length, limits.maxProviderCalls - providerCalls, limits.maxProviderSpendCredits - providerCalls);
     if (available > 0) {
@@ -199,20 +203,109 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
       const focusCoverage = assessCoverage({ angles: [...landscapeAngles, ...expansion.angles], successfulAngleIds: [...landscapeResults, ...expansionResults].map((item) => item.angle.id), evidence: focusSources, regulatedMarket: isRegulatedQuery(query) });
       const focusStop = decideStop({ coverage: focusCoverage, gaps: focusGaps, competitors: focusCompetitors });
       provisionalOpportunity = runOpportunityPipeline({ query, sources: focusSources, competitors: focusCompetitors, complaints: focusComplaints, segments: focusSegments, gaps: focusGaps, limits, now: now(), allowGeneration: focusStop.canGenerateCandidates, excludedMechanisms: options.userContext?.previouslyRejectedMechanisms, userContext: options.userContext, depth });
-      if (expansionResults.length === 0) searchBranches = searchBranches.map((branch) => ({ ...branch, status: "no_new_evidence" }));
+      const newEvidenceCount = focusSources.length - provisionalSources.length;
+      if (expansionResults.length === 0 || newEvidenceCount <= 0) {
+        searchBranches = searchBranches.map((branch) => ({ ...branch, status: "no_new_evidence" }));
+        expansionStopReason = failures.length ? "provider_limit" : "coverage_plateau";
+      } else if (provisionalOpportunity.falsificationResults.some((item) => item.outcome === "survived")) expansionStopReason = "survivor_found";
+      else expansionStopReason = available >= limits.maxExpansionBranches || providerCalls >= limits.maxProviderCalls ? "budget_exhausted" : "duplicate_branches";
     }
+    else expansionStopReason = "budget_exhausted";
   }
+  else if (weakInitialSurvivors) expansionStopReason = "budget_exhausted";
+  const recallSeeds = provisionalOpportunity.candidates.filter((candidate) => candidate.iteration === 0);
+  const fullRecallPlan = planCompetitorDiscovery(recallSeeds, focusGaps, limits.competitorQueriesPerCandidate);
+  const recallCapacity = Math.max(0, Math.min(
+    limits.maxSearchQueries - landscapeAngles.length - expansionAngles.length - 2,
+    limits.maxProviderCalls - providerCalls - 2,
+    limits.maxProviderSpendCredits - providerCalls - 2,
+  ));
+  const groupCost = limits.competitorQueriesPerCandidate * 2;
+  const selectedGroups = fullRecallPlan.groups.slice(0, Math.floor(recallCapacity / Math.max(1, groupCost)));
+  const selectedSuffixes = selectedGroups.map((group) => group.id.slice(-10));
+  const recallPlan = {
+    groups: selectedGroups,
+    primaryAngles: fullRecallPlan.primaryAngles.filter((angle) => selectedSuffixes.some((suffix) => angle.id.includes(suffix))),
+    crossCheckAngles: fullRecallPlan.crossCheckAngles.filter((angle) => selectedSuffixes.some((suffix) => angle.id.includes(suffix))),
+    escalationAngles: fullRecallPlan.escalationAngles.filter((angle) => selectedSuffixes.some((suffix) => angle.id.includes(suffix))),
+  };
+  const primaryCompetitorResults = recallPlan.primaryAngles.length ? await executeAngles(recallPlan.primaryAngles) : [];
+  const crossCheckCompetitorResults = recallPlan.crossCheckAngles.length ? await executeAngles(recallPlan.crossCheckAngles) : [];
+  let competitorSearchBatches = [...primaryCompetitorResults, ...crossCheckCompetitorResults];
+  focusSources = normalizeResults([...landscapeResults, ...expansionResults, ...competitorSearchBatches], now().toISOString(), limits.maxSources);
+  focusCompetitors = extractCompetitors(focusSources);
+  focusComplaints = clusterComplaints(focusSources);
+  focusSegments = detectUnderservedSegments(focusSources);
+  focusGaps = detectGaps(focusSources, focusCompetitors, focusComplaints, focusSegments);
+  const credibleAfterCrossCheck = focusCompetitors.filter((item) => credibleCompetitor(item, focusSources)).length;
+  const escalationTriggeredGroupIds = establishedCategory(query, focusCompetitors) && credibleAfterCrossCheck < limits.minCredibleCompetitors
+    ? recallPlan.groups.map((group) => group.id) : [];
+  const escalationAvailable = Math.max(0, Math.min(
+    limits.maxSearchQueries - landscapeAngles.length - expansionAngles.length - recallPlan.primaryAngles.length - recallPlan.crossCheckAngles.length - 2,
+    limits.maxProviderCalls - providerCalls - 2,
+    limits.maxProviderSpendCredits - providerCalls - 2,
+  ));
+  const escalationAngles = escalationTriggeredGroupIds.length ? recallPlan.escalationAngles.slice(0, escalationAvailable) : [];
+  const escalationResults = escalationAngles.length ? await executeAngles(escalationAngles) : [];
+  competitorSearchBatches = [...competitorSearchBatches, ...escalationResults];
+  focusSources = normalizeResults([...landscapeResults, ...expansionResults, ...competitorSearchBatches], now().toISOString(), limits.maxSources);
+  focusCompetitors = extractCompetitors(focusSources);
+  focusComplaints = clusterComplaints(focusSources);
+  focusSegments = detectUnderservedSegments(focusSources);
+  focusGaps = detectGaps(focusSources, focusCompetitors, focusComplaints, focusSegments);
+  let competitorRecall = buildCompetitorRecallReport({
+    query, plan: recallPlan, candidates: recallSeeds, competitors: focusCompetitors, evidence: focusSources,
+    successfulAngleIds: competitorSearchBatches.map((item) => item.angle.id), minimumCredibleCompetitors: limits.minCredibleCompetitors,
+    escalationTriggeredGroupIds,
+  });
+  let focusCoverage = assessCoverage({
+    angles: [...landscapeAngles, ...expansionAngles, ...recallPlan.primaryAngles, ...recallPlan.crossCheckAngles, ...escalationAngles],
+    successfulAngleIds: [...landscapeResults, ...expansionResults, ...competitorSearchBatches].map((item) => item.angle.id),
+    evidence: focusSources, regulatedMarket: isRegulatedQuery(query),
+  });
+  let focusStop = decideStop({ coverage: focusCoverage, gaps: focusGaps, competitors: focusCompetitors });
+  provisionalOpportunity = runOpportunityPipeline({
+    query, sources: focusSources, competitors: focusCompetitors, complaints: focusComplaints, segments: focusSegments, gaps: focusGaps,
+    limits, now: now(), allowGeneration: focusStop.canGenerateCandidates, excludedMechanisms: options.userContext?.previouslyRejectedMechanisms,
+    userContext: options.userContext, depth, competitorRecall: competitorRecall.candidates,
+  });
+
+  const missingGateFamilies = [...new Set(provisionalOpportunity.evidenceGates.flatMap((gate) => Object.entries(gate.checks)
+    .filter(([, passed]) => !passed).map(([name]) => name)))];
+  const gateCapacity = Math.max(0, Math.min(3,
+    limits.maxSearchQueries - landscapeAngles.length - expansionAngles.length - recallPlan.primaryAngles.length - recallPlan.crossCheckAngles.length - escalationAngles.length - 1,
+    limits.maxProviderCalls - providerCalls - 1,
+    limits.maxProviderSpendCredits - providerCalls - 1,
+  ));
+  const evidenceGapAngles = gateCapacity > 0
+    ? deriveEvidenceGapAngles(query, provisionalOpportunity.candidates, missingGateFamilies, isRegulatedQuery(query), gateCapacity) : [];
+  const evidenceGapResults = evidenceGapAngles.length ? await executeAngles(evidenceGapAngles) : [];
+  if (evidenceGapResults.length) {
+    focusSources = normalizeResults([...landscapeResults, ...expansionResults, ...competitorSearchBatches, ...evidenceGapResults], now().toISOString(), limits.maxSources);
+    focusCompetitors = extractCompetitors(focusSources);
+    focusComplaints = clusterComplaints(focusSources);
+    focusSegments = detectUnderservedSegments(focusSources);
+    focusGaps = detectGaps(focusSources, focusCompetitors, focusComplaints, focusSegments);
+    competitorRecall = buildCompetitorRecallReport({ query, plan: recallPlan, candidates: recallSeeds, competitors: focusCompetitors, evidence: focusSources,
+      successfulAngleIds: competitorSearchBatches.map((item) => item.angle.id), minimumCredibleCompetitors: limits.minCredibleCompetitors, escalationTriggeredGroupIds });
+    focusCoverage = assessCoverage({ angles: [...landscapeAngles, ...expansionAngles, ...recallPlan.primaryAngles, ...recallPlan.crossCheckAngles, ...escalationAngles, ...evidenceGapAngles],
+      successfulAngleIds: [...landscapeResults, ...expansionResults, ...competitorSearchBatches, ...evidenceGapResults].map((item) => item.angle.id), evidence: focusSources, regulatedMarket: isRegulatedQuery(query) });
+    focusStop = decideStop({ coverage: focusCoverage, gaps: focusGaps, competitors: focusCompetitors });
+    provisionalOpportunity = runOpportunityPipeline({ query, sources: focusSources, competitors: focusCompetitors, complaints: focusComplaints, segments: focusSegments,
+      gaps: focusGaps, limits, now: now(), allowGeneration: focusStop.canGenerateCandidates, excludedMechanisms: options.userContext?.previouslyRejectedMechanisms,
+      userContext: options.userContext, depth, competitorRecall: competitorRecall.candidates });
+  }
+
   const seenMechanisms = new Set<string>();
   const candidateFocus = provisionalOpportunity.candidates.filter((candidate) => candidate.iteration === 0 && !seenMechanisms.has(candidate.mechanismFamily) && seenMechanisms.add(candidate.mechanismFamily)).map((candidate) =>
-    `${candidate.mechanismFamily} for ${candidate.targetCustomer ?? "unknown"}: ${candidate.differentiator}`,
+    `${candidate.definition?.companyProfile ?? candidate.targetCustomer ?? "unknown buyer"}; ${candidate.jobToBeDone}; ${candidate.mechanism}; ${candidate.differentiator}`,
   );
-  const remainingAngles = Math.min(limits.maxCounterevidenceSearches, limits.maxSearchQueries - landscapeAngles.length - expansionAngles.length, limits.maxProviderCalls - providerCalls, limits.maxProviderSpendCredits - providerCalls);
-  const falsificationAngles = candidateFocus.length && remainingAngles > 0
-    ? deriveFalsificationAngles(query, candidateFocus, remainingAngles)
-    : [];
+  const usedAngles = landscapeAngles.length + expansionAngles.length + recallPlan.primaryAngles.length + recallPlan.crossCheckAngles.length + escalationAngles.length + evidenceGapAngles.length;
+  const remainingAngles = Math.min(limits.maxCounterevidenceSearches, limits.maxSearchQueries - usedAngles, limits.maxProviderCalls - providerCalls, limits.maxProviderSpendCredits - providerCalls);
+  const falsificationAngles = candidateFocus.length && remainingAngles > 0 ? deriveFalsificationAngles(query, candidateFocus, remainingAngles) : [];
   const falsificationResults = falsificationAngles.length ? await executeAngles(falsificationAngles) : [];
-  const searchAngles = [...landscapeAngles, ...expansionAngles, ...falsificationAngles];
-  const successful = [...landscapeResults, ...expansionResults, ...falsificationResults];
+  const searchAngles = [...landscapeAngles, ...expansionAngles, ...recallPlan.primaryAngles, ...recallPlan.crossCheckAngles, ...escalationAngles, ...evidenceGapAngles, ...falsificationAngles];
+  const successful = [...landscapeResults, ...expansionResults, ...competitorSearchBatches, ...evidenceGapResults, ...falsificationResults];
 
   const retrievedAt = now().toISOString();
   const sources = normalizeResults(successful, retrievedAt, limits.maxSources);
@@ -220,22 +313,33 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   const complaintClusters = clusterComplaints(sources);
   const underservedSegments = detectUnderservedSegments(sources);
   const gaps = detectGaps(sources, competitors, complaintClusters, underservedSegments);
+  competitorRecall = buildCompetitorRecallReport({
+    query, plan: recallPlan, candidates: recallSeeds, competitors, evidence: sources,
+    successfulAngleIds: successful.map((item) => item.angle.id), minimumCredibleCompetitors: limits.minCredibleCompetitors,
+    escalationTriggeredGroupIds,
+  });
   const successfulAngleIds = successful.map((item) => item.angle.id);
   const counterevidenceBudgetExhausted = focusGaps.length > 0 && falsificationAngles.length === 0;
   const coverage = assessCoverage({ angles: searchAngles, successfulAngleIds, evidence: sources, regulatedMarket: isRegulatedQuery(query), counterevidenceBudgetExhausted });
   const stopDecision = decideStop({ coverage, gaps, competitors });
-  const opportunity = runOpportunityPipeline({ query, sources, competitors, complaints: complaintClusters, segments: underservedSegments, gaps, limits, now: now(), allowGeneration: stopDecision.canGenerateCandidates, excludedMechanisms: options.userContext?.previouslyRejectedMechanisms, userContext: options.userContext, depth });
+  const opportunity = runOpportunityPipeline({ query, sources, competitors, complaints: complaintClusters, segments: underservedSegments, gaps, limits, now: now(), allowGeneration: stopDecision.canGenerateCandidates, excludedMechanisms: options.userContext?.previouslyRejectedMechanisms, userContext: options.userContext, depth, competitorRecall: competitorRecall.candidates });
   opportunity.budgetUsage.providerCalls = providerCalls;
   opportunity.budgetUsage.counterevidenceSearches = falsificationResults.length;
   opportunity.budgetUsage.estimatedProviderCredits = providerCalls;
-  opportunity.budgetUsage.exhausted ||= providerCalls >= limits.maxProviderCalls;
+  opportunity.budgetUsage.exhausted = providerCalls >= limits.maxProviderCalls || providerCalls >= limits.maxProviderSpendCredits
+    || searchAngles.length >= limits.maxSearchQueries || Date.now() - wallStartedAt >= limits.maxRunDurationMs;
+  opportunity.budgetUsage.expansionStopReason = expansionStopReason;
   const warnings = [...failures];
   if (complaintClusters.length === 0) warnings.push("No supported complaint clusters were found; the result contains no inferred market gaps rather than manufacturing them.");
   if (gaps.length > 0 && gaps.every((gap) => gap.confidenceLabel === "speculative opportunity")) warnings.push("All detected openings remain speculative because retrieved support is weak or isolated.");
   if (sources.length === 0) warnings.push("No usable public sources were retrieved. The run is returned as insufficient evidence; no candidate was generated.");
   if (!falsificationAngles.length && focusGaps.length > 0) warnings.push("The provider-call budget left no room for active candidate counterevidence searches; falsification dimensions without evidence remain UNKNOWN.");
   if (searchBranches.length) warnings.push(`${searchBranches.length} adjacent search branch(es) were attempted because the initial niche produced no survival-gate candidate; exact failure reasons were carried forward as negative search memory.`);
-  if (stopDecision.canGenerateCandidates && opportunity.finalOpportunities.length === 0) warnings.push("No candidate survived the bounded competitor, falsification, and mutation gates; the response intentionally contains no mediocre filler ideas.");
+  if (competitorRecall.candidates.some((item) => item.materialNewDirectCompetitorIds.length)) warnings.push("The mandatory independent competitor cross-check found material direct competitors absent from the primary pass; discoveries were merged before collision scoring, falsification, Bull/Bear/Judge review, and selection.");
+  if (competitorRecall.candidates.some((item) => !item.crossCheckComplete)) warnings.push("At least one candidate structural group could not complete its independent competitor cross-check and is ineligible for SURVIVED classification.");
+  if (stopDecision.canGenerateCandidates && opportunity.finalOpportunities.length === 0) warnings.push(opportunity.budgetUsage.exhausted
+    ? "No candidate survived after the configured search/expansion budget was exhausted; the response intentionally contains no mediocre filler ideas."
+    : "No opportunity survived in the branches searched so far; retrieval stopped only for the persisted expansion reason and does not imply exhaustive market rejection.");
   if (stopDecision.status !== "proceed") warnings.push(...stopDecision.reasons);
   const injectionCount = sources.filter((item) => item.security.promptInjectionDetected).length;
   if (injectionCount) warnings.push(`${injectionCount} retrieved source record(s) contained instruction-like text; directives were ignored and the content remained untrusted research data.`);
@@ -261,7 +365,7 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
       : failures.length ? "partial_provider_failure" : "none";
   const checkpoints = [
     checkpoint("source_validation_deduplication", "passed", `${sources.length} normalized source records; ${coverage.duplicateClaimsCollapsed} duplicate or syndicated claims collapsed.`, completedAt),
-    checkpoint("competitor_substitute_check", successful.some((item) => ["direct_competitors", "adjacent_categories", "active_falsification_competition"].includes(item.angle.kind)) ? "passed" : "failed", competitors.length ? `${competitors.length} supported competitors/substitutes inspected.` : "No supported competitor was found; coverage limitation remains visible.", completedAt),
+    checkpoint("competitor_substitute_check", competitorRecall.candidates.length > 0 && competitorRecall.candidates.every((item) => item.crossCheckComplete) ? "passed" : "failed", competitors.length ? `${competitors.length} supported competitors/substitutes inspected after primary and independent cross-check passes.` : "No supported competitor was found; coverage limitation remains visible.", completedAt),
     checkpoint("residual_gap_test", opportunity.candidates.length ? "passed" : "not_applicable", opportunity.candidates.length ? "Every promoted candidate received a structured residual-unmet-demand assessment during falsification." : "No candidate cleared the evidence gate.", completedAt),
     checkpoint("candidate_mechanism_deduplication", opportunity.candidates.length ? "passed" : "not_applicable", "Duplicate mechanism families were collapsed before final candidate count.", completedAt),
     checkpoint("falsification", opportunity.finalOpportunities.every((item) => item.falsification.outcome === "survived") ? "passed" : "failed", `${opportunity.falsificationResults.length} candidates received an adversarial falsification result.`, completedAt),
@@ -283,6 +387,7 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
     searchAngles,
     sources,
     competitors,
+    competitorRecall,
     complaintClusters,
     underservedSegments,
     gaps,

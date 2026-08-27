@@ -19,11 +19,11 @@ function supported<T>(value: T | null, evidenceIds: string[], confidence: number
 function productName(title: string, hostname: string): string {
   const parts = title.split(/\s+[|–—:]\s+|\s+-\s+/).map((part) => part.trim());
   const candidate = parts.find((part) => !/^(home|pricing|features?|plans?|documentation)$/i.test(part));
-  if (candidate && candidate.length >= 2 && candidate.length <= 70) return candidate;
+  if (candidate && candidate.length >= 2 && candidate.length <= 70) return candidate.replace(/\s+(?:reviews?|pricing|plans?|features?|documentation)$/i, "").trim();
   return hostname.split(".")[0].replace(/(^|[-_])\w/g, (match) => match.replace(/[-_]/, "").toUpperCase());
 }
 
-const FEATURE_TERMS = ["scheduling", "invoicing", "automation", "mobile", "reporting", "payments", "integrations", "collaboration", "compliance", "analytics", "crm", "marketplace", "workflow"];
+const FEATURE_TERMS = ["scheduling", "invoicing", "automation", "mobile", "reporting", "payments", "integrations", "collaboration", "compliance", "certificate tracking", "insurance", "vendor management", "risk", "procurement", "analytics", "crm", "marketplace", "workflow"];
 
 function extractFeatures(text: string): string[] {
   const lower = text.toLowerCase();
@@ -38,8 +38,20 @@ function extractPricing(text: string): string | null {
 }
 
 function extractTargetCustomer(text: string): string | null {
-  const match = text.match(/\bfor\s+((?:small |independent |growing |solo |regulated )?(?:contractors?|creators?|teams?|companies|businesses|operators|professionals|developers|agencies|home service companies))\b/i);
+  const match = text.match(/\bfor\s+((?:(?:small|mid[- ]?market|independent|growing|solo|regulated|commercial|general|specialty)\s+){0,3}(?:contractors?|subcontractors?|construction (?:companies|teams|firms)|home service companies|creators?|finance teams?|field teams?|operations teams?|compliance teams?|risk teams?|engineering teams?|developers?|agencies|companies|businesses|operators|professionals|enterprises?|smbs?))\b/i);
   return match?.[1] ?? null;
+}
+
+function competitorGroupKey(item: Evidence): string {
+  const url = new URL(item.normalizedUrl);
+  const host = url.hostname.replace(/^(app|docs|help|support)\./, "");
+  if (["review", "product_directory", "app_marketplace"].includes(item.sourceType)) {
+    const parts = url.pathname.split("/").filter(Boolean);
+    const marker = parts.findIndex((part) => /products?|software|apps?/i.test(part));
+    const product = marker >= 0 ? parts[marker + 1] : parts[0];
+    if (product) return `${host}/${product.toLowerCase()}`;
+  }
+  return host;
 }
 
 function snippets(items: Evidence[], pattern: RegExp, limit = 4): { values: string[]; ids: string[] } {
@@ -48,17 +60,18 @@ function snippets(items: Evidence[], pattern: RegExp, limit = 4): { values: stri
 }
 
 export function extractCompetitors(evidence: Evidence[]): Competitor[] {
-  const eligible = evidence.filter((item) => ["official_company", "pricing", "documentation", "product_directory", "app_marketplace"].includes(item.sourceType));
+  const eligible = evidence.filter((item) => ["official_company", "pricing", "documentation", "review", "product_directory", "app_marketplace"].includes(item.sourceType));
   const grouped = new Map<string, Evidence[]>();
   for (const item of eligible) {
-    const host = new URL(item.normalizedUrl).hostname.replace(/^(app|docs|help|support)\./, "");
-    const group = grouped.get(host) ?? [];
+    const key = competitorGroupKey(item);
+    const group = grouped.get(key) ?? [];
     group.push(item);
-    grouped.set(host, group);
+    grouped.set(key, group);
   }
 
-  return [...grouped.entries()].slice(0, 15).map(([host, items]) => {
+  const extracted = [...grouped.entries()].slice(0, 30).map(([groupKey, items]) => {
     const primary = items[0];
+    const host = new URL(primary.normalizedUrl).hostname.replace(/^(app|docs|help|support)\./, "");
     const allText = items.map((item) => `${item.title}. ${item.summary}`).join(" ");
     const ids = items.map((item) => item.id);
     const pricingEvidence = items.find((item) => item.sourceType === "pricing" || extractPricing(`${item.title} ${item.summary}`));
@@ -82,10 +95,14 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
     const launches = snippets(mentions, /launch|released|introduced|announced|new product/i);
     const strategic = mentions.find((item) => /strategy|roadmap|expanding|focus|positioning|mission/i.test(`${item.title} ${item.summary}`));
     const completeIds = [...new Set([...ids, ...weaknessEvidence.map((item) => item.id), ...mentions.map((item) => item.id)])];
+    const substituteLanguage = /\b(?:manual|spreadsheet|paper|shared inbox|consultant|broker|agency service|outsourced|in-house|do it yourself|diy)\b/i.test(allText)
+      && !/\b(?:software|saas|platform|application|automation product)\b/i.test(allText);
+    const substituteOnly = substituteLanguage || items.every((item) => item.searchAngleIds.some((id) => /adjacent|substitute/i.test(id))
+      && !item.searchAngleIds.some((id) => /direct|competitor_primary|competitor_crosscheck|competitor_escalation/i.test(id)));
     return {
-      id: stableId("comp", host),
+      id: stableId("comp", groupKey),
       name: supported(name, [primary.id], 0.72),
-      website: new URL(primary.normalizedUrl).origin,
+      website: ["review", "product_directory", "app_marketplace"].includes(primary.sourceType) ? primary.normalizedUrl : new URL(primary.normalizedUrl).origin,
       targetCustomer: supported(target, target ? ids : [], target ? 0.68 : 0),
       coreJobToBeDone: supported(positioning, [primary.id], 0.58),
       pricing: supported(pricing, pricingEvidence && pricing ? [pricingEvidence.id] : [], pricing ? 0.82 : 0),
@@ -93,6 +110,7 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
       positioning: supported(positioning, [primary.id], 0.65),
       likelyStrengths: supported(features.length ? features.slice(0, 3) : null, features.length ? ids : [], features.length ? 0.55 : 0),
       likelyWeaknesses: supported(weaknessEvidence.length ? weaknessEvidence.slice(0, 3).map((item) => item.summary) : null, weaknessEvidence.map((item) => item.id), weaknessEvidence.length ? 0.65 : 0),
+      relationship: supported<"direct" | "substitute">(substituteOnly ? "substitute" : "direct", ids, .64),
       intelligence: {
         funding: supported(funding.values[0] ?? null, funding.ids, funding.ids.length ? .6 : 0),
         headcount: supported(headcount?.summary ?? null, headcount ? [headcount.id] : [], headcount ? .6 : 0),
@@ -109,6 +127,24 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
       evidenceIds: completeIds,
     };
   });
+  const deduplicated = new Map<string, Competitor>();
+  for (const competitor of extracted) {
+    const key = (competitor.name.value ?? competitor.id).toLowerCase().replace(/[^a-z0-9]/g, "");
+    const existing = deduplicated.get(key);
+    if (!existing) { deduplicated.set(key, competitor); continue; }
+    existing.evidenceIds = [...new Set([...existing.evidenceIds, ...competitor.evidenceIds])];
+    for (const field of ["targetCustomer", "coreJobToBeDone", "pricing", "keyFeatures", "positioning", "likelyStrengths", "likelyWeaknesses", "relationship"] as const) {
+      const incoming = competitor[field];
+      if (incoming && existing[field] && existing[field]!.value === null && incoming.value !== null) Object.assign(existing[field]!, incoming);
+      else if (incoming && existing[field]) existing[field]!.evidenceIds = [...new Set([...existing[field]!.evidenceIds, ...incoming.evidenceIds])];
+    }
+    for (const [field, incoming] of Object.entries(competitor.intelligence)) {
+      const current = existing.intelligence[field as keyof Competitor["intelligence"]];
+      if (current.value === null && incoming.value !== null) Object.assign(current, incoming);
+      else current.evidenceIds = [...new Set([...current.evidenceIds, ...incoming.evidenceIds])];
+    }
+  }
+  return [...deduplicated.values()];
 }
 
 interface ComplaintRule {

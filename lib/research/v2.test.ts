@@ -103,7 +103,8 @@ test("novelty fingerprints and similarity scores are transparent heuristics", ()
   const different = compareFingerprints(first, distinct);
   assert.ok(same.score > different.score);
   assert.equal(same.heuristic, true);
-  assert.match(same.explanation, /55% token overlap/);
+  assert.match(same.explanation, /buyer 22%.*job 28%/);
+  assert.match(same.explanation, /Matched:.*Did not match:/);
 });
 
 test("lineage exposes concise provenance without private reasoning", () => {
@@ -185,7 +186,15 @@ test("competition is decisive only when close substitutes adequately solve the s
 
 test("survivor loop respects iteration, candidate, and requested-count budgets", () => {
   const limits = { ...researchLimits({ NODE_ENV: "test" }), maxCandidates: 18, maxSurvivorIterations: 1 };
-  const output = runOpportunityPipeline({ query: "Find 4 opportunities for small field service teams", sources, competitors, complaints, segments, gaps, limits, now: new Date("2026-08-24") });
+  const preliminary = runOpportunityPipeline({ query: "Find 4 opportunities for small field service teams", sources, competitors, complaints, segments, gaps, limits, now: new Date("2026-08-24") });
+  const competitorRecall = preliminary.candidates.map((candidate) => ({
+    candidateId: candidate.id, structuralGroupId: "test_group", establishedCategory: true, minimumCredibleCompetitors: 5,
+    primaryQueryIds: ["primary"], crossCheckQueryIds: ["crosscheck"], escalationQueryIds: [],
+    primaryCompetitorIds: competitors.map((item) => item.id), crossCheckCompetitorIds: competitors.map((item) => item.id), escalationCompetitorIds: [],
+    credibleCompetitorIds: competitors.map((item) => item.id), materialNewDirectCompetitorIds: [], crossCheckComplete: true,
+    escalationTriggered: false, escalationComplete: true, recallSufficient: true, explanation: "Test fixture completed both independent passes.",
+  }));
+  const output = runOpportunityPipeline({ query: "Find 4 opportunities for small field service teams", sources, competitors, complaints, segments, gaps, limits, now: new Date("2026-08-24"), competitorRecall });
   assert.ok(output.budgetUsage.survivorIterations <= 1);
   assert.ok(output.candidates.length <= 18);
   assert.ok(output.finalOpportunities.length <= 4);
@@ -220,7 +229,7 @@ test("all structured factual references preserve valid citation provenance", () 
 
 test("limits enforce hard caps and unknown fields remain explicit", () => {
   const limits = researchLimits({ NODE_ENV: "test", RESEARCH_MAX_QUERIES: "999", RESEARCH_RESULTS_PER_QUERY: "999", RESEARCH_MAX_CANDIDATES: "999", RESEARCH_MAX_SURVIVOR_ITERATIONS: "99", RESEARCH_TIMEOUT_MS: "999999" });
-  assert.equal(limits.maxSearchQueries, 12);
+  assert.equal(limits.maxSearchQueries, 28);
   assert.equal(limits.resultsPerQuery, 10);
   assert.equal(limits.maxCandidates, 48);
   assert.equal(limits.maxSurvivorIterations, 1);

@@ -37,7 +37,7 @@ export function scoreOpportunity(candidate: IdeaCandidate, input: {
   const penalties: OpportunityScore["penalties"] = [];
   if (candidate.evidenceIds.length === 0) penalties.push({ code: "no_evidence", points: 20, reason: "No retrieved evidence supports the candidate lineage." });
   if (!competitorCheckComplete) penalties.push({ code: "competitor_check_unresolved", points: 12, reason: "No competitor fingerprint could be compared; absence of a retrieved competitor is not novelty evidence." });
-  if (nearest >= 0.72) penalties.push({ code: "near_duplicate", points: 18, reason: "A close competitor fingerprint reduces differentiation and defensibility; it is decisive only if the residual-demand assessment also shows the same job is already adequately solved for the same user." });
+  if (nearest >= 0.62) penalties.push({ code: "near_duplicate", points: 18, reason: "Structured buyer/job/workflow/outcome overlap identifies a close competitor and reduces differentiation and defensibility; it is decisive only if residual-demand evidence also shows adequate resolution." });
   if (input.falsification.outcome === "rejected") penalties.push({ code: "failed_falsification", points: 30, reason: input.falsification.reason });
   let score = Object.entries(weights).reduce((sum, [key, weight]) => sum + factors[key as keyof OpportunityScoreFactors] * weight, 0) * 10;
   score -= penalties.reduce((sum, penalty) => sum + penalty.points, 0);

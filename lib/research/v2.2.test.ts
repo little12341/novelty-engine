@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CLAUDE_COMMAND_ROUTES } from "./intents.ts";
+import { CLAUDE_COMMAND_ROUTES, resolveClaudeCommand } from "./intents.ts";
 import { assessFounderFit } from "./founder-fit.ts";
 import { runResearch } from "./pipeline.ts";
 import { validateExternalResearchUrl } from "./url-policy.ts";
@@ -58,7 +58,8 @@ test("weak initial niches trigger bounded adjacent search and preserve exhausted
   assert.ok(run.searchBranches.length > 0);
   assert.ok(run.searchBranches.every((item) => item.learnedFromKillReasons.length >= 0 && item.searchAngleIds.length === 1));
   assert.ok(calls <= run.limits.maxProviderCalls);
-  assert.equal(run.budgetUsage.exhausted, true);
+  assert.equal(run.budgetUsage.exhausted, false, "provider/search budget truth must not be conflated with a completed expansion branch set");
+  assert.ok(["survivor_found", "coverage_plateau", "budget_exhausted"].includes(run.budgetUsage.expansionStopReason ?? ""));
   assert.ok(run.nextBestAction.action.length > 0);
 });
 
@@ -82,9 +83,12 @@ test("Agent Shield rejects SSRF-style destinations and founder constraints can k
 });
 
 test("Claude command routing covers research, specialist, stored-run, rerun, and export commands", () => {
-  for (const command of ["/research-market", "/find-gaps", "/inspect-competitors", "/falsify", "/validate-idea", "/research-company", "/find-business", "/compare", "/market-size", "/pricing", "/customer-pain", "/trend-check", "/source-check", "/evidence", "/summarize-run", "/rerun", "/export"]) {
+  for (const command of ["/research-market", "/find-gaps", "/inspect-competitors", "/falsify", "/validate-idea", "/research-company", "/find-business", "/compare", "/market-size", "/pricing", "/customer-pain", "/trend-check", "/source-check", "/evidence", "/summarize-run", "/rerun", "/export", "/commands", "/help"]) {
     assert.ok(command in CLAUDE_COMMAND_ROUTES, command);
   }
+  const sourceCheck = resolveClaudeCommand("/source-check", "research_20260827120000_route1234");
+  assert.deepEqual(sourceCheck, { kind: "mcp", command: "/source-check", mcpTool: "source_check", arguments: { run_id: "research_20260827120000_route1234" } });
+  assert.equal(resolveClaudeCommand("/commands")?.kind, "skill_help");
 });
 
 test("financial signals are timestamped before outcomes and weak repeatability is automatically killed", () => {

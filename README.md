@@ -62,21 +62,23 @@ Configure one provider. Both are server-side only and are never referenced by cl
 | `BRAVE_SEARCH_API_KEY` | One of the two keys | Brave Search API subscription token |
 | `TAVILY_API_KEY` | One of the two keys | Tavily Search API key |
 | `SEARCH_PROVIDER` | No; default `auto` | `brave`, `tavily`, or `auto` (Brave first) |
-| `RESEARCH_MAX_QUERIES` | No; default/hard cap 12 | Landscape plus active-falsification search angles per run |
+| `RESEARCH_MAX_QUERIES` | No; standard default 28, hard cap 48 | Landscape, competitor recall/cross-check, evidence-gap, expansion, and falsification angles per run |
 | `RESEARCH_RESULTS_PER_QUERY` | No; default 6, hard cap 10 | Provider results per angle |
-| `RESEARCH_MAX_PROVIDER_CALLS` | No; default follows query cap, hard cap 12 | Total search-provider calls |
+| `RESEARCH_MAX_PROVIDER_CALLS` | No; default follows query cap, hard cap 48 | Total search-provider calls |
 | `RESEARCH_MAX_COUNTEREVIDENCE_SEARCHES` | No; default 2, hard cap 4 | Candidate-focused competition/constraint searches inside a run |
 | `RESEARCH_MAX_AGENT_CALLS` | No; default 0, hard cap 8 | Reserved model/agent-call budget; current deterministic role boundaries use 0 |
-| `RESEARCH_MAX_PROVIDER_SPEND_CREDITS` | No; default follows provider cap, hard cap 12 | Abstract per-run provider-credit ceiling (one credit per search call) |
+| `RESEARCH_MAX_PROVIDER_SPEND_CREDITS` | No; default follows provider cap, hard cap 48 | Abstract per-run provider-credit ceiling (one credit per search call) |
 | `RESEARCH_MAX_CONCURRENCY` | No; default 3, hard cap 6 | Search concurrency inside one run |
 | `RESEARCH_MAX_RETRIES_PER_SEARCH` | No; default 1, hard cap 2 | Retry count for retryable provider failures |
 | `RESEARCH_COMPARISON_MAX_PROVIDER_CALLS` | No; default 30, hard cap 40 | Shared search-call ceiling across a 2–5 idea comparison |
 | `RESEARCH_MAX_CANDIDATES` | No; default 30, hard cap 48 | Initial plus survivor-mutation candidates |
 | `RESEARCH_MAX_SURVIVOR_ITERATIONS` | No; default/hard cap 1 | One tightly bounded mutation/retest round; one dimension per root |
-| `RESEARCH_MAX_EXPANSION_BRANCHES` | No; standard default 2, hard cap 4 | Adjacent segment/workflow branches when the initial niche is weak |
+| `RESEARCH_MAX_EXPANSION_BRANCHES` | No; standard default 5, hard cap 8 | Materially distinct adjacent branches attempted when the initial niche is weak |
+| `RESEARCH_MIN_CREDIBLE_COMPETITORS` | No; default 5, hard cap 15 | Recall-escalation threshold for established categories; it triggers more search rather than fabricating competitors |
+| `RESEARCH_COMPETITOR_QUERIES_PER_CANDIDATE` | No; default 2, hard cap 4 | Materially different formulations per structural buyer/job group in each primary and cross-check pass |
 | `RESEARCH_MAX_MODEL_ITERATIONS` | No; default 0, hard cap 6 | Reserved model-provider budget; deterministic engine currently uses 0 |
 | `RESEARCH_TIMEOUT_MS` | No; default 15000, hard cap 30000 | Per-provider-call timeout |
-| `RESEARCH_MAX_RUN_DURATION_MS` | No; standard default 55000, hard cap 120000 | Hard wall-clock research budget |
+| `RESEARCH_MAX_RUN_DURATION_MS` | No; standard default 75000, hard cap 120000 | Hard wall-clock research budget |
 | `EVIDENCE_GATE_MIN_*` | No; see `.env.example` | Strict validation thresholds for pain, spend, competitors, segments, timing, source diversity, citation coverage, and fatal risks |
 | `RESEARCH_RATE_LIMIT_PER_HOUR` | No | Legacy alias used when `MCP_RATE_LIMIT_PER_HOUR` is unset |
 | `RESEARCH_CACHE_TTL_SECONDS` | No; default 86400, hard cap 604800 | Exact/high-similarity result cache TTL |
@@ -168,7 +170,7 @@ The deliberate tool surface is:
 | --- | --- | --- |
 | `research_market` | `{ query, depth?, founder_constraints? }` | Complete compatible output schema, gates, lifecycle, citations, warnings, budgets, and run ID; may return no ideas |
 | `find_market_gaps` | `{ run_id, limit?, cursor? }` | Paginated ranked gaps with supporting/counter citations and explicit unknowns |
-| `inspect_competitors` | `{ run_id, limit?, cursor? }` | Paginated evidence-carrying competitor intelligence; unsupported fields stay `null` |
+| `inspect_competitors` | `{ run_id, limit?, cursor?, fresh_expand?, candidate_id? }` | Stored competitor map, with optional fresh high-recall expansion using the same primary/cross-check/escalation planner |
 | `falsify_opportunity` | `{ opportunity: string, run_id?: string, candidate_id?: string }` | Up to four fresh counterevidence searches plus the falsification result |
 | `get_research_run` | `{ run_id: string, include_full?: boolean }` | Concise summary by default; complete internal JSON only when explicitly requested |
 | `run_research_mode` | `{ mode, query, depth?, founder_constraints? }` | Shared pipeline for business, market, company, competitor, gap, falsification, and validation intents |
@@ -178,6 +180,7 @@ The deliberate tool surface is:
 | `rerun_research` | `{ run_id, depth? }` | Fresh incremental rerun plus material-change and opportunity-evolution comparison |
 | `source_check` | `{ run_id }` | Citation integrity, source quality/diversity, duplicates, contradictions, and unknowns |
 | `next_best_action` | `{ run_id }` | Single highest-information validation or search action with success/kill criteria |
+| `record_validation_outcome` | `{ run_id, candidate_id, experiment_type, success, observed_metrics, artifact_urls? }` | Persist an external validation result without bypassing research/evidence gates |
 
 Tool errors are structured and say when the provider is not configured or unavailable. They never substitute fixtures or model-generated research. Cost-bearing calls are bounded by request length, source/result limits, provider timeouts, search-call caps, per-client rate limits, daily/monthly global budgets, and a concurrent-run semaphore. Budget denial returns HTTP `429` with `Retry-After` and a machine-readable reason.
 
@@ -248,7 +251,7 @@ With a local server and provider key configured, exercise the same remote transp
 npm run test:mcp:client -- http://localhost:3000/api/mcp "Find 3 opportunities for small field service teams"
 ```
 
-For the full production-server regression (build manifests, browser health GET, protocol GET semantics, MCP initialization, exact tool discovery, and a fixture-backed `research_market` call), run `npm run test:production`.
+Run `npm run benchmark:retrieval` for the deterministic 20-market competitor-recall benchmark (recall, precision, major-player misses, source diversity, direct-vs-substitute accuracy, and collision calibration). For the full production-server regression (build manifests, browser health GET, protocol GET semantics, MCP initialization, exact tool discovery, and a fixture-backed `research_market` call), run `npm run test:production`.
 
 ## Three-mode evaluation
 

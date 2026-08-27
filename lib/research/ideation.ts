@@ -20,6 +20,25 @@ const TRANSFERS = [
   { sourceDomain: "version control", borrowedMechanism: "small reversible change sets", structuralAnalogue: "a workflow change needs provenance, review, and rollback", adaptationBoundary: "transfer review and rollback semantics, not developer jargon" },
 ];
 
+function marketDefinition(query: string, target: string | null): { industry: string; companyProfile: string; decisionMaker: string } {
+  const rules: Array<[RegExp, string, string, string]> = [
+    [/consumer|household|food waste|grocery|pantry/i, "consumer household operations", "households of roughly 1–6 people with recurring grocery, storage, and meal-planning workflows", "household buyer or primary grocery decision-maker"],
+    [/contract|construction|trades?|home service|field service/i, "contracting and field services", "contracting or home-service companies with roughly 2–50 field workers and recurring subcontractor/vendor handoffs", "owner, operations manager, or risk/compliance lead"],
+    [/finance|account|month.end|reconcil/i, "accounting and finance operations", "small and mid-sized companies with 2–20 person finance teams and a recurring close or reconciliation process", "controller, head of finance, or finance operations lead"],
+    [/clinical|trial|health|medical/i, "regulated healthcare and clinical research", "regulated clinics, research sites, or sponsors with a named audit owner and recurring document workflows", "site director, clinical operations lead, or compliance owner"],
+    [/developer|engineering|devops|software|\bci\b/i, "software engineering", "software companies with multi-repository engineering teams and a dedicated build or platform owner", "engineering manager, platform lead, or developer-tools buyer"],
+    [/restaurant|food service|hospitality/i, "hospitality and food service", "independent and regional operators with 1–25 locations and recurring frontline workflows", "owner-operator or operations director"],
+    [/insurance|broker|risk/i, "insurance and risk operations", "businesses or brokerages with recurring policy, certificate, or third-party risk workflows", "risk manager, controller, or insurance operations lead"],
+  ];
+  const matched = rules.find(([pattern]) => pattern.test(query));
+  const industry = matched?.[1] ?? (query.replace(/^(?:find|research|investigate|identify)\b/i, "").trim().split(/\s+/).slice(0, 7).join(" ") || "the researched market");
+  const genericTarget = !target || /mobile.first|field users?|users?|teams?|small businesses|regulated teams/i.test(target);
+  const companyProfile = genericTarget
+    ? matched?.[2] ?? `${industry} organizations with an identifiable recurring workflow, an accountable buyer, and an observable operating profile`
+    : `${target} in ${industry}, with a recurring affected workflow and an identifiable operating buyer`;
+  return { industry, companyProfile, decisionMaker: matched?.[3] ?? "the operations owner or budget-holding workflow leader" };
+}
+
 export function requestedIdeaCount(query: string): number {
   const match = query.match(/\b(?:generate|give|find|propose|develop|create|return|want)\s+(\d{1,2})\b/i) ?? query.match(/\b(\d{1,2})\s+(?:ideas?|opportunities|concepts?)\b/i);
   return Math.min(12, Math.max(1, Number(match?.[1] ?? 5)));
@@ -44,15 +63,21 @@ export function generateCandidates(input: {
     const signal = input.signals[index % Math.max(1, input.signals.length)];
     const failed = input.failedAttempts.filter((item) => item.resurrectionEligible)[index % Math.max(1, input.failedAttempts.filter((item) => item.resurrectionEligible).length)];
     const target = gap.affectedSegment ?? stitch?.segment ?? null;
+    const market = marketDefinition(input.query, target);
     const variation = Math.floor(index / MECHANISMS.length) + 1;
     const idSeed = `${gap.id}:${mechanism.label}:${variation}`;
     const targetLabel = (target ?? gap.gapType).split(/\s+/).slice(0, 3).join(" ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const currentWorkaround = gap.currentWorkaround ?? stitch?.manualSteps.join(", ") ?? "the cited manual or fragmented incumbent workflow";
+    const economicConsequence = gap.willingnessToPaySignal
+      ? "Recurring labor, rework, delay, or risk is already tied to a retrieved spend signal; magnitude still requires validation."
+      : "Recurring staff time, rework, delay, or compliance exposure is plausible from the cited workflow; monetary magnitude remains UNKNOWN.";
+    const proposedMechanism = `${mechanism.label}: ${transfer.borrowedMechanism}${contradiction ? `, bounded by ${contradiction.operation}` : ""}`;
     candidates.push({
       id: stableId("candidate", idSeed), name: `${targetLabel} ${mechanism.label.replace(/\b\w/g, (letter) => letter.toUpperCase())}${variation > 1 ? ` — ${gap.gapType}` : ""}`,
-      summary: `A ${mechanism.label} for ${target ?? "the affected user"} that addresses ${gap.problemStatement.toLowerCase()}`,
-      targetCustomer: target, payer: index % 3 === 0 ? "beneficiary or downstream counterparty" : target,
+      summary: `${market.companyProfile} use a ${mechanism.label} at ${mechanism.position} to address ${gap.problemStatement.toLowerCase()}; the buyer is ${market.decisionMaker}.`,
+      targetCustomer: market.companyProfile, payer: index % 3 === 0 ? `beneficiary or downstream counterparty approved by ${market.decisionMaker}` : market.decisionMaker,
       jobToBeDone: stitch?.job ?? gap.problemStatement,
-      mechanism: `${mechanism.label}: ${transfer.borrowedMechanism}${contradiction ? `, bounded by ${contradiction.operation}` : ""}`,
+      mechanism: proposedMechanism,
       interface: mechanism.interface, technology: signal?.label ?? mechanism.technology,
       businessModel: index % 3 === 0 ? "per verified outcome" : index % 3 === 1 ? "usage-based" : "service subscription",
       distribution: index % 2 === 0 ? "through an existing workflow partner" : "direct to the affected segment",
@@ -66,6 +91,18 @@ export function generateCandidates(input: {
       iteration: 0,
       rootCandidateId: stableId("candidate", idSeed), mechanismFamily: mechanism.family,
       crossDomainTransfer: transfer,
+      definition: {
+        industry: market.industry,
+        companyProfile: market.companyProfile,
+        buyer: market.decisionMaker,
+        decisionMaker: market.decisionMaker,
+        specificProblem: gap.problemStatement,
+        currentWorkaround,
+        economicConsequence,
+        proposedMechanism,
+        whyExistingSolutionsFail: gap.whySolutionsFail,
+        evidenceIds: evidenceUnion(gap.supportingEvidenceIds, gap.counterEvidenceIds),
+      },
     });
   }
   return candidates;

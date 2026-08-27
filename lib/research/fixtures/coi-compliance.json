@@ -1,0 +1,17 @@
+{
+  "primary": [
+    {"url":"https://getjones.com/contractors","title":"Jones — COI compliance for contractors","snippet":"Certificate of insurance tracking, subcontractor compliance, risk transfer, and vendor document workflows for general contractors and construction companies.","publishedAt":"2026-05-01"},
+    {"url":"https://trustlayer.io/construction","title":"TrustLayer — automated insurance verification","snippet":"Automated COI collection, insurance verification, compliance reporting, and vendor risk workflows for contractors and construction risk teams.","publishedAt":"2026-05-02"},
+    {"url":"https://reddit.com/r/Construction/comments/coi_manual","title":"Subcontractor COIs still tracked in spreadsheets","snippet":"Our 80-person general contractor uses a spreadsheet and email to chase subcontractor insurance certificates. Expired COIs create compliance and project-delay risk.","publishedAt":"2026-06-01"},
+    {"url":"https://community.contractors.example/discussions/coi-renewals","title":"Manual certificate renewal follow-up","snippet":"Construction operations teams manually email brokers and re-enter COI expiration dates because current compliance tools miss updates and integrations.","publishedAt":"2026-06-03"},
+    {"url":"https://g2.com/products/jones/reviews","title":"Jones reviews","snippet":"Contractor reviewers describe certificate tracking and compliance automation but report missing integrations, manual exceptions, and pricing friction.","publishedAt":"2026-06-05"},
+    {"url":"https://construction.example.gov/insurance-requirements","title":"Official contractor insurance and certificate requirements","snippet":"Contractors must retain current subcontractor insurance evidence and verify required coverage before work begins.","publishedAt":"2026-02-01"},
+    {"url":"https://jobs.example.com/construction-risk-coordinator","title":"Construction risk and COI coordinator job","snippet":"Hiring a compliance coordinator to collect certificates, verify limits, chase renewals, and maintain subcontractor records at an annual labor cost.","publishedAt":"2026-06-10"},
+    {"url":"https://procurement.example.org/rfp/coi-management","title":"RFP for certificate of insurance management","snippet":"Procurement budget seeks software for automated COI collection, compliance rules, reporting, and subcontractor onboarding.","publishedAt":"2026-04-12"}
+  ],
+  "crossCheck": [
+    {"url":"https://certificial.com/solutions/construction","title":"Certificial — smart COI compliance","snippet":"Real-time certificate of insurance issuance, verification, compliance monitoring, and integrations for contractors, brokers, and insureds.","publishedAt":"2026-05-04"},
+    {"url":"https://smartcompliance.co/industries/construction","title":"SmartCompliance — certificate tracking software","snippet":"COI tracking, vendor compliance, insurance document collection, reporting, and renewal workflows for construction companies and contractors.","publishedAt":"2026-05-05"},
+    {"url":"https://mycoitracking.com/construction","title":"myCOI — insurance compliance management","snippet":"Certificate tracking and subcontractor insurance compliance services for construction risk and operations teams.","publishedAt":"2026-05-06"}
+  ]
+}

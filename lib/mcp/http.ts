@@ -2,9 +2,9 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { acquireProtection } from "../research/protection.ts";
 import { durableStoreConfiguration } from "../research/durable.ts";
 import { recordMcpCall, withMcpRequestContext } from "./observability.ts";
-import { compareIdeasInput, falsifyOpportunityInput, rerunResearchInput, researchMarketInput, runResearchModeInput } from "./schemas.ts";
+import { compareIdeasInput, falsifyOpportunityInput, inspectCompetitorsInput, rerunResearchInput, researchMarketInput, runResearchModeInput } from "./schemas.ts";
 
-const COSTLY_TOOLS = new Set(["research_market", "falsify_opportunity", "run_research_mode", "compare_ideas", "rerun_research"]);
+const COSTLY_TOOLS = new Set(["research_market", "inspect_competitors", "falsify_opportunity", "run_research_mode", "compare_ideas", "rerun_research"]);
 type McpPayload = { id?: unknown; method?: unknown; params?: { name?: unknown; arguments?: unknown } };
 
 export function requestIdentifier(request: Request): string {
@@ -60,6 +60,7 @@ async function handleMcpHttpInner(request: Request, handler: (request: Request) 
   if (!tool) return handler(request);
 
   const validCostlyRequest = tool === "research_market" ? researchMarketInput.safeParse(payload?.params?.arguments).success
+    : tool === "inspect_competitors" ? (() => { const parsed = inspectCompetitorsInput.safeParse(payload?.params?.arguments); return parsed.success && parsed.data.fresh_expand; })()
     : tool === "falsify_opportunity" ? falsifyOpportunityInput.safeParse(payload?.params?.arguments).success
       : tool === "run_research_mode" ? runResearchModeInput.safeParse(payload?.params?.arguments).success
         : tool === "compare_ideas" ? compareIdeasInput.safeParse(payload?.params?.arguments).success

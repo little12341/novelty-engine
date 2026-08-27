@@ -93,6 +93,36 @@ test("MCP run tools route to gaps and competitors with explicit unknowns", async
   });
 });
 
+test("inspect_competitors optionally performs fresh expansion through shared recall logic", async () => {
+  const result = await getFixtureRun();
+  let expandedCandidate: string | undefined;
+  await withClient({
+    getRun: async (id) => id === result.id ? result : null,
+    expandCompetitors: async (run, candidateId) => { expandedCandidate = candidateId; return { ...run, warnings: [...run.warnings, "fresh expansion fixture"] }; },
+  }, async (client) => {
+    const candidateId = result.candidates[0].id;
+    const called = await client.callTool({ name: "inspect_competitors", arguments: { run_id: result.id, candidate_id: candidateId, fresh_expand: true, limit: 5 } });
+    assert.equal(called.isError, undefined);
+    assert.equal(expandedCandidate, candidateId);
+    const payload = called.structuredContent as { freshExpansion: boolean; candidateId: string; competitorRecall: object };
+    assert.equal(payload.freshExpansion, true);
+    assert.equal(payload.candidateId, candidateId);
+    assert.ok(payload.competitorRecall);
+  });
+});
+
+test("source-check intent target is the Novelty source_check tool for a completed run", async () => {
+  const result = await getFixtureRun();
+  await withClient({ getRun: async (id) => id === result.id ? result : null }, async (client) => {
+    const called = await client.callTool({ name: "source_check", arguments: { run_id: result.id } });
+    assert.equal(called.isError, undefined);
+    const payload = called.structuredContent as { runId: string; coverage: object; sources: unknown[] };
+    assert.equal(payload.runId, result.id);
+    assert.ok(payload.coverage);
+    assert.ok(payload.sources.length > 0);
+  });
+});
+
 test("MCP intent mode reuses the canonical pipeline and preserves mode-specific company output", async () => {
   const result = { ...await getFixtureRun(), mode: "research_company" as const, companyProfile: {
     identity: { id: "claim_company", claim: "FixtureCo", status: "INFERRED" as const, evidenceIds: [], rationale: "Fixture." },

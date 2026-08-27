@@ -28,6 +28,8 @@ export const inspectCompetitorsInput = z.object({
   run_id: runId.describe("ID returned by research_market."),
   limit: z.number().int().min(1).max(15).default(8).describe("Maximum competitors to return."),
   cursor: z.number().int().min(0).max(10_000).default(0).describe("Zero-based pagination offset."),
+  fresh_expand: z.boolean().default(false).describe("Run an optional fresh high-recall primary, independent cross-check, and escalation expansion using the stored candidate definition."),
+  candidate_id: z.string().regex(/^candidate_[a-zA-Z0-9_]{3,100}$/).optional().describe("Optional candidate from the stored run to focus the fresh expansion."),
 }).strict();
 
 export const falsifyOpportunityInput = z.object({
@@ -83,7 +85,7 @@ export const MCP_TOOL_NAMES = [
 export const MCP_TOOL_CATALOG = [
   { name: "research_market", arguments: { query: "string (8-500 characters)" }, cost: "up to configured provider-call cap" },
   { name: "find_market_gaps", arguments: { run_id: "string", limit: "optional integer 1-10", cursor: "optional offset" }, cost: "stored-run lookup" },
-  { name: "inspect_competitors", arguments: { run_id: "string", limit: "optional integer 1-15", cursor: "optional offset" }, cost: "stored-run lookup" },
+  { name: "inspect_competitors", arguments: { run_id: "string", limit: "optional integer 1-15", cursor: "optional offset", fresh_expand: "optional boolean", candidate_id: "optional candidate ID" }, cost: "stored-run lookup; bounded fresh research only when fresh_expand=true" },
   { name: "falsify_opportunity", arguments: { opportunity: "string (8-1000 characters)", run_id: "optional string", candidate_id: "optional string" }, cost: "up to 4 focused provider searches" },
   { name: "get_research_run", arguments: { run_id: "string", include_full: "optional boolean" }, cost: "stored-run lookup" },
   { name: "run_research_mode", arguments: { mode: "supported intent mode", query: "string (8-500 characters)" }, cost: "up to configured provider-call cap" },

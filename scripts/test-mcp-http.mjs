@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
-const expectedTools = ["research_market", "find_market_gaps", "inspect_competitors", "falsify_opportunity", "get_research_run", "run_research_mode", "compare_ideas", "export_research_run", "compare_research_runs"].sort();
+const expectedTools = ["research_market", "find_market_gaps", "inspect_competitors", "falsify_opportunity", "get_research_run", "run_research_mode", "compare_ideas", "export_research_run", "compare_research_runs", "rerun_research", "source_check", "next_best_action", "record_validation_outcome"].sort();
 const port = Number(process.env.NOVELTY_MCP_TEST_PORT ?? 3417);
 const origin = `http://127.0.0.1:${port}`;
 const endpoint = new URL("/api/mcp", origin);
@@ -59,7 +59,7 @@ try {
   assert.equal(health.endpoint, "/api/mcp");
   assert.equal(health.healthEndpoint, "/api/mcp/health");
   assert.equal(health.providerConfigured, true);
-  assert.equal(health.toolCount, 9);
+  assert.equal(health.toolCount, expectedTools.length);
 
   const plainGet = await fetch(endpoint, { headers: { Accept: "application/json, text/event-stream" } });
   assert.equal(plainGet.status, 405, "Stateless MCP GET must be protocol 405, not an application 404");

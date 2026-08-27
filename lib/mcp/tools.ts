@@ -14,15 +14,17 @@ import {
   getResearchRunInput, inspectCompetitorsInput, inspectRunInput, recordValidationOutcomeInput, rerunResearchInput, researchMarketInput, runResearchModeInput,
 } from "./schemas.ts";
 import { summarizeCompetitors, summarizeGaps, summarizeResearch } from "./summaries.ts";
+import { freshCompetitorExpansion } from "../research/competitor-discovery.ts";
 
 type ToolDependencies = {
   research: typeof runResearch;
   getRun: typeof getResearchResultById;
   falsify: typeof activelyFalsifyOpportunity;
   compare: typeof compareIdeas;
+  expandCompetitors: typeof freshCompetitorExpansion;
 };
 
-const defaults: ToolDependencies = { research: runResearch, getRun: getResearchResultById, falsify: activelyFalsifyOpportunity, compare: compareIdeas };
+const defaults: ToolDependencies = { research: runResearch, getRun: getResearchResultById, falsify: activelyFalsifyOpportunity, compare: compareIdeas, expandCompetitors: freshCompetitorExpansion };
 
 function textResult<T extends object>(value: T) {
   return { content: [{ type: "text" as const, text: JSON.stringify(value) }], structuredContent: value };
@@ -100,10 +102,14 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
 
   server.registerTool("inspect_competitors", {
     title: "Inspect competitors",
-    description: "Return the cited competitor map from a completed research run. Unsupported factual fields remain explicit nulls and are listed as unknown.",
+    description: "Return the cited competitor map from a completed research run, or optionally run the same high-recall primary/cross-check/escalation logic fresh for a selected candidate. Unsupported factual fields remain explicit nulls.",
     inputSchema: inspectCompetitorsInput,
     annotations,
-  }, ({ run_id, limit, cursor }) => observed("inspect_competitors", async () => summarizeCompetitors(await requiredRun(deps.getRun, run_id), limit, cursor)));
+  }, ({ run_id, limit, cursor, fresh_expand, candidate_id }, context) => observed("inspect_competitors", async () => {
+    const stored = await requiredRun(deps.getRun, run_id);
+    const result = fresh_expand ? await deps.expandCompetitors(stored, candidate_id, context.mcpReq.signal) : stored;
+    return { ...summarizeCompetitors(result, limit, cursor), freshExpansion: fresh_expand, candidateId: candidate_id ?? null, competitorRecall: result.competitorRecall };
+  }));
 
   server.registerTool("falsify_opportunity", {
     title: "Falsify an opportunity",

@@ -5,6 +5,8 @@ import { execFile } from "node:child_process";
 import http from "node:http";
 import path from "node:path";
 import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
+import { resolveClaudeCommand } from "../lib/research/intents.ts";
 
 const execFileAsync = promisify(execFile);
 let received = null;
@@ -33,6 +35,13 @@ try {
   assert.equal(received.query, query);
   const parsed = JSON.parse(stdout);
   assert.equal(parsed.stopDecision.status, "insufficient_evidence");
+  const skill = await readFile(path.join(process.cwd(), "skill", "novelty-engine", "SKILL.md"), "utf8");
+  assert.match(skill, /slash-like strings as Novelty intents/i);
+  assert.match(skill, /\/source-check.*must call `Novelty:source_check`/i);
+  assert.match(skill, /\/commands.*\/help.*Skill-level intents/i);
+  assert.deepEqual(resolveClaudeCommand("/source-check", "research_20260827120000_skilltest"), {
+    kind: "mcp", command: "/source-check", mcpTool: "source_check", arguments: { run_id: "research_20260827120000_skilltest" },
+  });
   console.log("Verified Claude Skill helper -> direct /api/research contract.");
 } finally {
   await new Promise((resolve) => server.close(resolve));

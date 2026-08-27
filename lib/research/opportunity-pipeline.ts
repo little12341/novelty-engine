@@ -18,12 +18,13 @@ import { buildValidationPlan, chooseNextBestAction } from "./next-action.ts";
 import { assessFounderFit } from "./founder-fit.ts";
 import { buildResearchTaskGraph } from "./orchestration.ts";
 import { buildCounterfactual, buildMoatStressTest } from "./strategy-tests.ts";
-import type { CandidateGap, ComplaintCluster, Competitor, Evidence, EvidenceGateResult, FinalOpportunity, MutationRecord, PipelineBudgetUsage, RejectedIdea, ResearchDepth, ResearchLimits, ResearchUserContext, UnderservedSegment } from "./types.ts";
+import type { CandidateCompetitorRecall, CandidateGap, ComplaintCluster, Competitor, Evidence, EvidenceGateResult, FinalOpportunity, MutationRecord, PipelineBudgetUsage, RejectedIdea, ResearchDepth, ResearchLimits, ResearchUserContext, UnderservedSegment } from "./types.ts";
 
 export function runOpportunityPipeline(input: {
   query: string; sources: Evidence[]; competitors: Competitor[]; complaints: ComplaintCluster[];
   segments: UnderservedSegment[]; gaps: CandidateGap[]; limits: ResearchLimits; now?: Date; allowGeneration?: boolean;
   excludedMechanisms?: string[]; userContext?: ResearchUserContext; depth?: ResearchDepth;
+  competitorRecall?: CandidateCompetitorRecall[];
 }) {
   const initialGraph = buildOpportunityGraph(input.sources, input.competitors, input.complaints, input.segments, input.gaps);
   const graphHoles = detectGraphHoles(initialGraph);
@@ -114,7 +115,8 @@ export function runOpportunityPipeline(input: {
   const validationExperiments = scoredSurvivors.map((item) => generateValidationExperiment(item.candidate));
   const detailedSurvivors = scoredSurvivors.map(({ candidate, falsification, score }) => {
     const gap = input.gaps.find((item) => candidate.sourceGapIds.includes(item.id));
-    const evidenceGate = evaluateEvidenceGate(candidate, { gap, evidence: input.sources, competitors: input.competitors, segments: input.segments, falsification });
+    const evidenceGate = evaluateEvidenceGate(candidate, { gap, evidence: input.sources, competitors: input.competitors, segments: input.segments, falsification,
+      competitorRecall: input.competitorRecall?.find((item) => item.candidateId === candidate.id) });
     const assumptionLedger = buildAssumptionLedger(candidate, gap, falsification, input.sources);
     const whyNotBuilt = analyzeWhyNotBuilt(candidate, gap, input.sources);
     const counterfactual = buildCounterfactual(candidate, assumptionLedger);
@@ -157,7 +159,8 @@ export function runOpportunityPipeline(input: {
   const evidenceGates: EvidenceGateResult[] = falsificationResults.map((falsification) => {
     const candidate = allCandidates.find((item) => item.id === falsification.candidateId)!;
     const gap = input.gaps.find((item) => candidate.sourceGapIds.includes(item.id));
-    return evaluateEvidenceGate(candidate, { gap, evidence: input.sources, competitors: input.competitors, segments: input.segments, falsification });
+    return evaluateEvidenceGate(candidate, { gap, evidence: input.sources, competitors: input.competitors, segments: input.segments, falsification,
+      competitorRecall: input.competitorRecall?.find((item) => item.candidateId === candidate.id) });
   });
   const fallbackGate = (candidate: typeof allCandidates[number]): EvidenceGateResult => ({
     candidateId: candidate.id, thresholds: evidenceGates[0]?.thresholds ?? {
@@ -165,7 +168,7 @@ export function runOpportunityPipeline(input: {
       minTimingSignals: 1, minSourceTypes: 3, minCitationCoverage: .85, maxUnresolvedFatalFalsifications: 0,
     },
     observed: { independentPainSignals: 0, independentSpendSignals: 0, competitorsAnalyzed: input.competitors.length, underservedSegments: input.segments.length, timingSignals: 0, sourceTypes: 0, citationCoverage: candidate.evidenceIds.length ? 1 : 0, unresolvedFatalFalsifications: 0 },
-    checks: { pain: false, spend: false, competition: input.competitors.length >= 3, segment: input.segments.length > 0, timing: false, sourceDiversity: false, citationCoverage: candidate.evidenceIds.length > 0, fatalFalsification: true },
+    checks: { pain: false, spend: false, competition: input.competitors.length >= 3, competitorRecall: false, buyerSpecificity: Boolean(candidate.definition), segment: input.segments.length > 0, timing: false, sourceDiversity: false, citationCoverage: candidate.evidenceIds.length > 0, fatalFalsification: true },
     survivalGatePassed: false, validationEvidenceGatePassed: false, externallyValidated: false,
     classification: rejectedIdeas.some((item) => item.candidateId === candidate.id) ? "killed" : candidate.evidenceIds.length ? "promising" : "discovered",
     blockers: ["falsification_not_completed", "external_validation_not_completed"], rationale: "Candidate did not complete the survival and validation gates.",
@@ -186,7 +189,7 @@ export function runOpportunityPipeline(input: {
   const budgetUsage: PipelineBudgetUsage = {
     providerCalls: 0, counterevidenceSearches: 0, agentCalls: 0, modelIterations: 0, estimatedProviderCredits: 0,
     candidatesGenerated: allCandidates.length, survivorIterations,
-    sourceCount: input.sources.length, exhausted: allCandidates.length >= input.limits.maxCandidates || survivorIterations >= input.limits.maxSurvivorIterations,
+    sourceCount: input.sources.length, exhausted: false,
     gracefulDegradation: "none",
   };
   return {
