@@ -611,9 +611,18 @@ body { background: var(--canvas); }
 .debug-form { padding: 26px; border: 1px solid var(--line-strong); background: var(--white); }
 .debug-form label { display: block; margin-bottom: 11px; color: var(--muted); font-size: 12px; font-weight: 700; }
 .debug-form > div { display: grid; grid-template-columns: 1fr auto; }
-.debug-form input { min-width: 0; height: 50px; padding: 0 14px; border: 1px solid var(--line-strong); background: var(--paper); color: var(--ink); font: inherit; }
-.debug-form button { padding: 0 22px; border: 1px solid var(--ink); background: var(--ink); color: var(--white); font-weight: 700; cursor: pointer; }
-.debug-form button:disabled { opacity: .6; cursor: wait; }
+.command-input-wrap { min-width: 0; position: relative; }
+.debug-form input { width: 100%; min-width: 0; height: 50px; padding: 0 14px; border: 1px solid var(--line-strong); background: var(--paper); color: var(--ink); font: inherit; }
+.debug-form > div > button { padding: 0 22px; border: 1px solid var(--ink); background: var(--ink); color: var(--white); font-weight: 700; cursor: pointer; }
+.debug-form > div > button:disabled { opacity: .6; cursor: wait; }
+.command-menu { max-height: 360px; position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; left: 0; overflow-y: auto; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-strong); box-shadow: 0 18px 42px rgba(38, 48, 38, .17); }
+.debug-form .command-menu button { width: 100%; display: grid; grid-template-columns: minmax(150px, .36fr) 1fr; gap: 14px; align-items: baseline; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.debug-form .command-menu button:last-child { border-bottom: 0; }
+.debug-form .command-menu button:hover, .debug-form .command-menu button.is-active { background: var(--green-soft); }
+.command-menu code { color: var(--green-dark); font-size: 12px; font-weight: 750; }
+.command-menu span { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.command-input-hint { margin: 10px 0 0; color: var(--faint); font-size: 11px; line-height: 1.5; }
+.command-input-hint code { color: var(--green-dark); font-weight: 750; }
 .debug-notice, .debug-error { margin: 18px 0 0; padding: 15px 17px; border-left: 3px solid var(--rust); background: var(--rust-soft); font-size: 13px; line-height: 1.55; }
 .debug-error { color: #7c261a; }
 .debug-results { margin-top: 34px; }
@@ -628,7 +637,8 @@ body { background: var(--canvas); }
 .graph-preview strong { color: var(--blue); font-size: 13px; }
 @media (max-width: 640px) {
   .debug-form > div { grid-template-columns: 1fr; }
-  .debug-form button { height: 48px; }
+  .debug-form > div > button { height: 48px; }
+  .debug-form .command-menu button { grid-template-columns: 1fr; gap: 4px; }
   .debug-summary span { width: 100%; margin-left: 0; }
   .mcp-health-grid, .mcp-tool-list { grid-template-columns: 1fr; }
   .mcp-debug-heading { align-items: flex-start; flex-direction: column; }

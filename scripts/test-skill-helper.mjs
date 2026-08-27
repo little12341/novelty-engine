@@ -6,7 +6,7 @@ import http from "node:http";
 import path from "node:path";
 import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
-import { resolveClaudeCommand } from "../lib/research/intents.ts";
+import { NOVELTY_COMMAND_CATALOG, resolveClaudeCommand } from "../lib/research/intents.ts";
 
 const execFileAsync = promisify(execFile);
 let received = null;
@@ -38,10 +38,21 @@ try {
   const skill = await readFile(path.join(process.cwd(), "skill", "novelty-engine", "SKILL.md"), "utf8");
   assert.match(skill, /slash-like strings as Novelty intents/i);
   assert.match(skill, /\/source-check.*must call `Novelty:source_check`/i);
-  assert.match(skill, /\/commands.*\/help.*Skill-level intents/i);
+  assert.match(skill, /does not register these in Claude's native slash-command UI/i);
+  for (const entry of NOVELTY_COMMAND_CATALOG) assert.match(skill, new RegExp(entry.command.replace("/", "\\/")));
+  const catalog = resolveClaudeCommand("/commands");
+  assert.equal(catalog.kind, "skill_help");
+  assert.equal(catalog.commands.length, NOVELTY_COMMAND_CATALOG.length);
+  const help = resolveClaudeCommand("/help source-check");
+  assert.equal(help.kind, "skill_help");
+  assert.match(help.response, /source quality/i);
+  assert.match(help.response, /Example: \/source-check/i);
   assert.deepEqual(resolveClaudeCommand("/source-check", "research_20260827120000_skilltest"), {
     kind: "mcp", command: "/source-check", mcpTool: "source_check", arguments: { run_id: "research_20260827120000_skilltest" },
   });
+  const unknown = resolveClaudeCommand("/sorce-check");
+  assert.equal(unknown.kind, "unknown_command");
+  assert.ok(unknown.suggestions.includes("/source-check"));
   console.log("Verified Claude Skill helper -> direct /api/research contract.");
 } finally {
   await new Promise((resolve) => server.close(resolve));

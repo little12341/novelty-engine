@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { productionOrigin } from "@/lib/site";
+import { NOVELTY_COMMAND_CATALOG } from "@/lib/research/intents";
 import { HeroInstallPanel } from "./install-panel";
 import { InstallTransition } from "./install-transition";
 
@@ -160,6 +161,7 @@ export default function Home() {
             <nav aria-label="Main navigation">
               <a href="#overview">Overview</a>
               <a href="#method">How it works</a>
+              <a href="#commands">Commands</a>
               <a href={`${githubUrl}#readme`} target="_blank" rel="noreferrer">Docs</a>
             </nav>
             <a className="header-github glass-control liquid-glass" href="#install">
@@ -218,6 +220,27 @@ export default function Home() {
             </li>
           ))}
         </ol>
+      </section>
+
+      <section className="commands-section" id="commands" aria-labelledby="commands-title">
+        <div className="page-width">
+          <div className="section-heading commands-heading">
+            <p className="eyebrow">Command discovery</p>
+            <div>
+              <h2 id="commands-title">A clear vocabulary for every research move.</h2>
+              <p>Type these as plain-text intents with the Novelty Skill enabled. They route to Novelty research or MCP tools; they are not registered native Claude slash commands.</p>
+            </div>
+          </div>
+          <ul className="command-catalog">
+            {NOVELTY_COMMAND_CATALOG.map((entry) => (
+              <li key={entry.command}>
+                <code>{entry.command}</code>
+                <p>{entry.description}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="command-alias-note"><strong>Safe aliases:</strong> <code>/gaps</code> → <code>/find-gaps</code> and <code>/competitors</code> → <code>/inspect-competitors</code>. Use <code>/help &lt;command&gt;</code> for usage and an example.</p>
+        </div>
       </section>
 
       <section className="comparison-section" id="comparison">

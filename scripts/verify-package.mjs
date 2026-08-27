@@ -44,6 +44,9 @@ for (let index = 0; index < count; index += 1) {
       "slash-like strings as Novelty intents",
       "Novelty:source_check",
       "/commands",
+      "/help",
+      "does not register these in Claude's native slash-command UI",
+      "Unknown Novelty command",
       "NOVELTY_RESEARCH_API_URL",
       "https://novelty-engine.com/api/mcp",
       "https://novelty-engine.com/api/mcp/health",
@@ -62,6 +65,9 @@ for (let index = 0; index < count; index += 1) {
     ];
     if (requiredMethodology.some((phrase) => !text.includes(phrase))) {
       throw new Error("Packaged SKILL.md is missing required methodology");
+    }
+    for (const command of ["/research-market", "/find-gaps", "/inspect-competitors", "/falsify", "/validate-idea", "/research-company", "/find-business", "/compare", "/market-size", "/pricing", "/customer-pain", "/trend-check", "/source-check", "/evidence", "/summarize-run", "/rerun", "/export", "/commands", "/help"]) {
+      if (!text.includes(`| \`${command}\` |`)) throw new Error(`Packaged SKILL.md command catalog is missing ${command}`);
     }
     if (text.includes("novelty-engine.vercel.app")) throw new Error("Packaged SKILL.md contains the legacy production hostname");
   }

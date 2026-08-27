@@ -2034,3 +2034,86 @@ main#top > :not(.hero-stage) {
   .comparison-column,
   .comparison-laurel { display: none; }
 }
+
+/* Command catalog: a scoped extension of the landing page's editorial cards. */
+.commands-section {
+  padding: clamp(78px, 8vw, 118px) 0;
+  border-top: 1px solid #d8cfbc;
+  background:
+    radial-gradient(circle at 84% 12%, rgba(157, 133, 79, .1), transparent 28%),
+    linear-gradient(180deg, #f4f0e5, #eee8da);
+}
+
+.commands-heading {
+  grid-template-columns: minmax(120px, .34fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.commands-heading h2 {
+  max-width: 760px;
+  margin: 0;
+  font-family: "Iowan Old Style", Baskerville, Georgia, "Times New Roman", serif;
+  font-size: clamp(42px, 4.4vw, 68px);
+  font-weight: 400;
+  letter-spacing: -.045em;
+  line-height: 1.02;
+}
+
+.commands-heading > div > p {
+  max-width: 720px;
+  margin: 22px 0 0;
+  color: #696b61;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.command-catalog {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 50px 0 0;
+  padding: 1px;
+  list-style: none;
+  background: rgba(154, 139, 108, .32);
+}
+
+.command-catalog li {
+  min-height: 122px;
+  padding: 24px 25px;
+  background: rgba(250, 247, 238, .88);
+}
+
+.command-catalog code {
+  color: #4d6248;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.command-catalog p {
+  margin: 12px 0 0;
+  color: #686a61;
+  font-size: 12px;
+  line-height: 1.58;
+}
+
+.command-alias-note {
+  margin: 22px 0 0;
+  color: #686a61;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.command-alias-note strong { color: #3e493d; }
+.command-alias-note code { color: #4d6248; font-size: 11px; font-weight: 700; }
+
+@media (max-width: 940px) {
+  .command-catalog { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 660px) {
+  .commands-section { padding: 72px 0; }
+  .commands-heading { grid-template-columns: 1fr; gap: 20px; }
+  .commands-heading h2 { font-size: 43px; }
+  .command-catalog { grid-template-columns: 1fr; margin-top: 36px; }
+  .command-catalog li { min-height: 0; }
+}

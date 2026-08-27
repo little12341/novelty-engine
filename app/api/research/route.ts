@@ -5,7 +5,7 @@ import { acquireProtection } from "@/lib/research/protection";
 import { durableStoreConfiguration } from "@/lib/research/durable";
 import { RESEARCH_ENGINE_VERSION, RESEARCH_SCHEMA_VERSION } from "@/lib/research/types";
 import type { ResearchMode, ResearchUserContext } from "@/lib/research/types";
-import { CLAUDE_COMMAND_ROUTES, parseResearchIntent, RESEARCH_COMMANDS } from "@/lib/research/intents";
+import { CLAUDE_COMMAND_ROUTES, NOVELTY_COMMAND_CATALOG, NoveltyCommandError, parseResearchIntent, RESEARCH_COMMANDS } from "@/lib/research/intents";
 import { compareIdeas } from "@/lib/research/comparison";
 import { getResearchMemory, mergeResearchContext } from "@/lib/research/memory";
 import { sanitizeFounderContext } from "@/lib/research/founder-fit";
@@ -21,6 +21,7 @@ export function GET() {
     provider: providerConfiguration(),
     commands: RESEARCH_COMMANDS,
     commandRoutes: CLAUDE_COMMAND_ROUTES,
+    commandCatalog: NOVELTY_COMMAND_CATALOG,
     accepts: { method: "POST", contentType: "application/json", body: { query: "string", mode: "optional ResearchMode", depth: "optional fast|standard|deep", ideas: "2-5 strings for compare_ideas", bypassCache: "optional boolean", memoryProfileId: "optional explicit opt-in profile", userContext: "optional current-run founder constraints" } },
   });
 }
@@ -63,6 +64,9 @@ export async function POST(request: NextRequest) {
     const result = await runResearch(intent.query, { bypassCache: body.bypassCache === true, mode: intent.mode, depth: body.depth as "fast" | "standard" | "deep" | undefined, userContext: mergeResearchContext(memory, userContext), signal: request.signal });
     return NextResponse.json(result, { headers: { "X-RateLimit-Remaining": String(permit.remaining), "Cache-Control": "private, no-store" } });
   } catch (error) {
+    if (error instanceof NoveltyCommandError) {
+      return NextResponse.json({ error: error.message, code: error.code, command: error.command, suggestions: error.suggestions }, { status: 400 });
+    }
     if (error instanceof ResearchConfigurationError) {
       return NextResponse.json({ error: error.message, code: "RESEARCH_NOT_CONFIGURED", requiredEnvironmentVariables: error.requiredEnvironmentVariables }, { status: 503 });
     }

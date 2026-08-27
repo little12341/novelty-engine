@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, KeyboardEvent, useId, useRef, useState } from "react";
 import Link from "next/link";
 import type { ResearchResult } from "@/lib/research/types";
+import { getNoveltyCommandMatches, moveCommandMenuIndex, selectNoveltyCommand } from "@/lib/research/command-menu";
 
 type McpHealth = {
   ok: boolean; endpoint: string; healthEndpoint: string; transport: string; toolCount: number;
@@ -22,6 +23,35 @@ export default function ResearchDebugger({ initialConfiguration, initialMcpHealt
   const [loading, setLoading] = useState(false);
   const [mcpHealth, setMcpHealth] = useState(initialMcpHealth);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [activeCommandIndex, setActiveCommandIndex] = useState(0);
+  const [dismissedCommandValue, setDismissedCommandValue] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const commandMenuId = useId();
+  const commandMatches = getNoveltyCommandMatches(query);
+  const commandMenuOpen = commandMatches.length > 0 && dismissedCommandValue !== query;
+
+  function chooseCommand(command: string) {
+    const selected = selectNoveltyCommand(command);
+    setQuery(selected);
+    setDismissedCommandValue(selected);
+    setActiveCommandIndex(0);
+    inputRef.current?.focus();
+  }
+
+  function handleCommandKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!commandMenuOpen) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveCommandIndex((current) => moveCommandMenuIndex(current, event.key === "ArrowDown" ? "next" : "previous", commandMatches.length));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const match = commandMatches[Math.min(activeCommandIndex, commandMatches.length - 1)];
+      if (match) chooseCommand(match.command);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setDismissedCommandValue(query);
+    }
+  }
 
   async function refreshHealth() {
     try {
@@ -83,7 +113,50 @@ export default function ResearchDebugger({ initialConfiguration, initialMcpHealt
       </section>
       <form className="debug-form" onSubmit={submit}>
         <label htmlFor="research-query">Research topic or ideation request</label>
-        <div><input id="research-query" value={query} maxLength={500} minLength={8} onChange={(event) => setQuery(event.target.value)} /><button disabled={loading}>{loading ? "Researching…" : "Run research"}</button></div>
+        <div>
+          <div className="command-input-wrap">
+            <input
+              ref={inputRef}
+              id="research-query"
+              value={query}
+              maxLength={500}
+              minLength={1}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={commandMenuOpen}
+              aria-controls={commandMenuId}
+              aria-activedescendant={commandMenuOpen ? `${commandMenuId}-${activeCommandIndex}` : undefined}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setDismissedCommandValue(null);
+                setActiveCommandIndex(0);
+              }}
+              onKeyDown={handleCommandKeyDown}
+            />
+            {commandMenuOpen && (
+              <div className="command-menu" id={commandMenuId} role="listbox" aria-label="Novelty commands">
+                {commandMatches.map((entry, index) => (
+                  <button
+                    type="button"
+                    id={`${commandMenuId}-${index}`}
+                    key={entry.command}
+                    role="option"
+                    aria-selected={index === activeCommandIndex}
+                    className={index === activeCommandIndex ? "is-active" : undefined}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setActiveCommandIndex(index)}
+                    onClick={() => chooseCommand(entry.command)}
+                  >
+                    <code>{entry.command}</code>
+                    <span>{entry.description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button disabled={loading}>{loading ? "Researching…" : "Run research"}</button>
+        </div>
+        <p className="command-input-hint">Type <code>/</code> to browse Novelty commands. Use ↑/↓ to move, Enter to select, and Escape to dismiss.</p>
       </form>
       {!initialConfiguration.configured && <p className="debug-notice">Set <code>BRAVE_SEARCH_API_KEY</code> or <code>TAVILY_API_KEY</code> on the server to enable live research. The inspector will not substitute fixture data.</p>}
       {error && <p className="debug-error">{error}</p>}
