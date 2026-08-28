@@ -63,9 +63,10 @@ for (const heroCopy of [
 ]) {
   if (!page.includes(heroCopy)) throw new Error(`Approved hero copy missing: ${heroCopy}`);
 }
-const installViewportRenders = [...installTransition.matchAll(/<InstallViewport\s*\/>/g)].length;
-const installContentSources = [...installTransition.matchAll(/className="install-content-source"/g)].length;
-if (installViewportRenders !== 1 || installContentSources !== 1) throw new Error("The installation viewport must have exactly one rendered content source");
+const installPanelRenders = [...installTransition.matchAll(/<InstallPanel\s*\/>/g)].length;
+if (installPanelRenders !== 1 || !installTransition.includes("Install Novelty Engine.")) throw new Error("The installation section must have one cohesive install panel and the approved title");
+if (/Option 0[12]/.test(installPanel) || /option-number/.test(installPanel)) throw new Error("Installation cards must not render numbered option badges");
+if (!installPanel.includes("Recommended")) throw new Error("The Claude Skill must remain the recommended installation method");
 for (const command of ["/research-market", "/find-gaps", "/inspect-competitors", "/customer-pain", "/falsify", "/rerun"]) {
   if (!page.includes(command)) throw new Error(`Required homepage command missing: ${command}`);
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { githubUrl, productionMcpEndpoint, productionMcpHealthEndpoint, productionSkillDownloadUrl } from "@/lib/site";
 
@@ -196,26 +195,25 @@ export function InstallPanel() {
 
   return (
     <div className="install-options">
-      <article className="install-option manual-option">
-        <div className="option-number">
-          <Image src="/assets/generated/open-laurel-wreath-v3.png" alt="" fill sizes="72px" unoptimized aria-hidden="true" />
-          <span>Option 01</span>
-        </div>
-        <div>
-          <p className="option-kicker">Claude Skill</p>
-          <h3>Upload or install the Skill.</h3>
-          <p><a href="/novelty-engine.zip" download>Download the current Skill package</a>. For Claude Code, extract it into your local skills directory. These commands are optional and only for the Claude Code route:</p>
-        </div>
+      <article className="install-option manual-option install-option-primary">
+        <header className="install-option-heading">
+          <div className="install-option-kicker-row">
+            <p className="option-kicker">Claude Skill</p>
+            <span className="recommended-label">Recommended</span>
+          </div>
+          <h3>Install the Claude Skill.</h3>
+          <p><a href="/novelty-engine.zip" download>Download the Skill ZIP</a> and upload it in <strong>Customize → Skills</strong>. Claude Code users can install the extracted folder locally.</p>
+        </header>
         <div className="command-block">
           <div className="command-header">
-            <span>Claude Code local install</span>
+            <span>Optional Claude Code install</span>
             <button type="button" onClick={() => copyText("commands", installCommands)} aria-label="Copy both Claude Skill setup commands">
               <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><rect x="6" y="6" width="8" height="8" rx="1"/><path d="M12 6V4.8c0-.5-.4-.8-.8-.8H4.8c-.4 0-.8.3-.8.8v6.4c0 .4.4.8.8.8H6"/></svg>
               {label("commands")}
             </button>
           </div>
           <pre><code>{installCommands}</code></pre>
-          <p className="archive-contents"><span>Windows</span>Extract to <code>%USERPROFILE%\.claude\skills\novelty-engine</code>.</p>
+          <p className="archive-contents"><strong>Windows</strong><span>Extract to <code>%USERPROFILE%\.claude\skills\novelty-engine</code></span></p>
         </div>
         <span className="sr-only" role="status" aria-live="polite">
           {copyState.target === "commands" && copyState.status === "copied" ? "Both install commands copied to clipboard." : copyState.target === "commands" && copyState.status === "error" ? "Could not copy the install commands." : ""}
@@ -223,15 +221,11 @@ export function InstallPanel() {
       </article>
 
       <article className="install-option browser-option">
-        <div className="option-number">
-          <Image src="/assets/generated/open-laurel-wreath-v3.png" alt="" fill sizes="72px" unoptimized aria-hidden="true" />
-          <span>Option 02</span>
-        </div>
-        <div>
-          <p className="option-kicker">Claude browser</p>
-          <h3>Connect the evidence engine once.</h3>
-          <p>First enable <strong>Code execution and file creation</strong> under <strong>Settings → Capabilities</strong>, then upload and enable the Skill under <strong>Customize → Skills</strong>. Open <strong>Customize → Connectors → + → Add custom connector</strong> and paste the MCP endpoint. Claude can gather sources with its own web access; Novelty analyzes them without requiring you to provide Tavily or Brave keys.</p>
-        </div>
+        <header className="install-option-heading">
+          <p className="option-kicker">Claude Connector</p>
+          <h3>Connect through MCP.</h3>
+          <p>Enable <strong>Code execution and file creation</strong>, then add a custom connector and paste this endpoint.</p>
+        </header>
         <div className="command-block mcp-command">
           <div className="command-header">
             <span>Streamable HTTP endpoint</span>
