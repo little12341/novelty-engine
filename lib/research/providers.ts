@@ -10,6 +10,30 @@ export class ResearchConfigurationError extends Error {
   }
 }
 
+export class HostedSearchDisabledError extends ResearchConfigurationError {
+  readonly code = "HOSTED_SEARCH_DISABLED";
+  constructor() {
+    super("Hosted search is disabled for this deployment. Use research_from_sources, then get_research_requirements and add_sources_to_run for additional evidence.", ["HOSTED_SEARCH_ENABLED"]);
+    this.name = "HostedSearchDisabledError";
+  }
+}
+
+export class SuppliedSourcesRequiredError extends Error {
+  readonly code = "SUPPLIED_SOURCES_REQUIRED";
+  constructor(message = "This workflow requires newly supplied public sources. Use get_research_requirements, gather evidence with Claude/web search, then call add_sources_to_run.") {
+    super(message);
+    this.name = "SuppliedSourcesRequiredError";
+  }
+}
+
+export function hostedSearchEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.HOSTED_SEARCH_ENABLED ?? "true").trim().toLowerCase() !== "false";
+}
+
+export function assertHostedSearchEnabled(env: NodeJS.ProcessEnv = process.env): void {
+  if (!hostedSearchEnabled(env)) throw new HostedSearchDisabledError();
+}
+
 function requireOk(response: Response, provider: string): void {
   if (!response.ok) {
     const retryAfter = response.headers.get("retry-after");
@@ -30,10 +54,13 @@ async function readJson<T>(response: Response, provider: string): Promise<T> {
 export class BraveSearchProvider implements SearchProvider {
   readonly id = "brave";
   readonly displayName = "Brave Search API";
+  readonly retrievalMode = "hosted" as const;
+  readonly usesHostedCredits = true;
   private readonly apiKey: string;
   constructor(apiKey: string) { this.apiKey = apiKey; }
 
   async search(query: string, options: { limit: number; signal?: AbortSignal }): Promise<ProviderSearchResult[]> {
+    assertHostedSearchEnabled();
     const url = new URL("https://api.search.brave.com/res/v1/web/search");
     url.searchParams.set("q", query);
     url.searchParams.set("count", String(options.limit));
@@ -59,10 +86,13 @@ export class BraveSearchProvider implements SearchProvider {
 export class TavilySearchProvider implements SearchProvider {
   readonly id = "tavily";
   readonly displayName = "Tavily Search API";
+  readonly retrievalMode = "hosted" as const;
+  readonly usesHostedCredits = true;
   private readonly apiKey: string;
   constructor(apiKey: string) { this.apiKey = apiKey; }
 
   async search(query: string, options: { limit: number; signal?: AbortSignal }): Promise<ProviderSearchResult[]> {
+    assertHostedSearchEnabled();
     const response = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -102,6 +132,7 @@ export function hasUsableProviderKey(value: string | undefined): value is string
 }
 
 export function getConfiguredProvider(env: NodeJS.ProcessEnv = process.env): SearchProvider {
+  assertHostedSearchEnabled(env);
   const requested = (env.SEARCH_PROVIDER ?? "auto").toLowerCase();
   if (requested === "fixture" && env.NOVELTY_MCP_TEST_FIXTURES === "true" && !env.VERCEL) return new LocalFixtureSearchProvider();
   if ((requested === "auto" || requested === "brave") && hasUsableProviderKey(env.BRAVE_SEARCH_API_KEY)) return new BraveSearchProvider(env.BRAVE_SEARCH_API_KEY.trim());
@@ -113,15 +144,15 @@ export function getConfiguredProvider(env: NodeJS.ProcessEnv = process.env): Sea
   throw new ResearchConfigurationError("Live research is not configured. Add a supported server-side search API key; no synthetic evidence was generated.", required);
 }
 
-export function providerConfiguration(env: NodeJS.ProcessEnv = process.env): { configured: boolean; selected: string | null; supported: string[] } {
+export function providerConfiguration(env: NodeJS.ProcessEnv = process.env): { configured: boolean; selected: string | null; supported: string[]; hostedSearchEnabled: boolean } {
   try {
     const provider = getConfiguredProvider(env);
-    return { configured: true, selected: provider.id, supported: ["brave", "tavily"] };
+    return { configured: true, selected: provider.id, supported: ["brave", "tavily"], hostedSearchEnabled: true };
   } catch {
-    return { configured: false, selected: null, supported: ["brave", "tavily"] };
+    return { configured: false, selected: null, supported: ["brave", "tavily"], hostedSearchEnabled: hostedSearchEnabled(env) };
   }
 }
 
-export function publicProviderConfiguration(env: NodeJS.ProcessEnv = process.env): { configured: boolean } {
-  return { configured: providerConfiguration(env).configured };
+export function publicProviderConfiguration(env: NodeJS.ProcessEnv = process.env): { suppliedSourceResearch: true; hostedSearchEnabled: boolean } {
+  return { suppliedSourceResearch: true, hostedSearchEnabled: hostedSearchEnabled(env) };
 }

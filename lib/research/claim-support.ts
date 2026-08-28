@@ -102,13 +102,16 @@ export function assessEvidenceForClaim(
     && !(evidence.sourceAssessment.discoveryOnly && !["company_existence", "vendor_positioning"].includes(claimType));
   const semantic = relevance(claim, marketContext, evidence);
   const identityClaim = ["company_existence", "vendor_feature", "vendor_positioning", "vendor_integration", "vendor_pricing", "competitor_relationship"].includes(claimType);
-  const relevant = identityClaim
+  const excerptSufficient = identityClaim || terms(evidence.summary).length >= 3;
+  const relevant = excerptSufficient && (identityClaim
     ? semantic.relevant || evidence.pageIdentity.explicitEntityNames.some((name) => claim.toLowerCase().includes(name.toLowerCase()))
-    : semantic.relevant;
+    : semantic.relevant);
   const accepted = roleCompatible && relevant;
   const reason = !roleCompatible
     ? `${supportRole} sources are not allowed to establish ${claimType.replaceAll("_", " ")}${evidence.sourceAssessment.discoveryOnly ? "; discovery-only/listicle evidence cannot independently prove this claim" : ""}.`
-    : !relevant
+    : !excerptSufficient
+      ? `Rejected by the evidence sufficiency gate; the supplied excerpt is too thin to establish ${claimType.replaceAll("_", " ")}.`
+      : !relevant
       ? `Rejected by the market relevance gate; matched ${semantic.matchedTerms.join(", ") || "no specific buyer/job/workflow/topic terms"}${semantic.missingAnchors.length ? ` and missed ${semantic.missingAnchors.join(", ")}` : ""}.`
       : `Accepted as ${supportRole} support with explicit buyer/job/workflow/topic overlap (${semantic.matchedTerms.join(", ") || "identity signal"}).`;
   return {

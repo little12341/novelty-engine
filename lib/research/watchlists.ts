@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { compareResearchRuns } from "./changes.ts";
 import { getPlatformRecord, privateIdentity, putPlatformRecord } from "./platform-store.ts";
 import { runResearch } from "./pipeline.ts";
+import { hostedSearchEnabled, SuppliedSourcesRequiredError } from "./providers.ts";
 import { getResearchResultById } from "./store.ts";
 import type { ChangeDetectionResult, SearchProvider, WatchlistConfig } from "./types.ts";
 
@@ -34,6 +35,9 @@ export async function checkWatchlist(id: string, options: { provider?: SearchPro
   if (!watch || !watch.enabled) throw new RangeError("Watchlist was not found or is disabled.");
   const baseline = await getResearchResultById(watch.baselineRunId);
   if (!baseline) throw new RangeError("Watchlist baseline run was not found.");
+  if (!options.provider && baseline.retrievalMode === "supplied_sources") {
+    throw new SuppliedSourcesRequiredError("A watchlist based on supplied evidence cannot silently spend hosted-search credits. Gather updated evidence with Claude/web search and add_sources_to_run, or create an explicitly hosted baseline before checking it.");
+  }
   const comparison = await runResearch(watch.query, {
     provider: options.provider, bypassCache: true, mode: watch.mode === "company" ? "research_company" : "research_market",
   });
@@ -47,4 +51,12 @@ export async function checkWatchlist(id: string, options: { provider?: SearchPro
     putPlatformRecord("changes", `change_${randomUUID().replaceAll("-", "").slice(0, 16)}`, filtered, new Date(filtered.comparedAt).getTime()),
   ]);
   return { watchlist: watch, change: filtered };
+}
+
+export async function watchlistProtectionClass(id: string): Promise<"compute" | "provider"> {
+  const watch = await getPlatformRecord<WatchlistConfig>("watchlists", id);
+  if (!watch || !watch.enabled) throw new RangeError("Watchlist was not found or is disabled.");
+  const baseline = await getResearchResultById(watch.baselineRunId);
+  if (!baseline) throw new RangeError("Watchlist baseline run was not found.");
+  return !hostedSearchEnabled() || baseline.retrievalMode === "supplied_sources" ? "compute" : "provider";
 }

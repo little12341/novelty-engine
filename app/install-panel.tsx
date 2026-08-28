@@ -229,8 +229,8 @@ export function InstallPanel() {
         </div>
         <div>
           <p className="option-kicker">Claude browser</p>
-          <h3>Connect live research once.</h3>
-          <p>After enabling the Skill, open <strong>Customize → Connectors → + → Add custom connector</strong> and paste the MCP endpoint. Team/Enterprise owners add it under Organization settings first.</p>
+          <h3>Connect the evidence engine once.</h3>
+          <p>After enabling the Skill, open <strong>Customize → Connectors → + → Add custom connector</strong> and paste the MCP endpoint. Claude can gather sources with its own web access; Novelty analyzes them without requiring you to provide Tavily or Brave keys.</p>
         </div>
         <div className="command-block mcp-command">
           <div className="command-header">

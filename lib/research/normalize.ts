@@ -153,7 +153,7 @@ function claimSimilarity(left: string, right: string): number {
   return shared / Math.min(a.size, b.size);
 }
 
-function cleanText(value: string, maxLength = 420): string {
+function cleanText(value: string, maxLength = 2_000): string {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
@@ -209,8 +209,9 @@ export function normalizeResults(
           + existingClaim.sourceAssessment.independence * .15) * 100) / 100;
         continue;
       }
+      const sourceRetrievedAt = normalizePublicationDate(result.retrievedAt) ? new Date(result.retrievedAt!).toISOString() : retrievedAt;
       const publicationDate = normalizePublicationDate(result.publishedAt);
-      const recency = recencyScore(publicationDate, retrievedAt);
+      const recency = recencyScore(publicationDate, sourceRetrievedAt);
       const quality = SOURCE_QUALITY[sourceType];
       const directness = directnessScore(sourceType);
       const independence = .9;
@@ -237,7 +238,7 @@ export function normalizeResults(
         title,
         sourceType,
         publicationDate,
-        retrievedAt,
+        retrievedAt: sourceRetrievedAt,
         summary,
         supports: angle.purpose,
         confidence: Math.round((overallWeight - (result.rank && result.rank > 5 ? .08 : 0)) * 100) / 100,
@@ -252,6 +253,12 @@ export function normalizeResults(
           promptInjectionDetected: ignoredDirectiveCategories.length > 0,
           ignoredDirectiveCategories,
         },
+        suppliedMetadata: result.suppliedMetadata ? {
+          declaredSourceType: result.suppliedMetadata.declaredSourceType ?? null,
+          declaredPublisher: result.suppliedMetadata.declaredPublisher ?? null,
+          declaredDomain: result.suppliedMetadata.declaredDomain ?? null,
+          metadataWarnings: [...new Set(result.suppliedMetadata.metadataWarnings ?? [])],
+        } : undefined,
         sourceAssessment: {
           quality, directness, recency, independence, overallWeight,
           independenceGroup: independenceGroup(normalizedUrl, sourceType),

@@ -14,6 +14,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => (
 export function structuredExport(result: ResearchResult) {
   return {
     schemaVersion: result.schemaVersion, engineVersion: result.engineVersion, depth: result.depth, runId: result.id, query: result.query, mode: result.mode, completedAt: result.completedAt,
+    retrievalMode: result.retrievalMode, retrieval: result.retrieval, runLineage: result.runLineage,
     researchLandscape: result.output.researchLandscape, signals: result.output.signals,
     structuralGaps: result.output.structuralGaps, candidateIdeas: result.output.candidateIdeas,
     rejectedIdeas: result.output.rejectedIdeas, survivors: result.output.survivors,
@@ -34,7 +35,7 @@ export function structuredExport(result: ResearchResult) {
 
 export function markdownExport(result: ResearchResult): string {
   const sections = [
-    ["Research Landscape", `Status: ${result.stopDecision.status}\n\nSources: ${result.sources.length}; independent: ${result.coverage.independentSourceCount}; provider: ${result.provider.displayName}.`],
+    ["Research Landscape", `Status: ${result.stopDecision.status}\n\nSources: ${result.sources.length}; independent: ${result.coverage.independentSourceCount}; retrieval: ${result.retrievalMode}; provider: ${result.provider.displayName}; hosted provider calls: ${result.retrieval.hostedProviderCalls}.`],
     ["Signals", result.output.signals.map((item) => `- ${item.label} — ${item.status} [${item.evidenceIds.join(", ")}]`).join("\n") || "No supported signals."],
     ["Structural Gaps", result.output.structuralGaps.map((item) => `- ${item.problemStatement} (${item.confidenceLabel})`).join("\n") || "No gap cleared the evidence gate."],
     ["Candidate Ideas", result.output.candidateIdeas.map((item) => `- ${item.name} — ${item.status}`).join("\n") || "No candidates generated."],

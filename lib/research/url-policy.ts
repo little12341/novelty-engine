@@ -5,6 +5,7 @@ export interface UrlPolicyDecision {
 }
 
 const LOCAL_HOSTS = new Set(["localhost", "localhost.localdomain", "0.0.0.0", "127.0.0.1", "::1", "[::1]"]);
+const CREDENTIAL_QUERY_KEYS = /^(?:access[_-]?token|api[_-]?key|auth|authorization|client[_-]?secret|credential|key|password|secret|signature|sig|token)$/i;
 
 function privateIpv4(host: string): boolean {
   const parts = host.split(".").map(Number);
@@ -29,6 +30,7 @@ export function validateExternalResearchUrl(raw: string): UrlPolicyDecision {
     const url = new URL(raw);
     if (url.protocol !== "https:" && url.protocol !== "http:") return { allowed: false, normalizedUrl: null, reason: "protocol_not_allowed" };
     if (url.username || url.password) return { allowed: false, normalizedUrl: null, reason: "url_credentials_not_allowed" };
+    if ([...url.searchParams.keys()].some((key) => CREDENTIAL_QUERY_KEYS.test(key))) return { allowed: false, normalizedUrl: null, reason: "url_credentials_not_allowed" };
     const host = url.hostname.toLowerCase().replace(/\.$/, "");
     if (!host || LOCAL_HOSTS.has(host) || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal") || privateIpv4(host) || privateIpv6(host)) {
       return { allowed: false, normalizedUrl: null, reason: "private_or_local_destination" };

@@ -3,10 +3,10 @@ import { falsifyCandidate } from "../research/falsification.ts";
 import { extractCompetitors } from "../research/analyze.ts";
 import { fingerprintCandidate, fingerprintCompetitor, similarityMatrix } from "../research/fingerprints.ts";
 import { normalizeResults } from "../research/normalize.ts";
-import { getConfiguredProvider } from "../research/providers.ts";
+import { getConfiguredProvider, hostedSearchEnabled, SuppliedSourcesRequiredError } from "../research/providers.ts";
 import { getResearchResultById } from "../research/store.ts";
 import { researchLimits } from "../research/pipeline.ts";
-import type { CandidateGap, IdeaCandidate, SearchAngle } from "../research/types.ts";
+import type { CandidateGap, IdeaCandidate, SearchAngle, SearchProvider } from "../research/types.ts";
 import { resolveCandidateId } from "../research/candidate-ids.ts";
 
 function focusedAngles(opportunity: string, limit: number): SearchAngle[] {
@@ -58,22 +58,27 @@ export async function activelyFalsifyOpportunity(input: { opportunity: string; r
     : undefined;
   if (input.candidate_id && !candidate) throw new RangeError(`Candidate ${input.candidate_id} was not found in run ${input.run_id}.`);
 
+  const selected = candidate ?? candidateFromSuppliedOpportunity(input.opportunity);
   const limits = researchLimits();
+  const storedOnly = !hostedSearchEnabled() || prior?.retrievalMode === "supplied_sources";
+  if (storedOnly && (!prior || prior.sources.length === 0)) throw new SuppliedSourcesRequiredError("Falsification needs counterevidence sources. Call research_from_sources first, or get_research_requirements and add_sources_to_run for an existing run.");
   const configured = Number.parseInt(process.env.MCP_FALSIFICATION_MAX_QUERIES ?? "4", 10);
-  const searchCount = Math.min(4, limits.maxProviderCalls, Number.isFinite(configured) ? Math.max(1, configured) : 4);
+  const searchCount = storedOnly ? 0 : Math.min(4, limits.maxProviderCalls, Number.isFinite(configured) ? Math.max(1, configured) : 4);
   const angles = focusedAngles(input.opportunity, searchCount);
-  const provider = getConfiguredProvider();
-  const settled = await Promise.allSettled(angles.map(async (angle) => ({
+  const provider: SearchProvider = storedOnly ? {
+    id: "stored_supplied_sources", displayName: "Stored supplied evidence", retrievalMode: "supplied_sources", usesHostedCredits: false,
+    async search() { return []; },
+  } : getConfiguredProvider();
+  const settled = storedOnly ? [] : await Promise.allSettled(angles.map(async (angle) => ({
     angle,
     results: await provider.search(angle.query, { limit: Math.min(5, limits.resultsPerQuery), signal: AbortSignal.timeout(limits.timeoutMs) }),
   })));
   const successful = settled.flatMap((item) => item.status === "fulfilled" ? [item.value] : []);
   const errors = settled.flatMap((item, index) => item.status === "rejected" ? [`${angles[index].kind}: ${item.reason instanceof Error ? item.reason.message : "provider error"}`] : []);
-  if (successful.length === 0) throw new Error(`All focused counterevidence searches failed. ${errors[0] ?? "Provider returned no response."}`);
+  if (!storedOnly && successful.length === 0) throw new Error(`All focused counterevidence searches failed. ${errors[0] ?? "Provider returned no response."}`);
   const newEvidence = normalizeResults(successful, new Date().toISOString(), 20);
-  if (newEvidence.length === 0) throw new Error("Focused searches returned no usable public counterevidence. Risks remain unknown; no evidence was fabricated.");
+  if (!storedOnly && newEvidence.length === 0) throw new Error("Focused searches returned no usable public counterevidence. Risks remain unknown; no evidence was fabricated.");
 
-  const selected = candidate ?? candidateFromSuppliedOpportunity(input.opportunity);
   const sourceGaps = prior?.gaps.filter((gap) => selected.sourceGapIds.includes(gap.id)) ?? [];
   const externalGap: CandidateGap = {
     id: "gap_external", problemStatement: input.opportunity, affectedSegment: null, currentWorkaround: null,
@@ -96,10 +101,15 @@ export async function activelyFalsifyOpportunity(input: { opportunity: string; r
   return {
     candidate: { id: selected.id, name: selected.name, summary: selected.summary, targetCustomer: selected.targetCustomer, mechanism: selected.mechanism },
     priorRunId: prior?.id ?? null, provider: { id: provider.id, displayName: provider.displayName },
+    retrievalMode: storedOnly ? "supplied_sources" as const : "hosted" as const,
+    providerCalls: storedOnly ? 0 : angles.length,
     activeSearch: { requestedQueries: angles.length, successfulQueries: successful.length, sourceCount: newEvidence.length, errors },
     falsification: result,
     citations: evidence.filter((item) => citedIds.has(item.id)).slice(0, 20).map((item) => ({ id: item.id, title: item.title, url: item.sourceUrl, confidence: item.confidence })),
     explicitUnknowns: result.hypotheses.filter((item) => item.unknown).map((item) => item.dimension),
-    warning: "Focused search results are counterevidence inputs, not proof that every claim in their snippets is correct. The survival score is a heuristic.",
+    requiresAdditionalSources: storedOnly && result.hypotheses.some((item) => item.unknown),
+    warning: storedOnly
+      ? "Falsification used only the stored supplied evidence and made zero hosted provider calls. UNKNOWN dimensions require Claude/web counterevidence followed by add_sources_to_run."
+      : "Focused search results are counterevidence inputs, not proof that every claim in their snippets is correct. The survival score is a heuristic.",
   };
 }

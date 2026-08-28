@@ -1,6 +1,6 @@
 # Novelty Engine
 
-Novelty Engine 2.2 is an evidence-driven search-and-elimination platform plus a Claude Skill. Its core loop is `search → discover → gather evidence → challenge → falsify → expand → validate → report survivors`. It preserves the V2.1 public result schema while adding persisted candidate lifecycles and kill reasons, adjacent-search expansion, configurable evidence gates, independent Bull/Bear/Judge records, specialist task graphs, assumption ledgers, founder constraints, separate opportunity/novelty/evidence-confidence scores, one next-best action, richer exports, and an architecturally separate financial-signal backtester. Claude consumes the same structured contract exposed by MCP instead of pretending a prompt performed research.
+Novelty Engine 2.2 is an evidence-driven search-and-elimination platform plus a Claude Skill. Its recommended default is `Claude/web search → research_from_sources → normalize → challenge → falsify → validate → persist/export`: Claude gathers public evidence with the user's web capability, while Novelty performs the full evidence pipeline without a Tavily or Brave call. Optional hosted retrieval remains available for backward-compatible or explicitly requested deep research. The engine preserves the V2.1 public result schema while adding persisted candidate lifecycles and kill reasons, adjacent expansion, configurable evidence gates, independent Bull/Bear/Judge records, specialist task graphs, assumption ledgers, founder constraints, separate opportunity/novelty/evidence-confidence scores, one next-best action, richer exports, and an architecturally separate financial-signal backtester.
 
 Production website: [https://www.novelty-engine.com](https://www.novelty-engine.com)
 
@@ -11,19 +11,21 @@ Competitors validate that a job or market may exist; their existence is never an
 ## Architecture
 
 ```text
-Claude browser / Claude Code -> Novelty Engine Skill -> remote MCP (/api/mcp)
-  -> intent (/find-business, /research-market, /research-company, ...)
-  -> user request -> synonym/customer-language plan -> bounded shared source gathering
+Claude browser / Claude Code -> Claude web search -> bounded public source objects
+  -> Novelty Engine Skill -> research_from_sources at remote MCP (/api/mcp)
+  -> user request + supplied evidence -> synonym/customer-language plan over one immutable snapshot
   -> source-verification role -> injection screening + trust metadata + deduplication
   -> market / competitor / complaint / gap / company roles over one evidence set
   -> source quality/independence/repetition assessment -> competitor + substitute map
   -> complaint/workaround mining -> Opportunity Graph -> graph-hole detection
   -> weak signals -> failed-attempt mining -> assumption contradictions
   -> evidence gate + stop decision -> candidate lifecycle -> novelty/collision fingerprints
-  -> independent Bull/Bear/Judge + 11-dimension falsification -> adjacent search / bounded mutation
+  -> independent Bull/Bear/Judge + 11-dimension falsification -> evidence requirements / bounded mutation
   -> 29-factor scorecard + evidence confidence + decision intelligence + moat/counterfactual tests
   -> assumption ledger -> strict validation gate -> one next-best action + 24-72 hour validation plan
-  -> quality checkpoints -> evidence snapshot -> consistent final output + durable history
+  -> quality checkpoints -> evidence snapshot lineage -> consistent final output + durable history
+
+Optional advanced path: explicit research_market/run_research_mode -> centrally enabled Tavily or Brave adapter -> same pipeline
 ```
 
 The app uses Next.js App Router, TypeScript, native `fetch`, the official MCP TypeScript SDK with Vercel's Web-standard handler, Zod schemas, Node storage helpers, and an optional Upstash Redis adapter. The provider, storage, protection, and authorization boundaries remain intentionally small.
@@ -51,16 +53,17 @@ Competitor fields use an evidence-carrying value shape: `{ value, evidenceIds, c
 
 Complaint mining clusters repeated language into product, pricing, usability, distribution, integration, trust, or compliance gaps. It records evidence count, severity, affected segment, workaround, links, and whether the complaint is isolated. Gap scoring exposes ten 0–10 heuristic factors and named penalties for absence-only reasoning, weak evidence, one-off complaints, and crowded incumbent markets without a wedge. Scores prioritize review; they are not probabilities or market forecasts.
 
-## Search provider setup
+## Retrieval modes and optional provider setup
 
 For local development, create `.env.local` in the project root. It is ignored by Git.
 
-Configure one provider. Both are server-side only and are never referenced by client components:
+No search-provider key is required for the recommended supplied-source workflow. `research_from_sources`, `get_research_requirements`, `add_sources_to_run`, stored reads, comparisons, falsification over stored evidence, and exports remain useful with no Tavily/Brave credentials. To enable optional hosted retrieval, configure one server-side provider; keys are never exposed to users or client components.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `BRAVE_SEARCH_API_KEY` | One of the two keys | Brave Search API subscription token |
-| `TAVILY_API_KEY` | One of the two keys | Tavily Search API key |
+| `HOSTED_SEARCH_ENABLED` | No; default `true` for backward compatibility | Set `false` to block every Tavily/Brave adapter call centrally, even when keys exist |
+| `BRAVE_SEARCH_API_KEY` | Only for optional hosted mode | Brave Search API subscription token |
+| `TAVILY_API_KEY` | Only for optional hosted mode | Tavily Search API key |
 | `SEARCH_PROVIDER` | No; default `auto` | `brave`, `tavily`, or `auto` (Brave first) |
 | `RESEARCH_MAX_QUERIES` | No; standard default 28, hard cap 48 | Landscape, competitor recall/cross-check, evidence-gap, expansion, and falsification angles per run |
 | `RESEARCH_RESULTS_PER_QUERY` | No; default 6, hard cap 10 | Provider results per angle |
@@ -98,11 +101,11 @@ Configure one provider. Both are server-side only and are never referenced by cl
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Alternative | Vercel/Upstash-compatible aliases for the durable store |
 | `NOVELTY_RESEARCH_DEPTH` | No; default `standard` | Claude Code helper default: `fast`, `standard`, or `deep` |
 
-For the authless public-beta deployment on Vercel, the exact required environment contract is: **one** of `TAVILY_API_KEY` or `BRAVE_SEARCH_API_KEY`, plus `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Tavily alone is supported; Brave is not an additional requirement. `SEARCH_PROVIDER` may be omitted (`auto`) or set to the matching provider. Leave `MCP_ALLOW_INSTANCE_LOCAL_PUBLIC=false` and leave `NOVELTY_MCP_ACCESS_TOKEN` unset for Claude’s authless custom-connector flow. Every other variable above is an optional bounded tuning control.
+For an authless public Vercel deployment using the zero-provider-cost default, set `HOSTED_SEARCH_ENABLED=false` and configure `UPSTASH_REDIS_REST_URL` plus `UPSTASH_REDIS_REST_TOKEN` for durable runs, distributed abuse limits, and concurrency protection. No Tavily/Brave key is needed. Leave `MCP_ALLOW_INSTANCE_LOCAL_PUBLIC=false` and `NOVELTY_MCP_ACCESS_TOKEN` unset for Claude’s authless custom-connector flow.
 
-Brave and Tavily both offer entry-level plans suitable for development, but current quotas and pricing should be checked with the provider. Secrets belong only in `.env.local` or Vercel environment settings and must never use a `NEXT_PUBLIC_` prefix. Obvious placeholder values such as `your_brave_key` are treated as unconfigured; in `auto` mode the engine can still select the other valid provider. `.env*` and `.research-runs/` are ignored by Git; `.env.example` is the deliberately committed key template.
+If hosted mode is enabled, current Brave/Tavily quotas and pricing should be checked with the provider. Secrets belong only in `.env.local` or Vercel environment settings and must never use a `NEXT_PUBLIC_` prefix. Users never supply Novelty's provider keys. Supplied-source mode records `providerCalls: 0`, consumes no Tavily/Brave credits, and bypasses daily/monthly provider-spend counters while retaining request-size, per-client, concurrency, CPU/time, persistence, and MCP protections. This does not mean the deployment is literally cost-free: Vercel, Redis, bandwidth, or other infrastructure can cost money above their free tiers.
 
-Without a configured key, `POST /api/research` returns HTTP 503 with `RESEARCH_NOT_CONFIGURED`. It does not substitute mock data or ask a model to invent results.
+Without a configured key, supplied-source research still works. Hosted `research_market` and hosted API requests return `RESEARCH_NOT_CONFIGURED`; when `HOSTED_SEARCH_ENABLED=false`, every hosted entry point returns `HOSTED_SEARCH_DISABLED` and suggests `research_from_sources`. No path substitutes fixtures or unsourced generation.
 
 ## Run locally
 
@@ -115,12 +118,12 @@ npm run dev
 
 Open the public landing page at [http://localhost:3000](http://localhost:3000) and the internal inspector at [http://localhost:3000/research-debug](http://localhost:3000/research-debug).
 
-Run a request with curl:
+Use the supplied-source path by default. Each record needs `url`, `title`, and an evidence-bearing `snippet`, `excerpt`, or `content`:
 
 ```bash
 curl -X POST http://localhost:3000/api/research \
   -H "Content-Type: application/json" \
-  -d '{"query":"find AI tools for contractors"}'
+  -d '{"query":"find AI tools for contractors","retrieval_mode":"supplied_sources","sources":[{"url":"https://example.org/field-report","title":"Field report","excerpt":"Contractors report re-entering job data between scheduling, invoicing, and customer systems."}]}'
 ```
 
 PowerShell equivalent:
@@ -129,16 +132,16 @@ PowerShell equivalent:
 Invoke-RestMethod -Method Post `
   -Uri http://localhost:3000/api/research `
   -ContentType application/json `
-  -Body '{"query":"find underserved creator software markets"}'
+  -Body '{"query":"find underserved creator software markets","retrieval_mode":"supplied_sources","sources":[{"url":"https://example.org/creator-survey","title":"Creator survey","excerpt":"Respondents describe recurring manual sponsorship reconciliation and delayed payment tracking."}]}'
 ```
 
-Successful local runs are saved twice under `.research-runs/`: an immutable run-ID file and a canonical-query cache file. Exact queries persist across restarts; highly similar queries are reused within a warm process when token-set similarity is at least 0.88. Add `"bypassCache": true` only when a fresh paid search is intentional.
+Successful local runs are saved as an immutable run-ID file and a canonical-query cache file. MCP/HTTP-created runs also receive a lightweight hashed current-client index under `.research-runs/owners/`; the owner namespace never enters `ResearchResult` JSON. Exact queries persist across restarts; highly similar queries are reused within the same owner namespace when token-set similarity is at least 0.88. Add `"bypassCache": true` only when a fresh paid search is intentional. Historical unscoped V2.1/V2.2 run files remain readable by ID but are deliberately not exposed through a scoped public list.
 
 ## Research API
 
 The production research endpoint is `https://www.novelty-engine.com/api/research`. Keep relative `/api/research` calls inside the deployed application so they remain same-origin.
 
-`GET /api/research` reports provider readiness without exposing keys. `POST /api/research` accepts:
+`GET /api/research` reports the available retrieval modes without exposing keys. `POST /api/research` accepts the backward-compatible hosted request below, plus `retrieval_mode: supplied_sources` with 1–48 strict source objects containing `url`, `title`, and at least one of `snippet`, `excerpt`, or `content`.
 
 ```json
 {
@@ -151,6 +154,21 @@ The production research endpoint is `https://www.novelty-engine.com/api/research
 ```
 
 The same endpoint accepts the documented research command prefixes. For comparison, send `{ "mode": "compare_ideas", "ideas": ["...", "..."] }`. Current-run `userContext` overrides any explicitly selected opt-in memory profile. Supporting endpoints cover searchable history, exports, notes/tags/folders/decision logs, measured validation outcomes, filtered saved-run feeds, memory, feedback, watchlists, and explicit watchlist checks; inspect `GET /api/research/openapi` for the current contract.
+
+Company research keeps the free-text path and also accepts authoritative structured identifiers. At least one query or identifier is required:
+
+```json
+{
+  "mode": "research_company",
+  "query": "Research Certificial and its competitors",
+  "company_name": "Certificial",
+  "domain": "certificial.com",
+  "ticker": null,
+  "country": "United States"
+}
+```
+
+`domain` must be a bare public hostname. Schemes, paths, queries, credentials, ports, localhost, and IP addresses are rejected. Ambiguous structured names and conflicting query/name/domain combinations return `INVALID_COMPANY_IDENTITY`; structured identity remains authoritative over article, directory, listicle, or comparison-page titles.
 
 The backward-compatible `ResearchResult` schema now carries `engineVersion: 2.2.0`, depth, search branches, lifecycle histories, evidence gates, assumption ledgers, independent adversarial reviews, task-graph/checkpoint records, one next-best action, novelty and evidence-confidence scores, counterfactual scale requirements, and moat stress tests in addition to every V2.1 field. `GET /api/research/openapi` describes the HTTP surface.
 
@@ -166,27 +184,44 @@ It uses Vercel's `mcp-handler` 2.x implementation pattern with the official MCP 
 
 Existing connectors configured with the apex-domain redirect or `https://novelty-engine.vercel.app/api/mcp` remain supported for backward compatibility. Use the redirect-free canonical `www.novelty-engine.com` endpoints for every new installation.
 
-The deliberate tool surface is:
+The deliberate, additive tool surface now contains **20 tools**. The first three are the recommended zero-provider-credit orchestration surface:
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
-| `research_market` | `{ query, depth?, founder_constraints? }` | Complete compatible output schema, gates, lifecycle, citations, warnings, budgets, and run ID; may return no ideas |
-| `find_market_gaps` | `{ run_id, limit?, cursor? }` | Paginated ranked gaps with supporting/counter citations and explicit unknowns |
-| `inspect_competitors` | `{ run_id, limit?, cursor?, fresh_expand?, candidate_id? }` | Stored competitor map, with optional fresh high-recall expansion using the same primary/cross-check/escalation planner |
-| `falsify_opportunity` | `{ opportunity: string, run_id?: string, candidate_id?: string }` | Up to four fresh counterevidence searches plus the falsification result |
-| `get_research_run` | `{ run_id: string, include_full?: boolean }` | Concise summary by default; complete internal JSON only when explicitly requested |
-| `run_research_mode` | `{ mode, query, depth?, founder_constraints? }` | Shared pipeline for business, market, company, competitor, gap, falsification, and validation intents |
-| `compare_ideas` | `{ ideas: string[2..5] }` | Qualitative cross-idea comparison under one shared provider-call budget |
-| `export_research_run` | `{ run_id, format }` | JSON, Markdown, print, CSV, competitor matrix, validation plan, brief, memo, or bibliography |
+| `research_from_sources` | `{ query, depth?, founder_constraints?, sources }` | Runs bounded Claude/user-supplied evidence through the full shared pipeline; persists a canonical run with `providerCalls: 0` |
+| `get_research_requirements` | `{ run_id }` | Returns missing evidence families, unresolved claims/assumptions, and suggested Claude/web search objectives; no provider call |
+| `add_sources_to_run` | `{ run_id, sources, founder_constraints? }` | Creates an immutable descendant run, merges/dedupes sources, and recomputes downstream analysis with zero hosted calls |
+| `research_market` | `{ query, depth?, founder_constraints?, retrieval_mode?: "hosted" }` | Backward-compatible optional hosted full run; fails safely when hosted search is disabled |
+| `find_market_gaps` | `{ run_id, limit?, cursor? }` | Only reads and ranks gaps already in a completed stored run; no fresh retrieval |
+| `inspect_competitors` | `{ run_id, limit?, cursor?, fresh_expand?, candidate_id? }` | Reads stored competitors; only `fresh_expand=true` performs one bounded high-recall expansion |
+| `falsify_opportunity` | `{ opportunity: string, run_id?: string, candidate_id?: string }` | Uses stored supplied evidence at zero provider cost; otherwise optional hosted counterevidence retrieval |
+| `get_research_run` | `{ run_id, include_full? }` | Concise summary by default; `include_full=true` returns the stored internal `ResearchResult` |
+| `run_research_mode` | `{ mode, query?, company_name?, domain?, ticker?, country?, depth?, founder_constraints?, retrieval_mode?: "hosted" }` | Optional hosted intent-scoped run; structured identifiers apply to `research_company` |
+| `compare_ideas` | `{ ideas: string[2..5] }` | Starts fresh research for separate ideas under one shared provider-call budget |
+| `export_research_run` | `{ run_id, format }` | Returns the canonical export/report representation; JSON export is not the internal `ResearchResult` |
 | `compare_research_runs` | `{ baseline_run_id, comparison_run_id }` | Material snapshot deltas with trivial/syndicated changes suppressed |
-| `rerun_research` | `{ run_id, depth? }` | Fresh incremental rerun plus material-change and opportunity-evolution comparison |
+| `rerun_research` | `{ run_id, depth?, retrieval_mode?: "auto"|"hosted" }` | Hosted rerun for hosted baselines; supplied baselines require `add_sources_to_run` unless hosted is explicitly requested |
 | `source_check` | `{ run_id }` | Citation integrity, source quality/diversity, duplicates, contradictions, and unknowns |
 | `next_best_action` | `{ run_id }` | Single highest-information validation or search action with success/kill criteria |
 | `record_validation_outcome` | `{ run_id, candidate_id, experiment_type, success, observed_metrics, artifact_urls? }` | Persist an external validation result without bypassing research/evidence gates |
+| `list_research_runs` | `{ limit?, cursor?, created_after?, created_before?, updated_after?, updated_before?, status?, stop_status?, mode?, depth? }` | Scoped recent-run summaries with opaque pagination; no run ID or fresh retrieval required |
+| `search_research_runs` | `{ query, ...list filters }` | Ranked scoped keyword/canonical-token matches with transparent match metadata; not embedding/vector search |
+| `get_research_budget_info` | `{}` | Public-safe configured retrieval ranges, hard caps, and relative cost for fast/standard/deep/comparison/falsification/rerun |
+| `compare_run_candidates` | `{ run_id, candidate_ids: string[2..5], dimensions?, fresh_expand? }` | Side-by-side stored evidence comparison; zero provider calls by default, with killed/UNKNOWN status preserved |
 
-Tool errors are structured and say when the provider is not configured or unavailable. They never substitute fixtures or model-generated research. Cost-bearing calls are bounded by request length, source/result limits, provider timeouts, search-call caps, per-client rate limits, daily/monthly global budgets, and a concurrent-run semaphore. Budget denial returns HTTP `429` with `Retry-After` and a machine-readable reason.
+`list_research_runs` returns `runs`, `page { limit, nextCursor, hasMore }`, and the automatic ownership boundary. Each run summary contains `run_id`, original query/topic, mode, depth, result status, stop status, creation/update timestamps, survivor/candidate/gap/rejected counts, and a concise result summary—never raw internal JSON. `search_research_runs` adds `match { score, exactPhrase, matchedFields }` and a plain-language `rankingMethod`. Filters and cursors are bounded and validated.
+
+Public discovery is automatically partitioned by the same privacy-preserving hashed client-network identity used by protection controls. New caches and indexes are also owner-scoped, so one client cannot list/search another client's run. No caller-supplied `user_id` can select a different namespace. This is a practical pre-OAuth boundary, not an account system: clients sharing a NAT/public IP share the namespace, and changing networks may make prior runs undiscoverable until a real authenticated user namespace is added. Random run IDs remain readable by explicit ID for backward compatibility.
+
+`get_research_budget_info` reports deterministic configured call ranges/caps rather than fake money. Deep is high relative cost and uses substantially more retrieval than fast; reruns inherit the selected depth; comparison has one shared cap; focused falsification has a four-call hard cap. It deliberately omits provider identity, API plans, credentials, monetary estimates, sensitive shared quota state, and remaining-capacity details.
+
+`compare_run_candidates` accepts 2–5 unique canonical candidate IDs or gap IDs from one run. Without `fresh_expand`, it reads only stored evidence, score reasoning, falsification, assumption ledger, collision/competitor data, and claim lineage and returns `providerCalls: 0`. Rows cover buyer specificity, pain, spend/WTP, residual gap, competition/collision, differentiation, feasibility, distribution, switching friction, regulation/liability, evidence confidence, critical assumptions, strongest counterevidence, and next validation. Every cell carries `KNOWN`, `INFERRED`, `UNKNOWN`, or `CONTRADICTED`, evidence IDs, and citations. Killed candidates retain their exact reason and are never revived. Explicit fresh expansion updates only the comparison view and does not mutate stored scores or lifecycle decisions.
+
+Tool errors are structured and distinguish `HOSTED_SEARCH_DISABLED`, `RESEARCH_NOT_CONFIGURED`, and `SUPPLIED_SOURCES_REQUIRED`. They never substitute fixtures or model-generated research. Supplied-source compute is bounded by strict source schemas, URL policy, per-source and aggregate text caps, request size, per-client rate limits, a concurrent-run semaphore, CPU/time limits, and persistence controls, but it does not consume Tavily/Brave daily/monthly budgets. Hosted calls retain every existing provider-call, retry, timeout, daily/monthly, and concurrency limit.
 
 If Upstash Redis REST is configured, run retrieval, exact-query cache records, counters, global budgets, and concurrency protection are durable/distributed. Without it, local development uses files plus memory. On Vercel, authless cost-bearing MCP calls fail closed with `DURABLE_PROTECTION_REQUIRED`; an explicit `MCP_ALLOW_INSTANCE_LOCAL_PUBLIC=true` exists only for private previews. `/api/mcp/health` and `/research-debug` report the active mode.
+
+Concise MCP summaries include an `ideationContextGuide`. The actual typed `ideationContext` remains on the stored `ResearchResult` and its user-safe fields are `finalOpportunities` (survivors), `graphHoles` (sparse structural links), `contradictions` (unresolved assumption inversions), `stitchingPatterns` (multi-tool/manual handoffs), `weakSignals` (early calibrated change signals), `resurrectionOpportunities` (failed approaches with possibly changed blockers), `competitors` (normalized entities with explicit nulls), `evidence` (traceable source records), `finalOutput`, and `budgetUsage`. This formalizes existing artifacts without changing schema version. Hidden chain-of-thought, raw model reasoning, private scratchwork, unselected candidate pools, sensitive quota state, and secrets are explicitly excluded.
 
 ## Claude Skill
 
@@ -236,9 +271,9 @@ Set the backend URL in the environment used by Claude Code:
 export NOVELTY_RESEARCH_API_URL="https://www.novelty-engine.com/api/research"
 ```
 
-The Skill’s `scripts/research.mjs` helper posts the complete ideation request to the backend and returns structured JSON. It consumes ranked survivor records before writing the response. When the backend is unavailable, the Skill uses a bounded local process but must label market openings as hypothesis-led, not research-backed; fixtures are never a fallback.
+The Skill’s `scripts/research.mjs` helper posts the complete ideation request plus the JSON array at `NOVELTY_RESEARCH_SOURCES_FILE` to the backend and returns structured JSON. It refuses source-less requests by default; `NOVELTY_ALLOW_HOSTED_SEARCH=true` is an explicit opt-in to hosted retrieval. When the backend is unavailable, the Skill uses a bounded local process but must label market openings as hypothesis-led, not research-backed; fixtures are never a fallback.
 
-The Skill's research order is remote MCP first, the `NOVELTY_RESEARCH_API_URL` helper second, and clearly labeled non-researched local methodology last. Browser users therefore need neither a local environment variable nor PowerShell setup.
+The Skill's research order is Claude/web source gathering plus remote MCP first, the source-file-backed `NOVELTY_RESEARCH_API_URL` helper second, and clearly labeled non-researched local methodology last. Browser users therefore need neither a local environment variable nor PowerShell setup.
 
 Novelty’s slash-like commands are plain-text **Skill intents**. They route through the Skill to the intended MCP tool, but they do not appear in Claude’s native prompt-bar slash autocomplete unless Claude itself provides that interface. Use `/commands` for the full catalog and `/help <command>` for one command’s usage and example.
 
@@ -264,7 +299,7 @@ With a local server and provider key configured, exercise the same remote transp
 npm run test:mcp:client -- http://localhost:3000/api/mcp "Find 3 opportunities for small field service teams"
 ```
 
-Run `npm run benchmark:retrieval` for the deterministic 20-market competitor-recall benchmark (recall, precision, major-player misses, source diversity, direct-vs-substitute accuracy, and collision calibration). For the full production-server regression (build manifests, browser health GET, protocol GET semantics, MCP initialization, exact tool discovery, and a fixture-backed `research_market` call), run `npm run test:production`.
+Run `npm run benchmark:retrieval` for the deterministic 20-market competitor-recall benchmark (recall, precision, major-player misses, source diversity, direct-vs-substitute accuracy, and collision calibration). For the full production-server regression (build manifests, browser health GET, protocol GET semantics, MCP initialization, exact 20-tool discovery, and a fixture-backed zero-provider `research_from_sources` call), run `npm run test:production`.
 
 ## Beta feedback and operational diagnostics
 
@@ -293,18 +328,18 @@ npm run eval:score -- evals/results/local.json
 
 1. Import the repository as a Next.js project.
 2. Keep the default build command (`npm run build`) and output settings.
-3. Add `SEARCH_PROVIDER` and one provider API key in **Project Settings → Environment Variables**. Do not use `NEXT_PUBLIC_` prefixes.
+3. Set `HOSTED_SEARCH_ENABLED=false` for a provider-spend-proof deployment. Add `SEARCH_PROVIDER` and one server-side key only if optional hosted retrieval is desired; never use `NEXT_PUBLIC_` prefixes.
 4. Add an Upstash Redis integration (required for authless public research on a multi-instance Vercel deployment) and expose its REST URL/token variables.
-5. Tune the MCP per-client, daily, monthly, concurrency, search, and cache budgets for the provider plan.
-6. Deploy, check `GET https://www.novelty-engine.com/api/mcp/health`, connect `https://www.novelty-engine.com/api/mcp` in Claude, and confirm a Claude research request returns a Novelty run ID and citations. Verify `/research-debug` returns 404.
+5. Tune per-client, concurrency, request-size, run-time, persistence, and—only when hosted mode is enabled—daily/monthly provider budgets.
+6. Deploy, check `GET https://www.novelty-engine.com/api/mcp/health`, connect `https://www.novelty-engine.com/api/mcp` in Claude, and confirm Claude web search → `research_from_sources` returns a run ID, citations, `retrievalMode: supplied_sources`, and `providerCalls: 0`. Verify `/research-debug` returns 404.
 
-Vercel functions cannot rely on local files for cross-instance history. This build uses Upstash Redis REST when configured and falls back to warm-instance memory on Vercel. Public production use should configure Redis; memory-only limits are suitable for local/single-instance evaluation, not a distributed free service. OAuth/per-user authorization remains intentionally outside the tool definitions so it can be added without rewriting them. No deploy or push is performed by repository scripts.
+Vercel functions cannot rely on local files for cross-instance history. This build uses Upstash Redis REST when configured and falls back to warm-instance memory on Vercel. Public production use should configure Redis; memory-only limits are suitable for local/single-instance evaluation, not a distributed free service. Automatic hashed client-network scoping protects run discovery today; OAuth/account-level identity remains intentionally outside the tool definitions so it can later replace that boundary without rewriting them. No deploy or push is performed by repository scripts.
 
 ## Current scope
 
 Fully functional without model calls: schemas, normalized/deduplicated evidence, Opportunity Graph construction, graph-hole detection, contradiction transforms, stitching scores, weak-signal normalization, market archaeology, candidate lifecycle/kill memory, bounded adjacent expansion, fingerprint collision checks, independent adversarial records, evidence gates, founder-fit rejection, 29-factor scoring, novelty/evidence confidence, assumption ledgers, counterfactual/moat tests, next-action selection, validation plans, caching, HTTP/OpenAPI, remote MCP routing, exports, and the separate financial backtester.
 
-Fixture-backed/heuristic: extraction from search snippets, entity resolution, complaint grouping, assumption detection, failure-cause extraction, acceleration proxies, candidate language, similarity, falsification risk, and scores. These are inspectable heuristics, never proof. Live public-web evidence requires Brave or Tavily. Distributed persistence/protection additionally requires Upstash-compatible Redis. Background schedulers, OAuth/team accounts, full-page archiving/dead-link revalidation, SEC/news/price ingestion, SDK publication, webhooks/billing, and a swappable model provider remain explicit integrations rather than fake functionality.
+Evidence-backed/heuristic: extraction from supplied or hosted search snippets/excerpts, entity resolution, complaint grouping, assumption detection, failure-cause extraction, acceleration proxies, candidate language, similarity, falsification risk, and scores. These are inspectable heuristics, never proof. Claude can gather live public-web evidence without Novelty owning a provider key; optional hosted retrieval requires Brave or Tavily. Distributed persistence/protection additionally requires Upstash-compatible Redis. Background schedulers, OAuth/team accounts, full-page archiving/dead-link revalidation, SEC/news/price ingestion, SDK publication, webhooks/billing, and a swappable model provider remain explicit integrations rather than fake functionality.
 
 ## License
 

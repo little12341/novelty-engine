@@ -36,6 +36,7 @@ export function protectionConfiguration(env: NodeJS.ProcessEnv = process.env) {
 }
 
 export type ProtectionDenial = "rate_limit" | "user_daily_budget" | "user_monthly_budget" | "daily_budget" | "monthly_budget" | "concurrency";
+export type ProtectionClass = "read" | "compute" | "provider";
 export type ProtectionPermit = {
   allowed: true;
   remaining: number;
@@ -51,8 +52,10 @@ export type ProtectionPermit = {
 const redisAcquireScript = `
 local hourly = tonumber(redis.call('GET', KEYS[1]) or '0')
 if hourly >= tonumber(ARGV[1]) then return {'rate_limit', redis.call('TTL', KEYS[1])} end
-local costly = ARGV[9] == '1'
-if costly then
+local mode = ARGV[9]
+local providerCost = mode == 'provider'
+local concurrentWork = providerCost or mode == 'compute'
+if providerCost then
   local userDaily = tonumber(redis.call('GET', KEYS[5]) or '0')
   if userDaily >= tonumber(ARGV[10]) then return {'user_daily_budget', redis.call('TTL', KEYS[5])} end
   local userMonthly = tonumber(redis.call('GET', KEYS[6]) or '0')
@@ -61,16 +64,20 @@ if costly then
   if daily >= tonumber(ARGV[2]) then return {'daily_budget', redis.call('TTL', KEYS[2])} end
   local monthly = tonumber(redis.call('GET', KEYS[3]) or '0')
   if monthly >= tonumber(ARGV[3]) then return {'monthly_budget', redis.call('TTL', KEYS[3])} end
+end
+if concurrentWork then
   local concurrent = tonumber(redis.call('GET', KEYS[4]) or '0')
   if concurrent >= tonumber(ARGV[4]) then return {'concurrency', math.max(1, redis.call('TTL', KEYS[4]))} end
 end
 local h = redis.call('INCR', KEYS[1])
 if h == 1 then redis.call('EXPIRE', KEYS[1], ARGV[5]) end
-if costly then
+if providerCost then
   local ud = redis.call('INCR', KEYS[5]); if ud == 1 then redis.call('EXPIRE', KEYS[5], ARGV[6]) end
   local um = redis.call('INCR', KEYS[6]); if um == 1 then redis.call('EXPIRE', KEYS[6], ARGV[7]) end
   local d = redis.call('INCR', KEYS[2]); if d == 1 then redis.call('EXPIRE', KEYS[2], ARGV[6]) end
   local m = redis.call('INCR', KEYS[3]); if m == 1 then redis.call('EXPIRE', KEYS[3], ARGV[7]) end
+end
+if concurrentWork then
   local c = redis.call('INCR', KEYS[4]); if c == 1 then redis.call('EXPIRE', KEYS[4], ARGV[8]) end
 end
 return {'ok', tonumber(ARGV[1]) - h}
@@ -114,7 +121,10 @@ function available(bucket: Map<string, Counter>, key: string, limit: number, now
   return !existing || existing.resetsAt <= now || existing.count < limit;
 }
 
-export async function acquireProtection(identifier: string, costly: boolean, now = Date.now()): Promise<ProtectionPermit> {
+export async function acquireProtection(identifier: string, protection: boolean | ProtectionClass, now = Date.now()): Promise<ProtectionPermit> {
+  const protectionClass: ProtectionClass = typeof protection === "boolean" ? protection ? "provider" : "read" : protection;
+  const providerCost = protectionClass === "provider";
+  const concurrentWork = protectionClass === "provider" || protectionClass === "compute";
   const config = protectionConfiguration();
   const window = windows(now);
   const identity = identifierHash(identifier || "anonymous");
@@ -132,7 +142,7 @@ export async function acquireProtection(identifier: string, costly: boolean, now
       const raw = await redis.eval(redisAcquireScript, keys, [
         config.perClientPerHour, config.globalDailyResearch, config.globalMonthlyResearch,
         config.maxConcurrentResearch, window.hourSeconds, window.daySeconds, window.monthSeconds,
-        config.concurrencyLeaseSeconds, costly ? 1 : 0,
+        config.concurrencyLeaseSeconds, protectionClass,
         config.perClientDailyResearch, config.perClientMonthlyResearch,
       ]) as [string, number];
       if (raw[0] !== "ok") {
@@ -140,19 +150,21 @@ export async function acquireProtection(identifier: string, costly: boolean, now
       }
       return {
         allowed: true, remaining: Number(raw[1]), backend: "upstash-redis-rest",
-        release: costly ? async () => { await redis.eval(redisReleaseScript, [keys[3]], []); } : async () => {},
+        release: concurrentWork ? async () => { await redis.eval(redisReleaseScript, [keys[3]], []); } : async () => {},
       };
     } catch (error) {
-      operationalLog("error", "distributed_protection_unavailable", { category: safeErrorCategory(error), costly });
-      if (costly) return { allowed: false, reason: "concurrency", retryAfterSeconds: 30, backend: "upstash-redis-rest" };
+      operationalLog("error", "distributed_protection_unavailable", { category: safeErrorCategory(error), protectionClass });
+      if (concurrentWork) return { allowed: false, reason: "concurrency", retryAfterSeconds: 30, backend: "upstash-redis-rest" };
       // Read-only requests may use the conservative instance-local limiter when Redis has a transient fault.
     }
   }
 
   const hourly = consume(state.hourly, `${window.hourKey}:${identity}`, config.perClientPerHour, window.hourEnd, now);
   if (!hourly.allowed) return { allowed: false, reason: "rate_limit", retryAfterSeconds: window.hourSeconds, backend: "memory" };
-  if (costly) {
+  if (concurrentWork) {
     if (state.concurrent >= config.maxConcurrentResearch) return { allowed: false, reason: "concurrency", retryAfterSeconds: 30, backend: "memory" };
+  }
+  if (providerCost) {
     if (!available(state.userDaily, `${window.dayKey}:${identity}`, config.perClientDailyResearch, now)) return { allowed: false, reason: "user_daily_budget", retryAfterSeconds: window.daySeconds, backend: "memory" };
     if (!available(state.userMonthly, `${window.monthKey}:${identity}`, config.perClientMonthlyResearch, now)) return { allowed: false, reason: "user_monthly_budget", retryAfterSeconds: window.monthSeconds, backend: "memory" };
     if (!available(state.daily, window.dayKey, config.globalDailyResearch, now)) return { allowed: false, reason: "daily_budget", retryAfterSeconds: window.daySeconds, backend: "memory" };
@@ -161,13 +173,13 @@ export async function acquireProtection(identifier: string, costly: boolean, now
     consume(state.monthly, window.monthKey, config.globalMonthlyResearch, window.monthEnd, now);
     consume(state.userDaily, `${window.dayKey}:${identity}`, config.perClientDailyResearch, window.dayEnd, now);
     consume(state.userMonthly, `${window.monthKey}:${identity}`, config.perClientMonthlyResearch, window.monthEnd, now);
-    state.concurrent += 1;
   }
+  if (concurrentWork) state.concurrent += 1;
   let released = false;
   return {
     allowed: true, remaining: hourly.remaining, backend: "memory",
     release: async () => {
-      if (costly && !released) { state.concurrent = Math.max(0, state.concurrent - 1); released = true; }
+      if (concurrentWork && !released) { state.concurrent = Math.max(0, state.concurrent - 1); released = true; }
     },
   };
 }

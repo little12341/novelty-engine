@@ -6,18 +6,24 @@ V2 separates public evidence, deterministic inference, candidate invention, adve
 
 Engine 2.2 is a backward-compatible extension of the V2.1 result schema. `schemaVersion` remains `2.1.0` so installed clients keep working; new runs declare `engineVersion: 2.2.0` and add lifecycle, evidence-gate, adversarial, task-graph, scorecard, founder-fit, expansion, and next-action records. Historical V2.1 records are conservatively normalized on read and are never retroactively labeled validated.
 
-The backend is modular and provider-neutral. Search uses the `SearchProvider` interface; Brave and Tavily are current adapters. The deterministic invention layer uses no model calls, so fixture runs are repeatable and free. `maxModelIterations` reserves an explicit budget for a future `ModelProvider` without making one a hidden dependency.
+The backend is modular and provider-neutral. Retrieval uses one narrow `SearchProvider` interface. `SuppliedSourcesProvider` is an in-memory adapter over bounded Claude/user evidence; Brave and Tavily are optional hosted adapters. All three enter the same downstream pipeline. The deterministic invention layer uses no model calls, so supplied-source and fixture runs are repeatable with zero hosted search calls. `maxModelIterations` reserves an explicit budget for a future `ModelProvider` without making one a hidden dependency.
 
 The remote MCP layer is an adapter in front of this backend, not a replacement for it:
 
 ```text
 Claude browser / Claude Code
+  → Claude/web search gathers bounded public evidence
   → Novelty Engine Skill
-  → /api/mcp (stateless MCP Streamable HTTP)
-  → deliberate tool router
-  → existing runResearch / opportunity / falsification modules
+  → /api/mcp research_from_sources (stateless MCP Streamable HTTP)
+  → SuppliedSourcesProvider (in-memory; no URL fetch; providerCalls=0)
+  → shared runResearch / opportunity / falsification modules
+  → persisted evidence, gaps, competitors, survivors, and retrieval lineage
+
+Explicit optional hosted request
+  → research_market / run_research_mode / compare_ideas
+  → central HOSTED_SEARCH_ENABLED guard
   → Brave or Tavily
-  → structured evidence, gaps, competitors, and survivors
+  → the same shared pipeline
 ```
 
 `mcp-handler` 2.x and the official MCP TypeScript SDK v2 provide Web-standard Next.js route handling. The endpoint serves MCP 2026-07-28 natively and 2025-era stateless Streamable HTTP through the package's compatibility path. No proprietary request envelope or deprecated HTTP+SSE route is used.
@@ -29,7 +35,9 @@ request
   ├─ validate query / compute budgets
   ├─ cache lookup
   ├─ derive 6 fast or 8 standard/deep landscape angles with synonyms and customer/workaround language
-  ├─ SearchProvider.search (timeout + concurrency + categorized failures + bounded retry)
+  ├─ SearchProvider.search
+  │    ├─ supplied: replay one bounded evidence snapshot in memory, zero hosted calls
+  │    └─ hosted: timeout + concurrency + categorized failures + bounded retry
   ├─ provisional landscape/gap pass and specialist task graph
   ├─ if weak: branch into adjacent segments/workflows with prior kill reasons as negative memory
   ├─ derive up to 2 candidate-focused competition/constraint falsification angles
@@ -57,7 +65,7 @@ request
        └─ return at most the requested count; record cutoff/rejected ideas and never pad
 ```
 
-`pipeline.ts` owns request/search/cache orchestration, the active counterevidence search, research coverage, and the stop decision. `opportunity-pipeline.ts` composes the deterministic post-research stages. Individual engines do not perform network calls, persistence, or UI work.
+`pipeline.ts` owns request/retrieval/cache orchestration, the active counterevidence stage, research coverage, accounting, lineage, and the stop decision. `opportunity-pipeline.ts` composes the deterministic post-research stages. Individual engines do not perform network calls, persistence, or UI work. Supplied-source runs do not pretend that angle replay is a web search and do not spend provider-call or provider-credit budgets.
 
 ## Specialist orchestration and independent adversaries
 
@@ -73,18 +81,24 @@ Every run records enforced checkpoints for source validation/deduplication, comp
 
 ## MCP boundary
 
-`app/api/mcp/route.ts` mounts one endpoint and registers the deliberate tool catalog through `lib/mcp/tools.ts`:
+`app/api/mcp/route.ts` mounts one endpoint and registers the additive 20-tool catalog through `lib/mcp/tools.ts`. The zero-provider orchestration surface is:
 
-- `research_market({ query })` invokes the complete existing pipeline and returns the consistent `Research Landscape → Signals → Structural Gaps → Candidate Ideas → Rejected Ideas + Why → Survivors → Evidence Lineage → Decisive Risks → 24–72 Hour Validation Tests` summary plus run ID.
+- `research_from_sources({ query, depth?, founder_constraints?, sources })` validates bounded public source records and persists a canonical full-pipeline run with `retrievalMode: supplied_sources` and `providerCalls: 0`.
+- `get_research_requirements({ run_id })` returns missing source families and unresolved evidence objectives without retrieval.
+- `add_sources_to_run({ run_id, sources, founder_constraints? })` creates a new immutable evidence version, preserves parent/root lineage, and recomputes the shared downstream analysis with zero hosted calls.
+
+The backward-compatible and stored-run surface remains:
+
+- `research_market({ query })` invokes the optional hosted path and returns the consistent `Research Landscape → Signals → Structural Gaps → Candidate Ideas → Rejected Ideas + Why → Survivors → Evidence Lineage → Decisive Risks → 24–72 Hour Validation Tests` summary plus run ID.
 - `find_market_gaps({ run_id, limit? })` selects ranked gaps and resolves support/counterevidence to source URLs.
 - `inspect_competitors({ run_id, limit? })` returns the evidence-carrying competitor map and a list of unsupported fields.
-- `falsify_opportunity({ opportunity, run_id?, candidate_id? })` makes at most four focused counterevidence searches, then reuses the existing falsification engine.
+- `falsify_opportunity({ opportunity, run_id?, candidate_id? })` uses stored evidence at zero provider cost for supplied runs; optional hosted runs can make at most four focused counterevidence searches.
 - `get_research_run({ run_id, include_full? })` returns a concise summary or the preserved full record when explicitly requested.
 - `run_research_mode({ mode, query })` exposes the supported intent modes without duplicating the pipeline.
 - `compare_ideas({ ideas })` compares 2–5 ideas qualitatively under a shared call budget.
 - `export_research_run({ run_id, format })` emits JSON, Markdown, print-ready data, CSV/matrices, validation plans, briefs, memos, or bibliographies.
 - `compare_research_runs({ baseline_run_id, comparison_run_id })` reports material snapshot deltas.
-- `rerun_research({ run_id, depth? })` bypasses the cache and returns both a fresh run and material evolution.
+- `rerun_research({ run_id, depth? })` is hosted only for hosted baselines or explicit hosted opt-in; supplied runs use `add_sources_to_run` and immutable descendant lineage.
 - `source_check({ run_id })` audits citation coverage, duplicates, source quality, contradictions, and unsupported claims.
 - `next_best_action({ run_id })` returns the single ranked validation/search step.
 
@@ -94,7 +108,7 @@ All input schemas are strict Zod objects with bounded strings and list limits. M
 
 The HTTP wrapper is separate from tool registration. It currently supports authless rate-limited access or an optional constant-time bearer-token check. OAuth or per-user authorization can replace that wrapper without changing tool schemas or research functions.
 
-Authless cost-bearing MCP calls fail closed on Vercel when no distributed store is configured. A named instance-local override exists for private preview testing, but production does not silently present warm-instance counters as safe public protection.
+`HOSTED_SEARCH_ENABLED=false` is a central kill switch checked before provider selection and inside each Brave/Tavily adapter. It applies to market research, named intent runs, comparisons, reruns, active falsification, adjacency, competitor expansion, and watchlist checks. A watchlist whose baseline is supplied-source also refuses an implicit hosted refresh and directs the caller to add newly gathered sources. Stored and supplied-source compute remains bounded by body/source/text caps, URL policy, rate limits, concurrency, run-duration limits, and persistence protection, but bypasses daily/monthly provider-spend counters. Authless public Vercel compute still fails closed without distributed protection unless the explicit private-preview override is enabled.
 
 ## Schemas and provenance
 
@@ -108,7 +122,7 @@ Authless cost-bearing MCP calls fail closed on Vercel when no distributed store 
 - `NoveltyFingerprint` and `SimilarityResult` for explainable heuristic comparisons.
 - `FalsificationResult` for separate arguments for/against, unknowns, risk penalties, and outcomes.
 - `IdeaLineage`, `OpportunityScore`, `ValidationExperiment`, and `FinalOpportunity` for user-facing survivor records.
-- `PipelineBudgetUsage` for cost/iteration accounting.
+- `PipelineBudgetUsage` plus `retrievalMode`, retrieval provenance, and run/evidence lineage for cost/iteration accounting and immutable evidence versions.
 
 Source IDs are stable hashes of normalized URLs. Normalized duplicate URLs merge their search-angle IDs. Exact and high-overlap claim copies at different URLs collapse into one evidence record whose `duplicateSourceUrls` and repetition risk remain visible. Each evidence record includes a source assessment for quality, directness, recency, independence, primary-source status, and overall weight. Community posts use post/repository-level independence groups while publisher material uses publisher-level groups. Engines union evidence IDs rather than copying source claims into new unsupported text. Fixture assertions verify that every referenced ID exists in the source set.
 

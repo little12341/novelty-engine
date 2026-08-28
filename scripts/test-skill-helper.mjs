@@ -32,16 +32,33 @@ try {
   const helper = path.join(skillRoot, "scripts", "research.mjs");
   const query = "/research-market find a carefully bounded local service opportunity";
   const { stdout, stderr } = await execFileAsync(process.execPath, [helper, query], {
-    cwd: process.cwd(), env: { ...process.env, NOVELTY_RESEARCH_API_URL: `http://127.0.0.1:${address.port}/api/research` },
+    cwd: process.cwd(), env: {
+      ...process.env,
+      NOVELTY_RESEARCH_API_URL: `http://127.0.0.1:${address.port}/api/research`,
+      NOVELTY_RESEARCH_SOURCES_FILE: path.join(process.cwd(), "lib", "research", "fixtures", "v2-market.json"),
+      NOVELTY_ALLOW_HOSTED_SEARCH: "false",
+    },
   });
   assert.equal(stderr, "");
   assert.equal(received.query, query);
+  assert.equal(received.retrieval_mode, "supplied_sources");
+  assert.ok(Array.isArray(received.sources) && received.sources.length > 0);
   const parsed = JSON.parse(stdout);
   assert.equal(parsed.stopDecision.status, "insufficient_evidence");
   const skill = await readFile(path.join(skillRoot, "SKILL.md"), "utf8");
   assert.match(skill, /slash-like strings as Novelty intents/i);
   assert.match(skill, /\/source-check.*must call `Novelty:source_check`/i);
   assert.match(skill, /does not register these in Claude's native slash-command UI/i);
+  assert.match(skill, /show my recent research.*list_research_runs/i);
+  assert.match(skill, /find the COI research from yesterday.*search_research_runs/i);
+  assert.match(skill, /compare_run_candidates.*zero provider calls/i);
+  assert.match(skill, /get_research_budget_info/i);
+  assert.match(skill, /substantially more retrieval/i);
+  assert.match(skill, /research_from_sources/);
+  assert.match(skill, /NOVELTY_RESEARCH_SOURCES_FILE/);
+  const interfaces = await readFile(path.join(skillRoot, "references", "mcp-interfaces.md"), "utf8");
+  assert.match(interfaces, /not vector or embedding search/i);
+  assert.match(interfaces, /INVALID_COMPANY_IDENTITY/);
   for (const entry of NOVELTY_COMMAND_CATALOG) assert.match(skill, new RegExp(entry.command.replace("/", "\\/")));
   const catalog = resolveClaudeCommand("/commands");
   assert.equal(catalog.kind, "skill_help");

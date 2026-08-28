@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { extractCompetitors } from "./analyze.ts";
 import { fingerprintCandidate, fingerprintCompetitor, compareFingerprints, similarityMatrix } from "./fingerprints.ts";
 import { buildProviderQuery } from "./angles.ts";
-import { getConfiguredProvider } from "./providers.ts";
+import { getConfiguredProvider, SuppliedSourcesRequiredError } from "./providers.ts";
 import { normalizeResults } from "./normalize.ts";
 import type {
   CandidateCompetitorRecall, CandidateGap, Competitor, CompetitorRecallReport, Evidence, IdeaCandidate,
@@ -181,7 +181,9 @@ export function buildCompetitorRecallReport(input: {
   };
 }
 
-export async function freshCompetitorExpansion(run: ResearchResult, candidateId?: string, signal?: AbortSignal, provider: SearchProvider = getConfiguredProvider()): Promise<ResearchResult> {
+export async function freshCompetitorExpansion(run: ResearchResult, candidateId?: string, signal?: AbortSignal, provider?: SearchProvider): Promise<ResearchResult> {
+  if (!provider && run.retrievalMode === "supplied_sources") throw new SuppliedSourcesRequiredError("A supplied-source run cannot perform implicit fresh competitor search. Call get_research_requirements, search with Claude/web, and add the resulting competitor sources with add_sources_to_run.");
+  const activeProvider = provider ?? getConfiguredProvider();
   const selected = candidateId ? run.candidates.filter((item) => item.id === candidateId) : run.candidates.filter((item) => item.iteration === 0).slice(0, 5);
   if (candidateId && selected.length === 0) throw new RangeError(`Candidate ${candidateId} was not found in research run ${run.id}.`);
   if (!selected.length) throw new RangeError(`Research run ${run.id} has no candidate definition to expand.`);
@@ -190,7 +192,7 @@ export async function freshCompetitorExpansion(run: ResearchResult, candidateId?
   const batches: Array<{ angle: SearchAngle; results: Awaited<ReturnType<SearchProvider["search"]>> }> = [];
   for (const angle of angles) {
     if (signal?.aborted) throw signal.reason ?? new DOMException("Competitor expansion cancelled.", "AbortError");
-    batches.push({ angle, results: await provider.search(buildProviderQuery(angle), { limit: run.limits.resultsPerQuery, signal }) });
+    batches.push({ angle, results: await activeProvider.search(buildProviderQuery(angle), { limit: run.limits.resultsPerQuery, signal }) });
   }
   const fresh = normalizeResults(batches, new Date().toISOString(), run.limits.maxSources);
   const mergedByUrl = new Map(run.sources.map((item) => [item.normalizedUrl, structuredClone(item)]));

@@ -1,4 +1,5 @@
 import type { CandidateGap, Competitor, Evidence, ResearchResult } from "../research/types.ts";
+import { IDEATION_CONTEXT_FIELD_GUIDE } from "../research/ideation-context.ts";
 
 function citation(evidence: Evidence) {
   return {
@@ -6,6 +7,7 @@ function citation(evidence: Evidence) {
     publicationDate: evidence.publicationDate, confidence: evidence.confidence,
     sourceType: evidence.sourceType, sourceAssessment: evidence.sourceAssessment,
     duplicateSourceUrls: evidence.duplicateSourceUrls,
+    suppliedMetadata: evidence.suppliedMetadata,
   };
 }
 
@@ -110,7 +112,8 @@ export function summarizeResearch(result: ResearchResult) {
   result.gaps.slice(0, 5).flatMap((gap) => [...gap.supportingEvidenceIds, ...gap.counterEvidenceIds]).forEach((id) => evidenceIds.add(id));
   return {
     schemaVersion: result.schemaVersion, engineVersion: result.engineVersion, depth: result.depth, runId: result.id, query: result.query, status: result.status,
-    provider: result.provider, cache: result.cache, completedAt: result.completedAt,
+    provider: result.provider, retrievalMode: result.retrievalMode, retrieval: result.retrieval,
+    runLineage: result.runLineage, cache: result.cache, completedAt: result.completedAt,
     researchLandscape: result.output.researchLandscape,
     signals: result.output.signals,
     structuralGaps: result.output.structuralGaps.slice(0, 5).map((gap) => summarizeGap(gap, result)),
@@ -134,6 +137,10 @@ export function summarizeResearch(result: ResearchResult) {
     citations: citationsFor([...evidenceIds], result, 20), warnings: result.warnings,
     budgetUsage: result.budgetUsage,
     citationCoverage: result.citationCoverage,
+    ideationContextGuide: {
+      ...IDEATION_CONTEXT_FIELD_GUIDE,
+      retrieval: "The documented user-safe fields are present on the stored ResearchResult under ideationContext. Use get_research_run(include_full=true) only when those full artifacts are needed.",
+    },
     unknowns: survivors.length === 0 ? [result.stopDecision.status === "insufficient_evidence" ? "Insufficient evidence for a compelling opportunity; no candidate was forced." : result.budgetUsage.exhausted ? "No opportunity survived after the configured retrieval and expansion budget was exhausted." : "No opportunity survived in the branches searched so far; this is not an exhaustive market rejection."] : [],
     retrievalHint: "Use get_research_run with include_full=true only when the full internal record is needed.",
   };

@@ -6,7 +6,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "mcp-handler";
 import { handleMcpHttp, requestIdentifier } from "./http.ts";
 import { mcpHealthSnapshot, publicMcpHealthSnapshot } from "./observability.ts";
-import { researchMarketInput, findMarketGapsInput, MCP_TOOL_NAMES } from "./schemas.ts";
+import { compareRunCandidatesInput, researchMarketInput, findMarketGapsInput, listResearchRunsInput, MCP_TOOL_NAMES, runResearchModeInput, searchResearchRunsInput } from "./schemas.ts";
 import { summarizeResearch } from "./summaries.ts";
 import { registerNoveltyTools } from "./tools.ts";
 import { runResearch } from "../research/pipeline.ts";
@@ -46,6 +46,12 @@ test("MCP schemas reject malformed and extra arguments", () => {
   assert.equal(researchMarketInput.safeParse({ query: "short" }).success, false);
   assert.equal(researchMarketInput.safeParse({ query: "A sufficiently specific market", extra: true }).success, false);
   assert.equal(findMarketGapsInput.safeParse({ run_id: "bad" }).success, false);
+  assert.equal(listResearchRunsInput.safeParse({ cursor: "bad" }).success, false);
+  assert.equal(searchResearchRunsInput.safeParse({ query: "x" }).success, false);
+  assert.equal(compareRunCandidatesInput.safeParse({ run_id: "research_20260824120000_abcd1234", candidate_ids: ["candidate_one", "candidate_one"] }).success, false);
+  assert.equal(runResearchModeInput.safeParse({ mode: "research_company", domain: "https://certificial.com" }).success, false);
+  assert.equal(runResearchModeInput.safeParse({ mode: "research_company", company_name: "Certificial" }).success, true);
+  assert.equal(runResearchModeInput.safeParse({ mode: "research_market" }).success, false);
 });
 
 test("malformed protocol requests receive an MCP parse error", async () => {
@@ -62,6 +68,15 @@ test("MCP fixture path research_market -> pipeline -> survivor opportunities pre
   await withClient({ research: async () => result, getRun: async (id) => id === result.id ? result : null }, async (client) => {
     const listed = await client.listTools();
     assert.deepEqual(listed.tools.map((tool) => tool.name).sort(), [...MCP_TOOL_NAMES].sort());
+    const descriptions = Object.fromEntries(listed.tools.map((tool) => [tool.name, tool.description ?? ""]));
+    assert.match(descriptions.research_market, /Start a new full V2\.2 market-research/i);
+    assert.match(descriptions.run_research_mode, /Start a new intent-scoped run/i);
+    assert.match(descriptions.find_market_gaps, /Stored-read tool only/i);
+    assert.match(descriptions.inspect_competitors, /no fresh retrieval unless fresh_expand=true/i);
+    assert.match(descriptions.get_research_run, /internal ResearchResult/i);
+    assert.match(descriptions.export_research_run, /canonical export\/report representation/i);
+    assert.match(descriptions.search_research_runs, /not embedding, vector/i);
+    assert.match(descriptions.compare_run_candidates, /zero provider calls/i);
     const called = await client.callTool({ name: "research_market", arguments: { query: "Find 4 opportunities for small field service teams" } });
     assert.equal(called.isError, undefined);
     const structured = called.structuredContent as ReturnType<typeof summarizeResearch>;
@@ -144,12 +159,65 @@ test("MCP intent mode reuses the canonical pipeline and preserves mode-specific 
     factsFromCompanyControlledSources: [], thirdPartyEvidenceIds: [], unknowns: ["Fixture unknown."],
   } };
   let receivedMode = "";
-  await withClient({ research: async (_query, options) => { receivedMode = options?.mode ?? ""; return result; } }, async (client) => {
-    const called = await client.callTool({ name: "run_research_mode", arguments: { mode: "research_company", query: "Research a sufficiently specific company" } });
+  let receivedQuery = "";
+  let receivedDomain: string | null | undefined;
+  await withClient({ research: async (query, options) => { receivedMode = options?.mode ?? ""; receivedQuery = query; receivedDomain = options?.companyIdentity?.canonicalDomain; return result; } }, async (client) => {
+    const called = await client.callTool({ name: "run_research_mode", arguments: { mode: "research_company", company_name: "Certificial", domain: "certificial.com" } });
     assert.equal(called.isError, undefined);
     assert.equal(receivedMode, "research_company");
+    assert.equal(receivedDomain, "certificial.com");
+    assert.match(receivedQuery, /specifically identified company/i);
     assert.equal((called.structuredContent as { mode: string }).mode, "research_company");
     assert.ok((called.structuredContent as { companyProfile: object }).companyProfile);
+  });
+});
+
+test("MCP can list and search scoped stored runs without a run ID", async () => {
+  const result = await getFixtureRun();
+  const summary = {
+    id: result.id, query: "COI compliance research", mode: result.mode, depth: result.depth, status: result.status,
+    startedAt: result.startedAt, completedAt: result.completedAt, provider: result.provider, stopDecision: result.stopDecision,
+    budgetUsage: result.budgetUsage, survivorCount: result.finalOpportunities.length, candidateCount: result.candidates.length,
+    gapCount: result.gaps.length, rejectedCount: result.rejectedIdeas.length,
+  };
+  await withClient({
+    discoverRuns: async () => ({ runs: [summary], page: { limit: 20, nextCursor: null, hasMore: false }, ownership: { scoped: true, boundary: "current_client_namespace" } }),
+    searchRuns: async () => ({ runs: [{ ...summary, match: { score: 1, exactPhrase: true, matchedFields: ["query"] } }], page: { limit: 20, nextCursor: null, hasMore: false }, ownership: { scoped: true, boundary: "current_client_namespace" }, rankingMethod: "Transparent canonical-token Jaccard similarity; no embeddings." }),
+  }, async (client) => {
+    const listed = await client.callTool({ name: "list_research_runs", arguments: {} });
+    const listPayload = listed.structuredContent as { runs: Array<{ run_id: string; counts: { survivors: number } }>; ownership: { scoped: boolean } };
+    assert.equal(listPayload.runs[0].run_id, result.id);
+    assert.equal(listPayload.ownership.scoped, true);
+    const searched = await client.callTool({ name: "search_research_runs", arguments: { query: "COI research" } });
+    const searchPayload = searched.structuredContent as { runs: Array<{ run_id: string; match: { score: number } }>; rankingMethod: string };
+    assert.equal(searchPayload.runs[0].run_id, result.id);
+    assert.equal(searchPayload.runs[0].match.score, 1);
+    assert.match(searchPayload.rankingMethod, /no embeddings/i);
+  });
+});
+
+test("MCP exposes coarse budget expectations and compares candidates from one stored run without fresh calls", async () => {
+  const result = await getFixtureRun();
+  assert.ok(result.candidates.length >= 2);
+  let expansionCalls = 0;
+  await withClient({
+    getRun: async (id) => id === result.id ? result : null,
+    expandCompetitors: async (run) => { expansionCalls += 1; return run; },
+  }, async (client) => {
+    const budget = await client.callTool({ name: "get_research_budget_info", arguments: {} });
+    const budgetPayload = budget.structuredContent as { depths: { fast: { relativeCost: string }; deep: { relativeCost: string } }; quotaVisibility: { remainingCapacityExposed: boolean } };
+    assert.equal(budgetPayload.depths.fast.relativeCost, "low");
+    assert.equal(budgetPayload.depths.deep.relativeCost, "high");
+    assert.equal(budgetPayload.quotaVisibility.remainingCapacityExposed, false);
+    const compared = await client.callTool({ name: "compare_run_candidates", arguments: { run_id: result.id, candidate_ids: result.candidates.slice(0, 2).map((item) => item.id) } });
+    assert.notEqual(compared.isError, true);
+    const payload = compared.structuredContent as { providerCalls: number; sourcePolicy: string; targets: unknown[]; dimensions: unknown[]; freshExpansion: { performed: boolean } };
+    assert.equal(payload.providerCalls, 0);
+    assert.equal(payload.sourcePolicy, "stored_run_only");
+    assert.equal(payload.targets.length, 2);
+    assert.ok(payload.dimensions.length > 10);
+    assert.equal(payload.freshExpansion.performed, false);
+    assert.equal(expansionCalls, 0);
   });
 });
 
@@ -288,6 +356,44 @@ test("global daily/monthly budgets and concurrent research permits are enforced"
     const concurrentDenied = await acquireProtection("concurrent-b", true);
     assert.equal(concurrentDenied.allowed, false);
     if (!concurrentDenied.allowed) assert.equal(concurrentDenied.reason, "concurrency");
+    if (held.allowed) await held.release();
+  } finally {
+    const restore = (name: string, value: string | undefined) => value === undefined ? delete process.env[name] : process.env[name] = value;
+    restore("MCP_RATE_LIMIT_PER_HOUR", previous.hourly); restore("MCP_GLOBAL_DAILY_RESEARCH_LIMIT", previous.daily);
+    restore("MCP_GLOBAL_MONTHLY_RESEARCH_LIMIT", previous.monthly); restore("MCP_MAX_CONCURRENT_RESEARCH", previous.concurrent);
+    clearMemoryProtection();
+  }
+});
+
+test("supplied-source compute keeps rate/concurrency protection without consuming provider-spend budgets", async () => {
+  const previous = {
+    hourly: process.env.MCP_RATE_LIMIT_PER_HOUR, daily: process.env.MCP_GLOBAL_DAILY_RESEARCH_LIMIT,
+    monthly: process.env.MCP_GLOBAL_MONTHLY_RESEARCH_LIMIT, concurrent: process.env.MCP_MAX_CONCURRENT_RESEARCH,
+  };
+  process.env.MCP_RATE_LIMIT_PER_HOUR = "20";
+  process.env.MCP_GLOBAL_DAILY_RESEARCH_LIMIT = "1";
+  process.env.MCP_GLOBAL_MONTHLY_RESEARCH_LIMIT = "1";
+  process.env.MCP_MAX_CONCURRENT_RESEARCH = "1";
+  clearMemoryProtection();
+  try {
+    const computeA = await acquireProtection("supplied-compute-a", "compute");
+    assert.equal(computeA.allowed, true);
+    if (computeA.allowed) await computeA.release();
+    const computeB = await acquireProtection("supplied-compute-b", "compute");
+    assert.equal(computeB.allowed, true, "compute must not consume daily/monthly provider budgets");
+    if (computeB.allowed) await computeB.release();
+
+    const hostedA = await acquireProtection("hosted-provider-a", "provider");
+    assert.equal(hostedA.allowed, true, "the first hosted request should still have the untouched provider budget");
+    if (hostedA.allowed) await hostedA.release();
+    const hostedB = await acquireProtection("hosted-provider-b", "provider");
+    assert.equal(hostedB.allowed, false);
+    if (!hostedB.allowed) assert.equal(hostedB.reason, "daily_budget");
+
+    const held = await acquireProtection("supplied-concurrent-a", "compute");
+    const concurrencyDenied = await acquireProtection("supplied-concurrent-b", "compute");
+    assert.equal(concurrencyDenied.allowed, false, "compute remains subject to the concurrent-run semaphore");
+    if (!concurrencyDenied.allowed) assert.equal(concurrencyDenied.reason, "concurrency");
     if (held.allowed) await held.release();
   } finally {
     const restore = (name: string, value: string | undefined) => value === undefined ? delete process.env[name] : process.env[name] = value;

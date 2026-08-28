@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getResearchResultById, listResearchRuns } from "@/lib/research/store";
+import { clientNetworkIdentity } from "@/lib/http-safety";
+import { privateIdentity } from "@/lib/research/platform-store";
 
 export const runtime = "nodejs";
 
@@ -21,7 +23,8 @@ export async function GET(request: NextRequest) {
   if (!CATEGORIES.includes(category)) return NextResponse.json({ error: `category must be one of: ${CATEGORIES.join(", ")}.` }, { status: 400 });
   const cadence = request.nextUrl.searchParams.get("cadence") === "daily" ? "daily" : "weekly";
   const cutoff = Date.now() - (cadence === "daily" ? 1 : 7) * 86_400_000;
-  const summaries = (await listResearchRuns(100)).filter((item) => new Date(item.completedAt).getTime() >= cutoff);
+  const ownerScope = privateIdentity(`research:${clientNetworkIdentity(request)}`);
+  const summaries = (await listResearchRuns(100, ownerScope)).filter((item) => new Date(item.completedAt).getTime() >= cutoff);
   const runs = (await Promise.all(summaries.map((item) => getResearchResultById(item.id)))).filter((item) => item !== null);
   const entries = runs.flatMap((run) => run!.finalOpportunities.flatMap((opportunity) => {
     const evidence = run!.sources.filter((item) => opportunity.candidate.evidenceIds.includes(item.id) && patterns[category].test(`${item.title} ${item.summary}`));

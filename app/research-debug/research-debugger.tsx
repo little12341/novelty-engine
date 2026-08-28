@@ -3,12 +3,13 @@
 import { FormEvent, KeyboardEvent, useId, useRef, useState } from "react";
 import Link from "next/link";
 import type { ResearchResult } from "@/lib/research/types";
+import type { ResearchBudgetInfo } from "@/lib/research/budget-info";
 import { getNoveltyCommandMatches, moveCommandMenuIndex, selectNoveltyCommand } from "@/lib/research/command-menu";
 
 type McpHealth = {
   ok: boolean; endpoint: string; healthEndpoint: string; transport: string; toolCount: number;
-  providerConfigured: boolean; redisConfigured: boolean; redisReachable: boolean | null;
-  tools: ReadonlyArray<{ name: string; arguments: Record<string, string>; cost: string }>;
+  providerConfigured: boolean; suppliedSourceResearch: boolean; hostedSearchEnabled: boolean; redisConfigured: boolean; redisReachable: boolean | null;
+  tools: ReadonlyArray<{ name: string; arguments: Record<string, string>; cost: string; behavior?: string }>;
   authentication: { mode: string; oauthReadyBoundary: boolean };
   protection: { backend: string; distributed: boolean; perClientPerHour: number; globalDailyResearch: number; globalMonthlyResearch: number; maxConcurrentResearch: number };
   storage: { backend: string; distributed: boolean; reachable: boolean | null };
@@ -16,7 +17,12 @@ type McpHealth = {
   recentErrors: Array<{ requestId: string; at: string; tool: string; status: string; durationMs: number; runId: string | null; provider: string | null; sourceCount: number | null; errorCode: string | null }>;
 };
 
-export default function ResearchDebugger({ initialConfiguration, initialMcpHealth }: { initialConfiguration: { configured: boolean; selected: string | null; supported: string[] }; initialMcpHealth: McpHealth }) {
+export default function ResearchDebugger({ initialConfiguration, initialMcpHealth, initialBudgetInfo, ideationContextGuide }: {
+  initialConfiguration: { configured: boolean; selected: string | null; supported: string[]; hostedSearchEnabled: boolean };
+  initialMcpHealth: McpHealth;
+  initialBudgetInfo: ResearchBudgetInfo;
+  ideationContextGuide: object;
+}) {
   const [query, setQuery] = useState("Find AI tools for small contractors");
   const [result, setResult] = useState<ResearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +92,7 @@ export default function ResearchDebugger({ initialConfiguration, initialMcpHealt
     <main className="debug-shell">
       <header className="debug-header">
         <Link href="/">Back to Novelty Engine</Link>
-        <div><span className={initialConfiguration.configured ? "status-ready" : "status-missing"} />{initialConfiguration.configured ? `${initialConfiguration.selected} configured` : "Provider key missing"}</div>
+        <div><span className="status-ready" />Supplied-source research ready{initialConfiguration.configured ? ` · ${initialConfiguration.selected} hosted option` : ""}</div>
       </header>
       <section className="debug-intro">
         <p className="overline">Internal developer view</p>
@@ -104,10 +110,13 @@ export default function ResearchDebugger({ initialConfiguration, initialMcpHealt
           <div><span>Access</span><strong>{mcpHealth.authentication.mode.replaceAll("-", " ")}</strong><small>OAuth-ready authorization boundary</small></div>
           <div><span>Protection</span><strong>{mcpHealth.protection.backend}</strong><small>{mcpHealth.protection.perClientPerHour}/client/hour · {mcpHealth.protection.globalDailyResearch}/day · {mcpHealth.protection.globalMonthlyResearch}/month · {mcpHealth.protection.maxConcurrentResearch} concurrent</small></div>
           <div><span>Redis</span><strong>{!mcpHealth.redisConfigured ? "Not configured" : mcpHealth.redisReachable === true ? "Reachable" : mcpHealth.redisReachable === false ? "Unreachable" : "Configured"}</strong><small>Credentials are never returned</small></div>
-          <div><span>Provider</span><strong>{mcpHealth.providerConfigured ? "Configured" : "Missing"}</strong><small>Server-side Tavily or Brave</small></div>
+          <div><span>Default retrieval</span><strong>Supplied sources</strong><small>Zero Tavily/Brave calls</small></div>
+          <div><span>Hosted option</span><strong>{!mcpHealth.hostedSearchEnabled ? "Disabled" : mcpHealth.providerConfigured ? "Configured" : "Unconfigured"}</strong><small>Optional server-side Tavily or Brave</small></div>
           <div><span>Tools</span><strong>{mcpHealth.toolCount}</strong><small>Discoverable MCP tools</small></div>
         </div>
-        <div className="mcp-tool-list">{mcpHealth.tools.map((tool) => <article key={tool.name}><code>{tool.name}</code><p>{Object.entries(tool.arguments).map(([name, shape]) => `${name}: ${shape}`).join(" · ")}</p><small>{tool.cost}</small></article>)}</div>
+        <div className="mcp-tool-list">{mcpHealth.tools.map((tool) => <article key={tool.name}><code>{tool.name}</code><p>{Object.entries(tool.arguments).map(([name, shape]) => `${name}: ${shape}`).join(" · ")}</p>{tool.behavior && <p>{tool.behavior}</p>}<small>{tool.cost}</small></article>)}</div>
+        <details><summary>Public-safe research budget expectations</summary><pre>{JSON.stringify(initialBudgetInfo, null, 2)}</pre></details>
+        <details><summary>Documented user-safe ideationContext fields</summary><pre>{JSON.stringify(ideationContextGuide, null, 2)}</pre></details>
         <details><summary>Most recent MCP calls ({mcpHealth.recentCalls.length})</summary><pre>{JSON.stringify(mcpHealth.recentCalls, null, 2)}</pre></details>
         <details><summary>Recent MCP errors ({mcpHealth.recentErrors.length})</summary><pre>{JSON.stringify(mcpHealth.recentErrors, null, 2)}</pre></details>
         {healthError && <p className="debug-error">{healthError}</p>}
@@ -159,7 +168,7 @@ export default function ResearchDebugger({ initialConfiguration, initialMcpHealt
         </div>
         <p className="command-input-hint">Type <code>/</code> to browse Novelty commands. Use ↑/↓ to move, Enter to select, and Escape to dismiss.</p>
       </form>
-      {!initialConfiguration.configured && <p className="debug-notice">Set <code>BRAVE_SEARCH_API_KEY</code> or <code>TAVILY_API_KEY</code> on the server to enable live research. The inspector will not substitute fixture data.</p>}
+      {!initialConfiguration.configured && <p className="debug-notice">Supplied-source research remains available without provider keys. Configure Tavily or Brave only for the optional hosted-search path; fixtures are never substituted for live evidence.</p>}
       {error && <p className="debug-error">{error}</p>}
       {result && <ResearchPanels result={result} />}
     </main>

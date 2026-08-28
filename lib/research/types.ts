@@ -4,6 +4,7 @@ export const RESEARCH_ENGINE_VERSION = "2.2.0" as const;
 export type ClaimStatus = "VERIFIED" | "INFERRED" | "UNKNOWN";
 export type FactState = "KNOWN" | "INFERRED" | "UNKNOWN" | "CONTRADICTED";
 export type ResearchDepth = "fast" | "standard" | "deep";
+export type RetrievalMode = "supplied_sources" | "hosted";
 
 export type ResearchClaimType =
   | "company_existence" | "vendor_feature" | "vendor_positioning" | "vendor_integration" | "vendor_pricing"
@@ -173,11 +174,20 @@ export interface ProviderSearchResult {
   snippet: string;
   publishedAt?: string | null;
   rank?: number;
+  retrievedAt?: string | null;
+  suppliedMetadata?: {
+    declaredSourceType?: SourceType | null;
+    declaredPublisher?: string | null;
+    declaredDomain?: string | null;
+    metadataWarnings?: string[];
+  };
 }
 
 export interface SearchProvider {
   readonly id: string;
   readonly displayName: string;
+  readonly retrievalMode?: RetrievalMode;
+  readonly usesHostedCredits?: boolean;
   search(query: string, options: { limit: number; signal?: AbortSignal }): Promise<ProviderSearchResult[]>;
 }
 
@@ -227,6 +237,12 @@ export interface Evidence {
     treatedAsUntrustedData: true;
     promptInjectionDetected: boolean;
     ignoredDirectiveCategories: string[];
+  };
+  suppliedMetadata?: {
+    declaredSourceType: SourceType | null;
+    declaredPublisher: string | null;
+    declaredDomain: string | null;
+    metadataWarnings: string[];
   };
   sourceAssessment: {
     quality: number;
@@ -1078,10 +1094,40 @@ export interface EvidenceSnapshot {
   missingSourceFamilyWarnings: string[];
   claimLineage?: ClaimLineageRecord[];
   citationCoverage?: CitationCoverageAudit;
+  lineage?: {
+    runId: string;
+    rootRunId: string;
+    parentRunId: string | null;
+    version: number;
+    retainedEvidenceIds: string[];
+    addedEvidenceIds: string[];
+  };
+}
+
+export interface ResearchRunLineage {
+  rootRunId: string;
+  parentRunId: string | null;
+  version: number;
+  reason: "fresh_run" | "sources_added" | "hosted_rerun";
+}
+
+export interface ResearchRetrievalRecord {
+  mode: RetrievalMode;
+  provenance: "claude_or_user_supplied" | "novelty_hosted_search";
+  suppliedSourceCount: number;
+  hostedProviderCalls: number;
+  estimatedHostedProviderCredits: number;
 }
 
 export interface CompanyProfile {
-  requestedIdentity?: { name: string; normalizedName: string; canonicalDomain: string | null };
+  requestedIdentity?: {
+    name: string;
+    normalizedName: string;
+    canonicalDomain: string | null;
+    ticker?: string | null;
+    country?: string | null;
+    authoritativeIdentifiers?: Array<"company_name" | "domain" | "ticker" | "country">;
+  };
   identity: TraceableClaim;
   productsServices: TraceableClaim[];
   targetUsers: TraceableClaim[];
@@ -1100,6 +1146,15 @@ export interface CompanyProfile {
   factsFromCompanyControlledSources: string[];
   thirdPartyEvidenceIds: string[];
   unknowns: string[];
+}
+
+export interface ResearchCompanyIdentity {
+  companyName: string | null;
+  normalizedName: string;
+  canonicalDomain: string | null;
+  ticker: string | null;
+  country: string | null;
+  authoritative: true;
 }
 
 export interface IdeationContext {
@@ -1129,6 +1184,9 @@ export interface ResearchResult {
   startedAt: string;
   completedAt: string;
   provider: { id: string; displayName: string };
+  retrievalMode: RetrievalMode;
+  retrieval: ResearchRetrievalRecord;
+  runLineage: ResearchRunLineage;
   cache: { hit: boolean; matchedRunId: string | null };
   limits: ResearchLimits;
   searchAngles: SearchAngle[];
@@ -1186,6 +1244,25 @@ export interface ResearchRequestOptions {
   userContext?: ResearchUserContext;
   depth?: ResearchDepth;
   signal?: AbortSignal;
+  companyIdentity?: ResearchCompanyIdentity;
+  ownerScope?: string;
+  retrievalMode?: RetrievalMode;
+  suppliedSourceCount?: number;
+  runLineage?: Omit<ResearchRunLineage, "rootRunId"> & { rootRunId?: string };
+  parentEvidenceIds?: string[];
+}
+
+export interface SuppliedResearchSource {
+  url: string;
+  title: string;
+  snippet?: string;
+  excerpt?: string;
+  content?: string;
+  publicationDate?: string | null;
+  sourceType?: SourceType | null;
+  publisher?: string | null;
+  domain?: string | null;
+  retrievedAt?: string | null;
 }
 
 export interface ResearchUserContext {

@@ -11,18 +11,21 @@ const boundedInt = (value: string | undefined, fallback: number, max: number) =>
   return Number.isFinite(parsed) ? Math.max(1, Math.min(max, parsed)) : fallback;
 };
 
-export async function compareIdeas(ideas: string[], options: Pick<ResearchRequestOptions, "provider" | "persist" | "now"> = {}): Promise<IdeaComparisonResult> {
+export async function compareIdeas(ideas: string[], options: Pick<ResearchRequestOptions, "provider" | "persist" | "now" | "ownerScope"> = {}): Promise<IdeaComparisonResult> {
   const cleaned = ideas.map((item) => item.trim()).filter(Boolean);
   if (cleaned.length < 2 || cleaned.length > 5) throw new RangeError("Idea comparison requires 2–5 ideas.");
   if (cleaned.some((item) => item.length < 8 || item.length > 500)) throw new RangeError("Each idea must be 8–500 characters.");
   const provider = options.provider ?? getConfiguredProvider();
+  const hostedCost = (provider.retrievalMode ?? "hosted") === "hosted" && provider.usesHostedCredits !== false;
   const totalCap = boundedInt(process.env.RESEARCH_COMPARISON_MAX_PROVIDER_CALLS, 30, 40);
   let sharedCalls = 0;
   const budgetedProvider: SearchProvider = {
     id: `${provider.id}-comparison`, displayName: `${provider.displayName} (shared comparison budget)`,
+    retrievalMode: provider.retrievalMode,
+    usesHostedCredits: provider.usesHostedCredits,
     async search(query, searchOptions) {
-      if (sharedCalls >= totalCap) throw new Error("Shared idea-comparison provider-call budget exhausted.");
-      sharedCalls += 1;
+      if (hostedCost && sharedCalls >= totalCap) throw new Error("Shared idea-comparison provider-call budget exhausted.");
+      if (hostedCost) sharedCalls += 1;
       return provider.search(query, searchOptions);
     },
   };
@@ -30,6 +33,7 @@ export async function compareIdeas(ideas: string[], options: Pick<ResearchReques
   for (const idea of cleaned) {
     runs.push(await runResearch(`Validate this business idea and identify decisive risks: ${idea}`, {
       provider: budgetedProvider, persist: options.persist, bypassCache: true, now: options.now, mode: "validate_idea",
+      ownerScope: options.ownerScope,
     }));
   }
   const compared: ComparedIdea[] = runs.map((run, index) => {
@@ -73,7 +77,7 @@ export async function compareIdeas(ideas: string[], options: Pick<ResearchReques
     candidatesGenerated: runs.reduce((sum, run) => sum + run.budgetUsage.candidatesGenerated, 0),
     survivorIterations: runs.reduce((sum, run) => sum + run.budgetUsage.survivorIterations, 0),
     sourceCount: runs.reduce((sum, run) => sum + run.sources.length, 0),
-    exhausted: sharedCalls >= totalCap || runs.some((run) => run.budgetUsage.exhausted),
+    exhausted: hostedCost && sharedCalls >= totalCap || runs.some((run) => run.budgetUsage.exhausted),
     gracefulDegradation: runs.some((run) => run.stopDecision.status === "insufficient_evidence") ? "insufficient_evidence" : runs.some((run) => run.status === "partial") ? "partial_provider_failure" : "none",
   };
   return { schemaVersion: runs[0].schemaVersion, mode: "compare_ideas", id: `comparison_${randomUUID().replaceAll("-", "").slice(0, 16)}`, createdAt: (options.now?.() ?? new Date()).toISOString(), ideas: compared, recommendation, runIds: runs.map((run) => run.id), budgetUsage };

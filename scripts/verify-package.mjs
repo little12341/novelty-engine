@@ -72,8 +72,18 @@ for (let index = 0; index < count; index += 1) {
       "Replenish rejected candidates",
       "Research-first operating mode",
       "Remote MCP (preferred)",
+      "research_from_sources",
+      "get_research_requirements",
+      "add_sources_to_run",
+      "providerCalls: 0",
+      "NOVELTY_RESEARCH_SOURCES_FILE",
+      "NOVELTY_ALLOW_HOSTED_SEARCH",
       "research_market",
       "falsify_opportunity",
+      "list_research_runs",
+      "search_research_runs",
+      "get_research_budget_info",
+      "compare_run_candidates",
       "slash-like strings as Novelty intents",
       "Novelty:source_check",
       "/commands",
@@ -104,9 +114,16 @@ for (let index = 0; index < count; index += 1) {
     }
     if (text.includes("novelty-engine.vercel.app") || text.includes("https://novelty-engine.com")) throw new Error("Packaged SKILL.md contains a redirected or legacy production hostname");
   }
+  if (name === "novelty-engine/references/mcp-interfaces.md") {
+    const text = data.toString("utf8");
+    for (const phrase of ["Supplied-source default and evidence loop", "research_from_sources", "get_research_requirements", "add_sources_to_run", "HOSTED_SEARCH_ENABLED", "Stored-run discovery", "Structured company research", "Budget visibility", "Candidate comparison inside one run", "User-safe `ideationContext`", "not vector or embedding search", "zero provider calls"]) {
+      if (!text.includes(phrase)) throw new Error(`Packaged MCP reference is missing ${phrase}`);
+    }
+  }
   if (name === "novelty-engine/scripts/research.mjs") {
     const text = data.toString("utf8");
     if (!text.includes('"https://www.novelty-engine.com/api/research"')) throw new Error("Packaged helper does not default to the canonical research endpoint");
+    if (!text.includes("NOVELTY_RESEARCH_SOURCES_FILE") || !text.includes("NOVELTY_ALLOW_HOSTED_SEARCH")) throw new Error("Packaged helper does not enforce supplied-source default and explicit hosted opt-in");
     if (text.includes("novelty-engine.vercel.app") || text.includes("https://novelty-engine.com")) throw new Error("Packaged helper contains a redirected or legacy production hostname");
   }
   cursor += 46 + nameLength + extraLength + commentLength;
@@ -114,6 +131,7 @@ for (let index = 0; index < count; index += 1) {
 
 if (!names.includes("novelty-engine/SKILL.md")) throw new Error("ZIP does not contain novelty-engine/SKILL.md");
 if (!names.includes("novelty-engine/scripts/research.mjs")) throw new Error("ZIP does not contain the research backend helper");
+if (!names.includes("novelty-engine/references/mcp-interfaces.md")) throw new Error("ZIP does not contain the MCP interface reference");
 const skillRoot = path.join(process.cwd(), "skill", "novelty-engine");
 const sourceFiles = await collect(skillRoot);
 const expectedNames = sourceFiles.map((file) => `novelty-engine/${path.relative(skillRoot, file).replaceAll(path.sep, "/")}`);

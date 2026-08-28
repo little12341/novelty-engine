@@ -11,7 +11,7 @@ const websiteStructuredData = {
   "@type": "WebSite",
   name: "Novelty Engine",
   url: productionOrigin,
-  description: "Evidence-driven market-gap research for opportunities worth building.",
+  description: "Claude gathers public sources; Novelty Engine normalizes evidence, maps gaps, falsifies opportunities, and preserves research runs.",
 };
 
 function HeroMark() {
@@ -178,7 +178,7 @@ export default function Home() {
             <p className="eyebrow">Find what others miss</p>
             <h1 id="hero-title"><span>Discover the gaps.</span><span>Build what’s next.</span></h1>
             <p className="hero-lede">
-              Novelty Engine searches for real market gaps, gathers evidence, challenges weak opportunities, expands into adjacent markets when appropriate, and reports only the opportunities that survive its checks.
+              Claude gathers public sources with your web access. Novelty Engine then normalizes evidence, maps competitors and gaps, challenges weak opportunities, preserves the run, and reports only the opportunities that survive its checks.
             </p>
             <p className="beta-disclaimer">Evidence-driven research may be incomplete and does not guarantee that an opportunity will succeed.</p>
             <div className="hero-actions">
@@ -209,7 +209,7 @@ export default function Home() {
           <p className="eyebrow">The evidence loop</p>
           <div>
             <h2 id="pipeline-title">A research method, not a longer prompt.</h2>
-            <p>The engine makes the search process inspectable from first source to final experiment.</p>
+            <p>The engine makes the evidence process inspectable from Claude’s first supplied source to the final experiment.</p>
           </div>
           <Image className="pipeline-halo" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized />
         </div>
@@ -323,7 +323,8 @@ export default function Home() {
               <h3>No competitor found does not mean a good opportunity was found.</h3>
             </div>
             <div>
-              <p>When web access is configured, the backend searches competitors, reviews, forums, GitHub, directories, regulations, failed attempts, and counterevidence.</p>
+              <p>By default, Claude searches competitors, reviews, forums, GitHub, directories, regulations, failed attempts, and counterevidence, then passes those sources to Novelty’s full evidence pipeline with zero Tavily/Brave calls.</p>
+              <p>Deployment owners can optionally enable hosted Tavily/Brave retrieval for advanced or deep runs.</p>
               <p>Missing evidence stays unknown. Novel proposals are hypotheses until a real market test says otherwise.</p>
             </div>
           </div>
@@ -350,7 +351,7 @@ export default function Home() {
       <footer className="site-footer">
         <div className="page-width footer-inner">
           <a className="brand" href="#top"><Image className="footer-wreath" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized /><span>Novelty Engine</span></a>
-          <p>V2.2 Public Beta · Free and open source under the MIT License.</p>
+          <p>V2.2 Public Beta · MIT licensed. Supplied-source mode uses zero Tavily/Brave calls; hosting or Redis may still cost above free tiers.</p>
           <a href={githubUrl} target="_blank" rel="noreferrer">GitHub <UtilityIcon kind="external" /></a>
         </div>
       </footer>

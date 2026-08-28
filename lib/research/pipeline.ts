@@ -18,6 +18,8 @@ import { buildCompetitorRecallReport, credibleCompetitor, establishedCategory, p
 import { operationalLog, safeErrorCategory } from "../http-safety.ts";
 import { buildResearchClaimLineage, citationCoverageAudit } from "./claim-support.ts";
 import { buildCandidateIdMapping } from "./candidate-ids.ts";
+import { suppliedSourcesToProvider } from "./supplied-sources.ts";
+import type { SuppliedResearchSource } from "./types.ts";
 
 const absoluteMax = (raw: string | undefined, fallback: number, max: number) => {
   const value = Number.parseInt(raw ?? "", 10);
@@ -121,9 +123,11 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   if (query.length > limits.maxQueryLength) throw new RangeError(`Research query must be ${limits.maxQueryLength} characters or fewer.`);
   const canonicalQuery = canonicalizeQuery(`${mode} ${query}`);
   const provider = options.provider ?? getConfiguredProvider();
+  const retrievalMode = options.retrievalMode ?? provider.retrievalMode ?? "hosted";
+  const usesHostedCredits = retrievalMode === "hosted" && provider.usesHostedCredits !== false;
   const ttl = cacheTtlSeconds();
   if (!options.bypassCache) {
-    const cached = await findCachedResearch(canonicalQuery, provider.id, ttl);
+    const cached = await findCachedResearch(canonicalQuery, provider.id, ttl, options.ownerScope);
     if (cached) {
       cached.cache = { hit: true, matchedRunId: cached.id };
       return cached;
@@ -140,8 +144,8 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
       for (let attempt = 1; attempt <= limits.maxRetriesPerSearch + 1; attempt += 1) {
         if (options.signal?.aborted) throw options.signal.reason ?? new DOMException("Research cancelled.", "AbortError");
         if (Date.now() - wallStartedAt >= limits.maxRunDurationMs) throw new DOMException("Hard research time budget exhausted.", "TimeoutError");
-        if (providerCalls >= Math.min(limits.maxProviderCalls, limits.maxProviderSpendCredits)) throw new Error("Provider-call or spend-credit budget exhausted before this angle could complete.");
-        providerCalls += 1;
+        if (usesHostedCredits && providerCalls >= Math.min(limits.maxProviderCalls, limits.maxProviderSpendCredits)) throw new Error("Provider-call or spend-credit budget exhausted before this angle could complete.");
+        if (usesHostedCredits) providerCalls += 1;
         try {
           const timeoutSignal = AbortSignal.timeout(Math.min(limits.timeoutMs, Math.max(1, limits.maxRunDurationMs - (Date.now() - wallStartedAt))));
           const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
@@ -332,10 +336,12 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   const stopDecision = decideStop({ coverage, gaps, competitors });
   const opportunity = runOpportunityPipeline({ query, sources, competitors, complaints: complaintClusters, segments: underservedSegments, gaps, limits, now: now(), allowGeneration: stopDecision.canGenerateCandidates, excludedMechanisms: options.userContext?.previouslyRejectedMechanisms, userContext: options.userContext, depth, competitorRecall: competitorRecall.candidates });
   opportunity.budgetUsage.providerCalls = providerCalls;
-  opportunity.budgetUsage.counterevidenceSearches = falsificationResults.length;
+  opportunity.budgetUsage.counterevidenceSearches = usesHostedCredits ? falsificationResults.length : 0;
   opportunity.budgetUsage.estimatedProviderCredits = providerCalls;
-  opportunity.budgetUsage.exhausted = providerCalls >= limits.maxProviderCalls || providerCalls >= limits.maxProviderSpendCredits
-    || searchAngles.length >= limits.maxSearchQueries || Date.now() - wallStartedAt >= limits.maxRunDurationMs;
+  opportunity.budgetUsage.exhausted = usesHostedCredits
+    ? providerCalls >= limits.maxProviderCalls || providerCalls >= limits.maxProviderSpendCredits
+      || searchAngles.length >= limits.maxSearchQueries || Date.now() - wallStartedAt >= limits.maxRunDurationMs
+    : Date.now() - wallStartedAt >= limits.maxRunDurationMs;
   opportunity.budgetUsage.expansionStopReason = opportunity.budgetUsage.exhausted ? "budget_exhausted"
     : opportunity.finalOpportunities.length > 0 ? "success"
       : searchBranches.some((item) => item.status === "no_new_evidence") ? "coverage_plateau"
@@ -353,7 +359,9 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   if (complaintClusters.length === 0) warnings.push("No supported complaint clusters were found; the result contains no inferred market gaps rather than manufacturing them.");
   if (gaps.length > 0 && gaps.every((gap) => gap.confidenceLabel === "speculative opportunity")) warnings.push("All detected openings remain speculative because retrieved support is weak or isolated.");
   if (sources.length === 0) warnings.push("No usable public sources were retrieved. The run is returned as insufficient evidence; no candidate was generated.");
-  if (!falsificationAngles.length && focusGaps.length > 0) warnings.push("The provider-call budget left no room for active candidate counterevidence searches; falsification dimensions without evidence remain UNKNOWN.");
+  if (!falsificationAngles.length && focusGaps.length > 0) warnings.push(retrievalMode === "supplied_sources"
+    ? "The supplied evidence snapshot did not provide a separate counterevidence pass; unresolved falsification dimensions remain UNKNOWN and are returned by get_research_requirements."
+    : "The provider-call budget left no room for active candidate counterevidence searches; falsification dimensions without evidence remain UNKNOWN.");
   if (searchBranches.length) warnings.push(`${searchBranches.length} adjacent search branch(es) were attempted because the initial niche produced no survival-gate candidate; exact failure reasons were carried forward as negative search memory.`);
   if (competitorRecall.candidates.some((item) => item.materialNewDirectCompetitorIds.length)) warnings.push("The mandatory independent competitor cross-check found material direct competitors absent from the primary pass; discoveries were merged before collision scoring, falsification, Bull/Bear/Judge review, and selection.");
   if (competitorRecall.candidates.some((item) => !item.crossCheckComplete)) warnings.push("At least one candidate structural group could not complete its independent competitor cross-check and is ineligible for SURVIVED classification.");
@@ -371,7 +379,7 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   const completedAt = now().toISOString();
   const companyProfile = mode === "research_company" ? buildCompanyProfile({
     query, evidence: sources, competitors, complaints: complaintClusters, segments: underservedSegments,
-    opportunities: opportunity.finalOpportunities,
+    opportunities: opportunity.finalOpportunities, requestedIdentity: options.companyIdentity,
   }) : null;
   const candidateIdMapping = buildCandidateIdMapping(recallSeeds, opportunity.candidates);
   const claimLineage = buildResearchClaimLineage({
@@ -396,10 +404,19 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
     checkpoint("candidate_mechanism_deduplication", opportunity.candidates.length ? "passed" : "not_applicable", "Duplicate mechanism families were collapsed before final candidate count.", completedAt),
     checkpoint("falsification", opportunity.finalOpportunities.every((item) => item.falsification.outcome === "survived") ? "passed" : "failed", `${opportunity.falsificationResults.length} candidates received an adversarial falsification result.`, completedAt),
   ];
+  const runId = `research_${now().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}_${randomUUID().slice(0, 8)}`;
+  const runLineage = {
+    rootRunId: options.runLineage?.rootRunId ?? runId,
+    parentRunId: options.runLineage?.parentRunId ?? null,
+    version: options.runLineage?.version ?? 1,
+    reason: options.runLineage?.reason ?? "fresh_run" as const,
+  };
+  const evidenceIds = new Set(sources.map((item) => item.id));
+  const retainedEvidenceIds = [...new Set(options.parentEvidenceIds ?? [])].filter((id) => evidenceIds.has(id));
   const base = {
     schemaVersion: RESEARCH_SCHEMA_VERSION,
     engineVersion: RESEARCH_ENGINE_VERSION,
-    id: `research_${now().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}_${randomUUID().slice(0, 8)}`,
+    id: runId,
     query,
     mode,
     depth,
@@ -408,6 +425,15 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
     startedAt,
     completedAt,
     provider: { id: provider.id, displayName: provider.displayName },
+    retrievalMode,
+    retrieval: {
+      mode: retrievalMode,
+      provenance: retrievalMode === "supplied_sources" ? "claude_or_user_supplied" as const : "novelty_hosted_search" as const,
+      suppliedSourceCount: retrievalMode === "supplied_sources" ? options.suppliedSourceCount ?? sources.length : 0,
+      hostedProviderCalls: providerCalls,
+      estimatedHostedProviderCredits: providerCalls,
+    },
+    runLineage,
     cache: { hit: false, matchedRunId: null },
     limits,
     searchAngles,
@@ -427,6 +453,11 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
     evidenceSnapshot: {
       ...createEvidenceSnapshot(sources, coverage, completedAt),
       claimLineage: structuredClone(claimLineage), citationCoverage: structuredClone(citationCoverage),
+      lineage: {
+        runId, rootRunId: runLineage.rootRunId, parentRunId: runLineage.parentRunId, version: runLineage.version,
+        retainedEvidenceIds,
+        addedEvidenceIds: sources.map((item) => item.id).filter((id) => !retainedEvidenceIds.includes(id)),
+      },
     },
     claimLineage,
     citationCoverage,
@@ -442,7 +473,7 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   result.checkpoints.push(checkpoint("final_persistence", options.persist === false ? "not_applicable" : "passed", options.persist === false ? "Persistence was explicitly disabled for this run." : "The completed run and evidence snapshot are the object passed to durable/local persistence.", completedAt));
   const completeResult: ResearchResult = { ...result, ideationContext: ideationContext(result) };
   if (options.persist !== false) {
-    const stored = await saveResearchResult(completeResult, ttl);
+    const stored = await saveResearchResult(completeResult, ttl, options.ownerScope);
     if (!stored.durable) completeResult.warnings.push("This Vercel-compatible build uses in-memory cache in serverless mode; configure external durable storage before relying on run history across instances.");
   }
   if (failures.length) {
@@ -460,4 +491,21 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
     });
   }
   return completeResult;
+}
+
+export async function runResearchFromSources(
+  rawQuery: string,
+  sources: SuppliedResearchSource[],
+  options: Omit<ResearchRequestOptions, "provider" | "retrievalMode" | "suppliedSourceCount"> = {},
+): Promise<ResearchResult> {
+  const now = options.now?.() ?? new Date();
+  const supplied = suppliedSourcesToProvider(sources, { now });
+  return runResearch(rawQuery, {
+    ...options,
+    now: options.now ?? (() => now),
+    provider: supplied.provider,
+    retrievalMode: "supplied_sources",
+    suppliedSourceCount: supplied.sourceCount,
+    bypassCache: true,
+  });
 }

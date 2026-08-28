@@ -1,5 +1,13 @@
 # Novelty Engine 2.2 implementation report
 
+## Zero-provider default extension (2026-08-28)
+
+The recommended public workflow is now `Claude/web search → research_from_sources → get_research_requirements → add_sources_to_run → stored tools`. Claude or the user supplies bounded public URLs, titles, and evidence-bearing excerpts; Novelty validates and sanitizes them, then routes them through the same V2.2 normalization, provenance, entity, claim-audit, evidence-gate, competitor/gap, falsification, Bull/Bear/Judge, lifecycle, scoring, persistence, and next-action pipeline used by hosted search.
+
+Supplied-source runs persist `retrievalMode: supplied_sources`, retrieval provenance, source counts, and immutable parent/root/version evidence lineage. Provider calls and estimated provider credits are exactly zero. `add_sources_to_run` creates a descendant snapshot rather than mutating history and reports evidence-family, gate, citation, and material-change deltas.
+
+Brave/Tavily remain optional backward-compatible hosted adapters. `HOSTED_SEARCH_ENABLED=false` blocks them centrally even when credentials exist; secondary paths do not silently cross that boundary. Stored reads and stored-evidence falsification remain available. Public compute retains request-size, URL, text, per-client, concurrency, duration, persistence, and distributed-infrastructure protection while bypassing provider-spend counters. This avoids Tavily/Brave cost, not possible Vercel, Redis, bandwidth, or compute charges above free tiers.
+
 ## Outcome
 
 The repository was upgraded in place. The landing-page visual system, existing public V2.1 result schema, provider adapters, deterministic opportunity pipeline, stored-run format, MCP endpoint, Claude Skill packaging, and existing tool names were preserved. `schemaVersion` intentionally remains `2.1.0` for client compatibility; new runs add `engineVersion: 2.2.0`.

@@ -1,21 +1,14 @@
 import { auditClaim } from "./claim-support.ts";
+import { requestedCompanyIdentity } from "./company-identity.ts";
 import { normalizeOrganizationName } from "./entity-resolution.ts";
 import type {
-  CompanyProfile, ComplaintCluster, Competitor, Evidence, FinalOpportunity, ResearchClaimType, TraceableClaim,
+  CompanyProfile, ComplaintCluster, Competitor, Evidence, FinalOpportunity, ResearchClaimType, ResearchCompanyIdentity, TraceableClaim,
   UnderservedSegment, ValidationExperiment,
 } from "./types.ts";
 
-export function requestedCompanyIdentity(query: string): { name: string; normalizedName: string } | null {
-  const cleaned = query.replace(/^\s*\/(?:research-company|company)\s+/i, "").trim();
-  const match = cleaned.match(/^(?:research|analy[sz]e|investigate|profile|look into)\s+(?:the\s+company\s+)?(.+?)(?=\s+(?:as\s+a\s+company|and\s+(?:its|their)|company\b|competitors?\b|pricing\b|products?\b)|[,.;]|$)/i);
-  let name = match?.[1]?.trim() ?? "";
-  name = name.replace(/^(?:a|an|the)\s+/i, "").trim();
-  if (!name || /\b(?:market|industry|software company|category|business idea)\b/i.test(name) || name.split(/\s+/).length > 4) return null;
-  const normalizedName = normalizeOrganizationName(name);
-  return normalizedName.length >= 2 ? { name, normalizedName } : null;
-}
-
-function sourceMatchesIdentity(item: Evidence, normalizedName: string): boolean {
+function sourceMatchesIdentity(item: Evidence, normalizedName: string, canonicalDomain: string | null): boolean {
+  if (canonicalDomain && item.pageIdentity.canonicalDomain === canonicalDomain) return true;
+  if (!normalizedName) return false;
   const domainStem = normalizeOrganizationName(item.pageIdentity.canonicalDomain.split(".")[0]);
   return domainStem.includes(normalizedName) || normalizedName.includes(domainStem)
     || item.pageIdentity.explicitEntityNames.some((name) => {
@@ -46,14 +39,19 @@ export function buildCompanyProfile(input: {
   complaints: ComplaintCluster[];
   segments: UnderservedSegment[];
   opportunities: FinalOpportunity[];
+  requestedIdentity?: ResearchCompanyIdentity;
 }): CompanyProfile {
-  const requested = requestedCompanyIdentity(input.query);
-  const targetEvidence = requested ? input.evidence.filter((item) => sourceMatchesIdentity(item, requested.normalizedName)) : input.evidence;
+  const parsed = requestedCompanyIdentity(input.query);
+  const requested = input.requestedIdentity ?? (parsed ? {
+    companyName: parsed.name, normalizedName: parsed.normalizedName, canonicalDomain: null, ticker: null, country: null, authoritative: true as const,
+  } : null);
+  const targetEvidence = requested ? input.evidence.filter((item) => sourceMatchesIdentity(item, requested.normalizedName, requested.canonicalDomain)) : input.evidence;
   const controlled = targetEvidence.filter((item) => item.sourceAssessment.provenance === "company_controlled"
+    && (!requested?.canonicalDomain || item.pageIdentity.canonicalDomain === requested.canonicalDomain)
     && item.pageIdentity.entityEligible && !item.sourceAssessment.discoveryOnly && item.relevanceAssessment.acceptedForMarket);
-  const anchorDomain = controlled[0]?.pageIdentity.canonicalDomain ?? null;
-  const targetName = requested?.name ?? controlled[0]?.pageIdentity.explicitEntityNames[0] ?? "Requested company";
-  const normalizedTarget = requested?.normalizedName ?? normalizeOrganizationName(targetName);
+  const anchorDomain = requested?.canonicalDomain ?? controlled[0]?.pageIdentity.canonicalDomain ?? null;
+  const targetName = requested?.companyName ?? controlled[0]?.pageIdentity.explicitEntityNames[0] ?? anchorDomain?.split(".")[0] ?? requested?.ticker ?? "Requested company";
+  const normalizedTarget = requested?.normalizedName || normalizeOrganizationName(targetName);
   const context = `${input.query} ${targetName}`;
   const thirdParty = targetEvidence.filter((item) => item.sourceAssessment.provenance !== "company_controlled" && item.relevanceAssessment.acceptedForMarket);
   const pricing = controlled.filter((item) => item.sourceType === "pricing" || /\bpricing|\bplans?|\$\d|per month|contact sales/i.test(`${item.title} ${item.summary}`));
@@ -87,7 +85,16 @@ export function buildCompanyProfile(input: {
     complaintEvidence.length === 0 && "Company-specific complaint evidence is thin or unavailable.",
   ].filter((item): item is string => Boolean(item));
   return {
-    requestedIdentity: { name: targetName, normalizedName: normalizedTarget, canonicalDomain: anchorDomain },
+    requestedIdentity: {
+      name: targetName, normalizedName: normalizedTarget, canonicalDomain: anchorDomain,
+      ticker: requested?.ticker ?? null, country: requested?.country ?? null,
+      authoritativeIdentifiers: requested ? [
+        requested.companyName && "company_name" as const,
+        requested.canonicalDomain && "domain" as const,
+        requested.ticker && "ticker" as const,
+        requested.country && "country" as const,
+      ].filter((item): item is "company_name" | "domain" | "ticker" | "country" => Boolean(item)) : [],
+    },
     identity: auditedClaim(identityLabel, "company_existence", identityEvidence.map((item) => item.id), input.evidence, context,
       identityEvidence.length ? "The requested identity is anchored to matching canonical domain and brand signals." : "The requested identity is preserved but remains unsupported."),
     productsServices: productClaims,

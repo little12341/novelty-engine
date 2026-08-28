@@ -2,10 +2,13 @@
 
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
-const expectedTools = ["research_market", "find_market_gaps", "inspect_competitors", "falsify_opportunity", "get_research_run", "run_research_mode", "compare_ideas", "export_research_run", "compare_research_runs", "rerun_research", "source_check", "next_best_action", "record_validation_outcome"].sort();
+const expectedTools = ["research_from_sources", "add_sources_to_run", "get_research_requirements", "research_market", "find_market_gaps", "inspect_competitors", "falsify_opportunity", "get_research_run", "run_research_mode", "compare_ideas", "export_research_run", "compare_research_runs", "rerun_research", "source_check", "next_best_action", "record_validation_outcome", "list_research_runs", "search_research_runs", "get_research_budget_info", "compare_run_candidates"].sort();
+const suppliedSources = JSON.parse(readFileSync(path.join(process.cwd(), "lib", "research", "fixtures", "v2-market.json"), "utf8"))
+  .map((item) => ({ url: item.url, title: item.title, snippet: item.snippet, publication_date: item.publishedAt }));
 const port = Number(process.env.NOVELTY_MCP_TEST_PORT ?? 3417);
 const origin = `http://127.0.0.1:${port}`;
 const endpoint = new URL("/api/mcp", origin);
@@ -15,6 +18,7 @@ const childEnv = {
   NODE_ENV: "production",
   SEARCH_PROVIDER: "fixture",
   NOVELTY_MCP_TEST_FIXTURES: "true",
+  HOSTED_SEARCH_ENABLED: "false",
   RESEARCH_MAX_QUERIES: "4",
   RESEARCH_MAX_PROVIDER_CALLS: "4",
   RESEARCH_RESULTS_PER_QUERY: "6",
@@ -69,7 +73,7 @@ try {
   assert.doesNotMatch(JSON.stringify(malformedPayload), /SyntaxError|Unexpected token|stack/i);
 
   const oversizedResearch = await fetch(new URL("/api/research", origin), {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: "x".repeat(5_000) }),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: "x".repeat(140_000) }),
   });
   assert.equal(oversizedResearch.status, 413);
 
@@ -87,23 +91,50 @@ try {
   await client.connect(transport);
   const listed = await client.listTools();
   assert.deepEqual(listed.tools.map((tool) => tool.name).sort(), expectedTools);
-  const called = await client.callTool({ name: "research_market", arguments: { query: "Find 3 underserved workflow opportunities for small field service teams" } });
+  const called = await client.callTool({ name: "research_from_sources", arguments: {
+    query: "Find 3 underserved workflow opportunities for small field service teams",
+    sources: suppliedSources,
+  } });
   assert.notEqual(called.isError, true);
   const result = called.structuredContent;
   assert.match(result.runId, /^research_/);
+  assert.equal(result.retrievalMode, "supplied_sources");
+  assert.equal(result.budgetUsage.providerCalls, 0);
   assert.ok(Array.isArray(result.citations) && result.citations.length > 0);
   assert.ok(result.citations.every((citation) => /^https:\/\//.test(citation.url)));
+  const recent = await client.callTool({ name: "list_research_runs", arguments: { limit: 5 } });
+  assert.notEqual(recent.isError, true);
+  assert.ok(recent.structuredContent.runs.some((run) => run.run_id === result.runId));
+  const found = await client.callTool({ name: "search_research_runs", arguments: { query: "field service workflow" } });
+  assert.notEqual(found.isError, true);
+  assert.ok(found.structuredContent.runs.some((run) => run.run_id === result.runId));
+  assert.match(found.structuredContent.rankingMethod, /canonical-token/i);
+  const budget = await client.callTool({ name: "get_research_budget_info", arguments: {} });
+  assert.equal(budget.structuredContent.depths.fast.relativeCost, "low");
+  assert.equal(budget.structuredContent.depths.deep.relativeCost, "high");
+  assert.equal(budget.structuredContent.quotaVisibility.remainingCapacityExposed, false);
+  const comparableIds = result.candidateIdMapping.canonicalIds.length >= 2
+    ? result.candidateIdMapping.canonicalIds.slice(0, 2)
+    : result.structuralGaps.slice(0, 2).map((gap) => gap.id);
+  assert.equal(comparableIds.length, 2);
+  const inRunComparison = await client.callTool({ name: "compare_run_candidates", arguments: { run_id: result.runId, candidate_ids: comparableIds } });
+  assert.notEqual(inRunComparison.isError, true);
+  assert.equal(inRunComparison.structuredContent.providerCalls, 0);
+  assert.equal(inRunComparison.structuredContent.freshExpansion.performed, false);
   const direct = await fetch(new URL("/api/research", origin), {
     method: "POST", headers: { "Content-Type": "application/json", "x-novelty-client-id": "direct-api-e2e" },
-    body: JSON.stringify({ mode: "research_company", query: "Research a field service software company and its competitors" }),
+    body: JSON.stringify({ query: "Find evidence-backed field service workflow opportunities", retrieval_mode: "supplied_sources", sources: suppliedSources }),
   });
   assert.equal(direct.status, 200);
   const directResult = await direct.json();
-  assert.equal(directResult.mode, "research_company");
-  assert.ok(directResult.companyProfile);
+  assert.equal(directResult.retrievalMode, "supplied_sources");
+  assert.equal(directResult.budgetUsage.providerCalls, 0);
   assert.ok(Array.isArray(directResult.roleOutputs));
   assert.ok(directResult.checkpoints.some((item) => item.name === "citation_validation" && item.status === "passed"));
   assert.ok(directResult.evidenceSnapshot?.capturedAt);
+  const hosted = await client.callTool({ name: "research_market", arguments: { query: "This explicit hosted request must be blocked by the deployment kill switch" } });
+  assert.equal(hosted.isError, true);
+  assert.match(hosted.content?.[0]?.type === "text" ? hosted.content[0].text : "", /HOSTED_SEARCH_DISABLED/);
   console.log(`HTTP MCP verified: protocol=${client.getNegotiatedProtocolVersion()} tools=${listed.tools.length} run=${result.runId} citations=${result.citations.length}`);
 } finally {
   await client.close().catch(() => {});

@@ -18,14 +18,18 @@ export interface McpCallRecord {
 
 const globalState = globalThis as typeof globalThis & { __noveltyMcpCalls?: McpCallRecord[] };
 const calls = globalState.__noveltyMcpCalls ??= [];
-const requestContext = new AsyncLocalStorage<{ requestId: string }>();
+const requestContext = new AsyncLocalStorage<{ requestId: string; ownerScope: string }>();
 
-export function withMcpRequestContext<T>(requestId: string, work: () => Promise<T>): Promise<T> {
-  return requestContext.run({ requestId }, work);
+export function withMcpRequestContext<T>(requestId: string, ownerScope: string, work: () => Promise<T>): Promise<T> {
+  return requestContext.run({ requestId, ownerScope }, work);
 }
 
 export function currentMcpRequestId(): string {
   return requestContext.getStore()?.requestId ?? "internal";
+}
+
+export function currentMcpOwnerScope(): string | undefined {
+  return requestContext.getStore()?.ownerScope;
 }
 
 export function recordMcpCall(record: Omit<McpCallRecord, "requestId"> & { requestId?: string }) {
@@ -50,6 +54,8 @@ export function mcpHealthSnapshot(env: NodeJS.ProcessEnv = process.env) {
     tools: MCP_TOOL_CATALOG,
     provider: providerConfiguration(env),
     providerConfigured: providerConfiguration(env).configured,
+    suppliedSourceResearch: true,
+    hostedSearchEnabled: providerConfiguration(env).hostedSearchEnabled,
     redisConfigured: storage.configured,
     redisReachable: storage.reachable,
     authentication: { mode: env.NOVELTY_MCP_ACCESS_TOKEN ? "bearer-token" : publicResearchEnabled ? "public-rate-limited" : "public-read-only-until-durable-protection", oauthReadyBoundary: true },
@@ -76,7 +82,7 @@ export async function mcpHealthSnapshotWithConnectivity() {
 export async function publicMcpHealthSnapshot() {
   const internal = await mcpHealthSnapshotWithConnectivity();
   return {
-    status: internal.providerConfigured && internal.publicResearchEnabled && internal.redisReachable !== false ? "ok" as const : "unavailable" as const,
+    status: internal.publicResearchEnabled && internal.redisReachable !== false ? "ok" as const : "unavailable" as const,
     version: internal.toolContractVersion,
   };
 }
