@@ -16,6 +16,8 @@ import { deriveExpansionBranches } from "./expansion.ts";
 import { RESEARCH_ENGINE_VERSION, type ResearchDepth, type SearchAngle, type SearchBranch } from "./types.ts";
 import { buildCompetitorRecallReport, credibleCompetitor, establishedCategory, planCompetitorDiscovery } from "./competitor-discovery.ts";
 import { operationalLog, safeErrorCategory } from "../http-safety.ts";
+import { buildResearchClaimLineage, citationCoverageAudit } from "./claim-support.ts";
+import { buildCandidateIdMapping } from "./candidate-ids.ts";
 
 const absoluteMax = (raw: string | undefined, fallback: number, max: number) => {
   const value = Number.parseInt(raw ?? "", 10);
@@ -334,7 +336,19 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   opportunity.budgetUsage.estimatedProviderCredits = providerCalls;
   opportunity.budgetUsage.exhausted = providerCalls >= limits.maxProviderCalls || providerCalls >= limits.maxProviderSpendCredits
     || searchAngles.length >= limits.maxSearchQueries || Date.now() - wallStartedAt >= limits.maxRunDurationMs;
-  opportunity.budgetUsage.expansionStopReason = expansionStopReason;
+  opportunity.budgetUsage.expansionStopReason = opportunity.budgetUsage.exhausted ? "budget_exhausted"
+    : opportunity.finalOpportunities.length > 0 ? "success"
+      : searchBranches.some((item) => item.status === "no_new_evidence") ? "coverage_plateau"
+        : failures.length && expansionAngles.length > 0 && expansionResults.length === 0 ? "provider_limit"
+          : expansionStopReason === "budget_exhausted" ? "no_useful_branch_remaining" : expansionStopReason;
+  if (!opportunity.finalOpportunities.length && searchBranches.length && /Expand the search into one adjacent segment or workflow/i.test(opportunity.nextBestAction.action)) {
+    opportunity.nextBestAction = {
+      ...opportunity.nextBestAction,
+      action: "Collect independent user-voice and current-spend evidence for the strongest recorded gap before another adjacent expansion.",
+      reason: "Adjacent workflow/segment expansion already ran in this research run without producing a survivor; repeating it is not the next-best action.",
+      estimatedCost: "targeted interviews or one evidence-gap retrieval pass",
+    };
+  }
   const warnings = [...failures];
   if (complaintClusters.length === 0) warnings.push("No supported complaint clusters were found; the result contains no inferred market gaps rather than manufacturing them.");
   if (gaps.length > 0 && gaps.every((gap) => gap.confidenceLabel === "speculative opportunity")) warnings.push("All detected openings remain speculative because retrieved support is weak or isolated.");
@@ -359,6 +373,12 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
     query, evidence: sources, competitors, complaints: complaintClusters, segments: underservedSegments,
     opportunities: opportunity.finalOpportunities,
   }) : null;
+  const candidateIdMapping = buildCandidateIdMapping(recallSeeds, opportunity.candidates);
+  const claimLineage = buildResearchClaimLineage({
+    query, sources, competitors, gaps, candidates: opportunity.candidates,
+    falsificationResults: opportunity.falsificationResults, weakSignals: opportunity.weakSignals, companyProfile,
+  });
+  const citationCoverage = citationCoverageAudit(claimLineage);
   const roleOutputs = buildRoleOutputs({
     evidence: sources, competitors, complaints: complaintClusters, gaps, candidates: opportunity.candidates,
     falsificationResults: opportunity.falsificationResults,
@@ -404,7 +424,13 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
     output,
     roleOutputs,
     checkpoints,
-    evidenceSnapshot: createEvidenceSnapshot(sources, coverage, completedAt),
+    evidenceSnapshot: {
+      ...createEvidenceSnapshot(sources, coverage, completedAt),
+      claimLineage: structuredClone(claimLineage), citationCoverage: structuredClone(citationCoverage),
+    },
+    claimLineage,
+    citationCoverage,
+    candidateIdMapping,
     companyProfile,
     warnings,
   };
@@ -412,7 +438,7 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
   const invalidReferences = validateEvidenceReferences(result as ResearchResult);
   const gateErrors = assertSurvivorGates(result as ResearchResult);
   if (invalidReferences.length || gateErrors.length) throw new Error(`Research quality gate failed: ${[...invalidReferences.map((id) => `missing evidence ${id}`), ...gateErrors].join("; ")}`);
-  result.checkpoints.push(checkpoint("citation_validation", "passed", "Every factual evidence ID in survivors, gaps, rejections, and falsification resolved to the immutable evidence snapshot.", completedAt));
+  result.checkpoints.push(checkpoint("citation_validation", "passed", `Every factual evidence ID resolved to the immutable snapshot; ${citationCoverage.supportedMajorClaims}/${citationCoverage.totalMajorClaims} major claims have at least one support-role- and relevance-compatible citation. Unsupported or mismatched claims remain explicit.`, completedAt));
   result.checkpoints.push(checkpoint("final_persistence", options.persist === false ? "not_applicable" : "passed", options.persist === false ? "Persistence was explicitly disabled for this run." : "The completed run and evidence snapshot are the object passed to durable/local persistence.", completedAt));
   const completeResult: ResearchResult = { ...result, ideationContext: ideationContext(result) };
   if (options.persist !== false) {

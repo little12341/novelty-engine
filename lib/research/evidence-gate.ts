@@ -3,6 +3,7 @@ import type {
   FalsificationResult, IdeaCandidate, UnderservedSegment,
 } from "./types.ts";
 import { independentEvidenceCount } from "./quality.ts";
+import { filterEvidenceIdsForClaim } from "./claim-support.ts";
 
 const bounded = (raw: string | undefined, fallback: number, min: number, max: number) => {
   const parsed = Number(raw);
@@ -30,13 +31,13 @@ export function buyerSpecificityGate(candidate: IdeaCandidate): { passed: boolea
   if (!definition) return { passed: false, reason: "Candidate lacks the required structured buyer/company definition." };
   const required = [definition.industry, definition.companyProfile, definition.buyer, definition.decisionMaker, definition.specificProblem,
     definition.currentWorkaround, definition.economicConsequence, definition.proposedMechanism, definition.whyExistingSolutionsFail];
-  if (required.some((value) => !value || value.trim().length < 4) || definition.evidenceIds.length === 0) {
+  if (required.some((value) => !value || value.trim().length < 4 || /^(?:unknown|unspecified|not established|not supplied)\b/i.test(value.trim())) || definition.evidenceIds.length === 0) {
     return { passed: false, reason: "Candidate definition is missing buyer, profile, problem, workaround, consequence, mechanism, incumbent-failure, or evidence detail." };
   }
   if (/^(?:mobile-first users|field users|users|teams|businesses|companies|professionals)$/i.test(candidate.targetCustomer?.trim() ?? "")) {
     return { passed: false, reason: "Target customer is a vague usage label rather than an addressable segment." };
   }
-  const profileSpecific = /\b(?:small|mid[- ]?market|enterprise|independent|regional|regulated|multi-|\d+\s*[–-]\s*\d+|\d+\s*(?:person|employee|worker|location|seat))\b/i.test(definition.companyProfile);
+  const profileSpecific = /\b(?:small|mid[- ]?market|enterprise|independent|regional|regulated|multi-|US|U\.S\.|general contractors?|specialty trades?|commercial cleaning|aquaculture|restaurants?|\d+\s*[–-]\s*\d+|\d+\s*(?:person|employee|worker|location|seat))\b/i.test(definition.companyProfile);
   const buyerSpecific = /\b(?:owner|manager|director|head|lead|controller|officer|buyer|operations|compliance|risk|finance|procurement)\b/i.test(definition.decisionMaker);
   return profileSpecific && buyerSpecific
     ? { passed: true, reason: "Industry, operating profile, and accountable buyer/decision-maker are explicit." }
@@ -54,12 +55,17 @@ export function evaluateEvidenceGate(candidate: IdeaCandidate, input: {
   externallyValidated?: boolean;
 }): EvidenceGateResult {
   const thresholds = input.thresholds ?? evidenceGateThresholds();
-  const gapIds = input.gap?.supportingEvidenceIds ?? [];
+  const marketContext = `${candidate.definition?.industry ?? ""} ${candidate.definition?.companyProfile ?? candidate.targetCustomer ?? ""} ${candidate.jobToBeDone}`;
+  const gapIds = filterEvidenceIdsForClaim("customer_pain", input.gap?.problemStatement ?? candidate.jobToBeDone,
+    input.gap?.supportingEvidenceIds ?? [], input.evidence, marketContext);
   const relevantIds = [...new Set([...candidate.evidenceIds, ...gapIds, ...(input.gap?.counterEvidenceIds ?? [])])];
   const relevant = input.evidence.filter((item) => relevantIds.includes(item.id));
-  const spendIds = input.evidence.filter((item) => !item.sourceAssessment.discoveryOnly && SPEND.test(`${item.title} ${item.summary}`)
+  const spendCandidates = input.evidence.filter((item) => !item.sourceAssessment.discoveryOnly && SPEND.test(`${item.title} ${item.summary}`)
     && (relevantIds.includes(item.id) || item.sourceAssessment.sourceFamily === "commercial")).map((item) => item.id);
-  const timingIds = input.evidence.filter((item) => TIMING.test(`${item.title} ${item.summary}`)).map((item) => item.id);
+  const spendIds = filterEvidenceIdsForClaim("market_spend", candidate.definition?.economicConsequence ?? "Current spend or avoided economic consequence",
+    spendCandidates, input.evidence, marketContext);
+  const timingCandidates = input.evidence.filter((item) => TIMING.test(`${item.title} ${item.summary}`)).map((item) => item.id);
+  const timingIds = filterEvidenceIdsForClaim("market_timing", `Timing conditions for ${candidate.jobToBeDone}`, timingCandidates, input.evidence, marketContext);
   const referenced = [
     ...candidate.evidenceIds,
     ...input.falsification.hypotheses.flatMap((item) => [...item.supportingEvidenceIds, ...item.counterEvidenceIds]),

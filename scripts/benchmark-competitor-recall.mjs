@@ -23,10 +23,10 @@ const legacySimilarity = (left, right) => {
   const matching = dimensions.filter((key) => legacyJaccard(legacyTokens(left.dimensions[key]), legacyTokens(right.dimensions[key])) >= .35).length;
   return Math.min(1, legacyJaccard(left.tokens, right.tokens) * .55 + matching / 11 * .45);
 };
-const result = (market, name, index, source = "official") => ({
+const result = (market, name, _index, source = "official") => ({
   url: source === "g2" ? `https://g2.com/products/${slug(name)}/reviews`
     : source === "producthunt" ? `https://producthunt.com/products/${slug(name)}`
-      : `https://${slug(market.id)}-${index}.example/product`,
+      : `https://${slug(name)}.example/product`,
   title: `${name} | ${market.query}`,
   snippet: `Purpose-built software for ${market.buyer} to ${market.job}. Workflow automation, integrations, reporting, and subscription pricing.`,
   publishedAt: "2026-06-01",
@@ -60,7 +60,7 @@ function batchesFor(market, mode) {
     [plan.primaryAngles[0].id, [result(market, market.referenceDirect[0], 0), result(market, market.referenceDirect[1], 1)]],
     [plan.primaryAngles[1].id, [result(market, market.referenceDirect[2], 2, "g2"), result(market, "Generic Market Guide", 90)]],
     [plan.crossCheckAngles[0].id, [result(market, market.referenceDirect[3], 3), {
-      url: `https://${slug(market.id)}-manual-substitute.example/guide`, title: market.referenceSubstitutes[0],
+      url: `https://${slug(market.referenceSubstitutes[0])}.example/product`, title: market.referenceSubstitutes[0],
       snippet: `Manual substitute used by ${market.buyer}: ${market.referenceSubstitutes[0]}. The work is handled by people and documents.`, publishedAt: "2026-05-01",
     }]],
     [plan.crossCheckAngles[1].id, [result(market, market.referenceDirect[4], 4, "producthunt")]],

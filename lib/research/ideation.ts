@@ -22,6 +22,10 @@ const TRANSFERS = [
 
 function marketDefinition(query: string, target: string | null): { industry: string; companyProfile: string; decisionMaker: string } {
   const rules: Array<[RegExp, string, string, string]> = [
+    [/\bUS\b.*general contractors?|general contractors?.*specialty trades?|specialty trades?.*general contractors?/i, "US construction contracting", "US general contractors and specialty-trade firms with recurring subcontractor, insurance, field-proof, or project handoffs", "owner, operations manager, project executive, or risk/compliance lead"],
+    [/commercial clean|janitorial|proof.of.service/i, "commercial cleaning services", "commercial cleaning companies with mobile crews, recurring client sites, and contract proof-of-service obligations", "owner, field operations manager, or account operations director"],
+    [/independent restaurant|restaurant pos|point.of.sale|\bpos\b/i, "independent restaurant operations", "independent restaurants and small restaurant groups with 1–10 locations and owner-led technology purchasing", "owner-operator or restaurant operations director"],
+    [/aquaculture|ozone|fish farm/i, "aquaculture water operations", "aquaculture farms and water-treatment operators using ozone or oxidation controls with traceability obligations", "farm operations manager, water-quality lead, or compliance buyer"],
     [/consumer|household|food waste|grocery|pantry/i, "consumer household operations", "households of roughly 1–6 people with recurring grocery, storage, and meal-planning workflows", "household buyer or primary grocery decision-maker"],
     [/contract|construction|trades?|home service|field service/i, "contracting and field services", "contracting or home-service companies with roughly 2–50 field workers and recurring subcontractor/vendor handoffs", "owner, operations manager, or risk/compliance lead"],
     [/finance|account|month.end|reconcil/i, "accounting and finance operations", "small and mid-sized companies with 2–20 person finance teams and a recurring close or reconciliation process", "controller, head of finance, or finance operations lead"],

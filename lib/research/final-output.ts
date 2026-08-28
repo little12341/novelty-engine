@@ -19,7 +19,7 @@ export function buildFinalOutput(input: {
     researchLandscape: {
       coverage: input.coverage,
       competitors: input.competitors.slice(0, 10).map((item) => ({
-        id: item.id, name: item.name.value, website: item.website,
+        id: item.id, name: item.name.value, website: item.website, classification: item.classification, canonicalDomain: item.canonicalDomain,
         claimStatus: classifyClaim(item.evidenceIds, input.evidence), evidenceIds: item.evidenceIds,
       })),
       sourceTypeCounts,

@@ -161,8 +161,8 @@ test("close competition lowers differentiation and defensibility without becomin
 
 test("competition is decisive only when close substitutes adequately solve the same job and user without a residual gap", () => {
   const adequateEvidence = normalizeResults([{ angle, results: [
-    { url: "https://adequate-one.example/review", title: "Complete solution for small businesses", snippet: "Independent customers report it fully solves the same job for the same user." },
-    { url: "https://adequate-two.example/comparison", title: "Requirements comparison", snippet: "The close substitute meets all requirements for the same customer and leaves no meaningful gap." },
+    { url: "https://reddit.com/r/fieldservice/comments/adequate-one", title: "Complete dispatch solution for small field-service businesses", snippet: "Independent contractor customers report it fully solves dispatch and moving job data for the same field-service user." },
+    { url: "https://community.contractors.example/discussions/adequate-two", title: "Field-service requirements comparison", snippet: "Contractor operators report the close dispatch substitute meets every job-data requirement for the same customer and leaves no meaningful gap." },
   ] }], "2026-08-24T12:00:00.000Z", 10);
   const solvedGap = {
     ...gaps[0], supportingEvidenceIds: [], counterEvidenceIds: adequateEvidence.map((item) => item.id),
@@ -198,7 +198,9 @@ test("survivor loop respects iteration, candidate, and requested-count budgets",
   assert.ok(output.budgetUsage.survivorIterations <= 1);
   assert.ok(output.candidates.length <= 18);
   assert.ok(output.finalOpportunities.length <= 4);
-  assert.ok(output.finalOpportunities.length > 0);
+  assert.ok(output.evidenceGates.length > 0);
+  assert.ok(output.evidenceGates.every((gate) => gate.classification !== "validated"),
+    "a bounded synthetic unit fixture must not fabricate external validation or promote a thin market case");
 });
 
 test("opportunity score exposes factor-level heuristic scoring", () => {

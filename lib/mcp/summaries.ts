@@ -41,13 +41,24 @@ export function summarizeGap(gap: CandidateGap, result: ResearchResult) {
   };
 }
 
-export function summarizeCompetitor(competitor: Competitor, result: ResearchResult) {
+export function summarizeCompetitor(competitor: Competitor, result: ResearchResult, candidateId?: string) {
+  const similarity = result.similarities.find((item) => candidateId
+    ? item.leftId === candidateId && item.rightId === competitor.id || item.rightId === candidateId && item.leftId === competitor.id
+    : item.leftId === competitor.id || item.rightId === competitor.id) ?? null;
   return {
-    id: competitor.id, name: competitor.name.value, website: competitor.website,
+    id: competitor.id, canonicalOrganizationId: competitor.canonicalOrganizationId, canonicalDomain: competitor.canonicalDomain,
+    name: competitor.name.value, website: competitor.website,
     targetCustomer: competitor.targetCustomer.value, coreJobToBeDone: competitor.coreJobToBeDone.value,
     pricing: competitor.pricing.value, keyFeatures: competitor.keyFeatures.value,
     positioning: competitor.positioning.value, likelyStrengths: competitor.likelyStrengths.value,
-    likelyWeaknesses: competitor.likelyWeaknesses.value, relationship: competitor.relationship?.value ?? null, unknownFields: unknownCompetitorFields(competitor),
+    likelyWeaknesses: competitor.likelyWeaknesses.value, relationship: competitor.relationship?.value ?? null,
+    classification: competitor.classification, sourcePageIds: competitor.sourcePageIds,
+    similarity: similarity ? {
+      candidateId: candidateId ?? (result.candidates.some((item) => item.id === similarity.leftId) ? similarity.leftId : similarity.rightId),
+      score: similarity.score, matchedDimensions: similarity.matchingDimensions,
+      unmatchedDimensions: similarity.nonMatchingDimensions ?? [], dimensionScores: similarity.dimensionScores ?? {}, explanation: similarity.explanation,
+    } : null,
+    unknownFields: unknownCompetitorFields(competitor),
     intelligence: competitor.intelligence,
     unknownIntelligenceFields: unknownCompetitorIntelligenceFields(competitor),
     citations: citationsFor(competitor.evidenceIds, result),
@@ -70,6 +81,14 @@ export function summarizeResearch(result: ResearchResult) {
         reason: opportunity.falsification.reason,
         unknownDimensions: opportunity.falsification.hypotheses.filter((item) => item.unknown).map((item) => item.dimension),
         decisiveRisks: opportunity.falsification.decisiveRisks,
+        closestCompetitorSimilarity: opportunity.falsification.residualUnmetDemand.closestCompetitorSimilarity,
+        closestCompetitorDimensions: opportunity.nearestAnalogues[0] ? {
+          competitorId: opportunity.nearestAnalogues[0].rightId,
+          matched: opportunity.nearestAnalogues[0].matchingDimensions,
+          unmatched: opportunity.nearestAnalogues[0].nonMatchingDimensions ?? [],
+          scores: opportunity.nearestAnalogues[0].dimensionScores ?? {},
+        } : null,
+        searchCoverage: opportunity.falsification.searchCoverage,
       },
       evidenceIds: opportunity.candidate.evidenceIds,
       evidenceLineage: opportunity.lineage,
@@ -108,11 +127,13 @@ export function summarizeResearch(result: ResearchResult) {
     taskGraph: result.taskGraph,
     searchBranches: result.searchBranches,
     competitorRecall: result.competitorRecall,
+    candidateIdMapping: result.candidateIdMapping,
     candidateLifecycles: result.candidateLifecycles,
     nextBestAction: result.nextBestAction,
     stopDecision: result.stopDecision,
     citations: citationsFor([...evidenceIds], result, 20), warnings: result.warnings,
     budgetUsage: result.budgetUsage,
+    citationCoverage: result.citationCoverage,
     unknowns: survivors.length === 0 ? [result.stopDecision.status === "insufficient_evidence" ? "Insufficient evidence for a compelling opportunity; no candidate was forced." : result.budgetUsage.exhausted ? "No opportunity survived after the configured retrieval and expansion budget was exhausted." : "No opportunity survived in the branches searched so far; this is not an exhaustive market rejection."] : [],
     retrievalHint: "Use get_research_run with include_full=true only when the full internal record is needed.",
   };
@@ -123,7 +144,24 @@ export function summarizeGaps(result: ResearchResult, limit: number, cursor = 0)
   return { runId: result.id, query: result.query, gaps, cursor, nextCursor: cursor + gaps.length < result.gaps.length ? cursor + gaps.length : null, total: result.gaps.length, warnings: result.warnings };
 }
 
-export function summarizeCompetitors(result: ResearchResult, limit: number, cursor = 0) {
-  const competitors = result.competitors.slice(cursor, cursor + limit).map((item) => summarizeCompetitor(item, result));
-  return { runId: result.id, query: result.query, competitors, cursor, nextCursor: cursor + competitors.length < result.competitors.length ? cursor + competitors.length : null, total: result.competitors.length, warnings: result.warnings };
+export function summarizeCompetitors(result: ResearchResult, limit: number, cursor = 0, candidateId?: string) {
+  const competitors = result.competitors.slice(cursor, cursor + limit).map((item) => summarizeCompetitor(item, result, candidateId));
+  const sourceRelationships = result.sources.reduce<Record<string, number>>((counts, item) => {
+    counts[item.pageIdentity.relationship] = (counts[item.pageIdentity.relationship] ?? 0) + 1;
+    return counts;
+  }, {});
+  return {
+    runId: result.id, query: result.query, candidateId: candidateId ?? null, competitors,
+    counts: {
+      directCompetitors: result.competitors.filter((item) => item.classification === "direct_competitor").length,
+      substitutes: result.competitors.filter((item) => item.classification === "substitute").length,
+      normalizedEntities: result.competitors.length,
+      sourceRelationships,
+    },
+    closestCompetitorSimilarity: candidateId ? result.similarities.filter((item) => item.leftId === candidateId || item.rightId === candidateId)
+      .filter((item) => result.competitors.some((competitor) => competitor.id === item.leftId || competitor.id === item.rightId))
+      .sort((a, b) => b.score - a.score)[0] ?? null : null,
+    cursor, nextCursor: cursor + competitors.length < result.competitors.length ? cursor + competitors.length : null,
+    total: result.competitors.length, warnings: result.warnings,
+  };
 }

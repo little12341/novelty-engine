@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { extractCompetitors } from "./analyze.ts";
-import { fingerprintCandidate, fingerprintCompetitor, compareFingerprints } from "./fingerprints.ts";
+import { fingerprintCandidate, fingerprintCompetitor, compareFingerprints, similarityMatrix } from "./fingerprints.ts";
 import { buildProviderQuery } from "./angles.ts";
 import { getConfiguredProvider } from "./providers.ts";
 import { normalizeResults } from "./normalize.ts";
@@ -201,8 +201,9 @@ export async function freshCompetitorExpansion(run: ResearchResult, candidateId?
   }
   const sources = [...mergedByUrl.values()];
   const competitors = extractCompetitors(sources);
+  const similarities = similarityMatrix(run.candidates.map(fingerprintCandidate), competitors.map(fingerprintCompetitor));
   const report = buildCompetitorRecallReport({ query: run.query, plan, candidates: selected, competitors, evidence: sources,
     successfulAngleIds: angles.map((item) => item.id), minimumCredibleCompetitors: run.limits.minCredibleCompetitors ?? 5,
     escalationTriggeredGroupIds: plan.groups.map((item) => item.id) });
-  return { ...run, sources, competitors, competitorRecall: report, warnings: [...run.warnings, "inspect_competitors performed a fresh high-recall expansion; the stored run itself was not mutated."] };
+  return { ...run, sources, competitors, similarities, competitorRecall: report, warnings: [...run.warnings, "inspect_competitors performed a fresh high-recall expansion; the stored run itself was not mutated."] };
 }

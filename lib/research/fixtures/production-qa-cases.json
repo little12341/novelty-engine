@@ -1,0 +1,46 @@
+{
+  "coi_entities": [
+    { "url": "https://simplecerts.com/solutions/construction", "title": "SimpleCerts | COI tracking for construction", "snippet": "SimpleCerts provides certificate of insurance tracking and subcontractor compliance workflows for general contractors." },
+    { "url": "https://smartcompliance.co/industries/construction", "title": "SmartCompliance | Construction certificate tracking", "snippet": "SmartCompliance provides COI tracking, document collection, renewal reporting, and vendor compliance for construction companies." },
+    { "url": "https://getjones.com/contractors", "title": "Jones | Insurance compliance for contractors", "snippet": "Jones provides certificate of insurance tracking, subcontractor compliance, and risk workflows for general contractors." },
+    { "url": "https://certificial.com/solutions/construction", "title": "Certificial | Smart COI compliance", "snippet": "Certificial provides real-time certificate issuance, verification, compliance monitoring, and integrations for contractors and brokers." },
+    { "url": "https://billyforinsurance.com/construction", "title": "Billy | Construction insurance compliance", "snippet": "Billy provides certificate of insurance collection and subcontractor compliance software for general contractors." },
+    { "url": "https://knowify.com/features/subcontractor-management", "title": "Knowify | Subcontractor management", "snippet": "Knowify provides construction subcontractor management, insurance certificate records, scheduling, invoicing, and reporting for contractors." },
+    { "url": "https://sourceforge.net/software/coi-tracking/", "title": "Best COI Tracking Software in 2026", "snippet": "SourceForge category directory comparing certificate of insurance tracking platforms for contractors." },
+    { "url": "https://www.g2.com/articles/best-coi-tracking-software", "title": "Best COI Tracking Software (2026): 7 Platforms Compared", "snippet": "A publisher comparison of COI and subcontractor compliance platforms." },
+    { "url": "https://www.linkedin.com/posts/editor_coi-platforms-compared", "title": "Seven COI platforms construction leaders should know", "snippet": "A LinkedIn article comparing insurance certificate software for general contractors." },
+    { "url": "https://fieldservice.example/blog/benefits-of-field-service-management-software", "title": "Benefits of Field Service Management Software", "snippet": "A generic field-service article about dispatch and scheduling benefits." },
+    { "url": "https://reports.example.org/reports/construction-software-market.pdf", "title": "Construction Software Market Report PDF", "snippet": "A broad report about construction software categories and vendors." },
+    { "url": "https://vendorseo.example/resources/best-coi-software-alternatives", "title": "Top 10 COI Software Alternatives", "snippet": "A vendor-authored comparison of certificate tracking tools and platforms." }
+  ],
+  "certificial_company": [
+    { "url": "https://certificial.com/", "title": "Certificial | Real-time insurance verification", "snippet": "Certificial provides real-time insurance verification and Smart COI Network services for brokers, insureds, and requestors." },
+    { "url": "https://certificial.com/platform/integrations", "title": "Certificial integrations", "snippet": "Certificial states that its platform integrates certificate issuance, compliance monitoring, and insurance verification workflows." },
+    { "url": "https://certificial.com/pricing", "title": "Certificial pricing", "snippet": "Certificial uses contact sales pricing for its insurance verification platform." },
+    { "url": "https://g2.com/articles/compliance-open-source-tools", "title": "Best open-source compliance tools", "snippet": "A generic publisher listicle about policy-as-code and software governance." },
+    { "url": "https://linkedin.com/posts/analyst_insurance-compliance-comparison", "title": "Insurance compliance platforms compared", "snippet": "An analyst LinkedIn post listing Certificial, Jones, and unrelated compliance tools." },
+    { "url": "https://trustlayer.io/blog/certificial-alternatives", "title": "Best Certificial alternatives", "snippet": "A vendor-authored comparison page positioning TrustLayer against Certificial." }
+  ],
+  "commercial_cleaning": [
+    { "url": "https://cleanproof.example/product", "title": "CleanProof | Proof of service for janitorial teams", "snippet": "CleanProof provides timestamped proof-of-service records for commercial cleaning companies and field operations managers." },
+    { "url": "https://reddit.com/r/janitorial/comments/proof-gap", "title": "Clients dispute whether crews completed nightly cleaning", "snippet": "Our small commercial cleaning company uses paper checklists and phone photos because clients require proof of service and dispute missed areas." },
+    { "url": "https://community.cleaners.example/discussions/client-proof", "title": "Manual proof-of-service packet", "snippet": "Independent janitorial operators email photos and spreadsheets to property managers; the workaround takes hours and missing proof delays invoices." },
+    { "url": "https://fieldservice.example/blog/benefits-of-field-service-management-software", "title": "Benefits of Field Service Management Software", "snippet": "A broad article about dispatch, technician scheduling, and invoicing for home service teams." }
+  ],
+  "restaurant_pos": [
+    { "url": "https://tableledger.example/restaurant-pos", "title": "TableLedger | Restaurant POS reconciliation", "snippet": "TableLedger provides point-of-sale reconciliation and daily close automation for independent restaurants." },
+    { "url": "https://reddit.com/r/restaurateur/comments/pos-close", "title": "Independent restaurant POS close still needs a spreadsheet", "snippet": "Our independent restaurant manager exports POS reports and manually reconciles delivery fees in a spreadsheet every night." },
+    { "url": "https://community.restaurant.example/discussions/delivery-reconciliation", "title": "Delivery marketplace totals do not match the POS", "snippet": "Restaurant owner-operators re-enter orders because the point-of-sale integration misses refunds and fees." },
+    { "url": "https://aquaculture.example/reports/ozone-water-treatment", "title": "Ozone treatment in aquaculture", "snippet": "A report about ozone oxidation and water quality at fish farms." }
+  ],
+  "aquaculture_ozone": [
+    { "url": "https://ozonetrace.example/aquaculture", "title": "OzoneTrace | Aquaculture ozone records", "snippet": "OzoneTrace provides ozone dosing records and water-treatment traceability for aquaculture farms." },
+    { "url": "https://forum.aquaculture.example/discussions/ozone-log", "title": "Fish farm ozone dosing log is still manual", "snippet": "Aquaculture operators record ozone oxidation and water-treatment checks on paper, making traceability during mortality investigations difficult." },
+    { "url": "https://research.example.org/reports/aquaculture-ozone-traceability.pdf", "title": "Aquaculture ozone traceability report PDF", "snippet": "Independent research describes ozone dosing, water quality, and traceability needs in recirculating fish farms." },
+    { "url": "https://opensource.example/blog/compliance-automation", "title": "Open-source compliance automation", "snippet": "A generic article about policy engines and software compliance." }
+  ],
+  "two_ideas": [
+    "Proof-of-service evidence automation for small US commercial cleaning companies, purchased by the owner or field operations manager",
+    "Ozone dosing traceability for land-based aquaculture farms, purchased by the operations or water-quality manager"
+  ]
+}

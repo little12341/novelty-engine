@@ -4,6 +4,7 @@ import type {
   ResidualUnmetDemandAssessment, SimilarityResult,
 } from "./types.ts";
 import { classifyClaim, independentEvidenceCount } from "./quality.ts";
+import { filterEvidenceIdsForClaim } from "./claim-support.ts";
 
 const HYPOTHESES: Array<[FalsificationDimension, string]> = [
   ["demand", "The reported pain is not frequent or severe enough to change behavior."],
@@ -46,7 +47,7 @@ function assessResidualUnmetDemand(candidate: IdeaCandidate, gap: CandidateGap |
     const otherId = item.leftId === candidate.id ? item.rightId : item.leftId;
     return explicitCompetitorIds.has(otherId);
   });
-  const closest = comparisons[0] ?? null;
+  const closest = [...comparisons].sort((a, b) => b.score - a.score)[0] ?? null;
   const competitorsPresent = explicitCompetitorIds.size > 0 || comparisons.length > 0;
   const sameJobSameUserSubstitute = comparisons.some((item) => {
     const dimensions = new Set(item.matchingDimensions);
@@ -54,11 +55,15 @@ function assessResidualUnmetDemand(candidate: IdeaCandidate, gap: CandidateGap |
       || (item.dimensionScores?.targetCustomer ?? 0) >= .5 && (item.dimensionScores?.jobToBeDone ?? 0) >= .5;
   });
   const relevantIds = unique([...(gap?.supportingEvidenceIds ?? []), ...(gap?.counterEvidenceIds ?? []), ...candidate.evidenceIds]);
-  const relevantEvidence = input.evidence.filter((item) => relevantIds.includes(item.id));
+  const marketContext = `${candidate.definition?.industry ?? ""} ${candidate.definition?.companyProfile ?? candidate.targetCustomer ?? ""} ${candidate.jobToBeDone}`;
+  const relevantEvidence = input.evidence.filter((item) => relevantIds.includes(item.id) && item.relevanceAssessment.acceptedForMarket);
   const residualEvidence = relevantEvidence.filter((item) => !ADEQUATE_SOLUTION.test(`${item.title} ${item.summary}`));
   const matchingIds = (pattern: RegExp) => residualEvidence.filter((item) => pattern.test(`${item.title} ${item.summary}`)).map((item) => item.id);
   const signal = (criterion: ResidualDemandCriterion, ids: string[], rationale: string): ResidualDemandSignalAssessment => {
-    const evidenceIds = unique(ids);
+    const claimType = criterion === "workaround_prevalence" || criterion === "tolerated_bad_solutions" ? "customer_workaround"
+      : criterion === "underserved_segments" ? "underserved_status"
+        : criterion === "price_performance_gaps" ? "competitor_weakness" : "unmet_demand";
+    const evidenceIds = filterEvidenceIdsForClaim(claimType, rationale, unique(ids), input.evidence, marketContext);
     return {
       criterion, present: evidenceIds.length ? true : null,
       claimStatus: evidenceIds.length ? classifyClaim(evidenceIds, input.evidence) : "UNKNOWN",
@@ -118,7 +123,8 @@ function assessResidualUnmetDemand(candidate: IdeaCandidate, gap: CandidateGap |
   };
   const presentSignals = Object.values(signals).filter((item) => item.present).length;
   const meaningfulResidualGap = signals.repeated_unresolved_complaints.present === true || presentSignals >= 2;
-  const adequateIds = input.evidence.filter((item) => relevantIds.includes(item.id) && ADEQUATE_SOLUTION.test(`${item.title} ${item.summary}`)).map((item) => item.id);
+  const adequateIds = filterEvidenceIdsForClaim("competitor_relationship", "A same-buyer same-job solution adequately resolves the workflow",
+    input.evidence.filter((item) => relevantIds.includes(item.id) && ADEQUATE_SOLUTION.test(`${item.title} ${item.summary}`)).map((item) => item.id), input.evidence, marketContext);
   const adequateSameJobSameUserSolution = sameJobSameUserSubstitute && !meaningfulResidualGap
     && independentEvidenceCount(adequateIds, input.evidence) >= 2;
   const conclusion: ResidualUnmetDemandAssessment["conclusion"] = !competitorsPresent ? "no_competitor_evaluated"
@@ -147,9 +153,10 @@ export function falsifyCandidate(candidate: IdeaCandidate, input: {
   const gap = input.gaps.find((item) => candidate.sourceGapIds.includes(item.id));
   const residualUnmetDemand = assessResidualUnmetDemand(candidate, gap, input);
   const maxSimilarity = residualUnmetDemand.closestCompetitorSimilarity ?? 0;
-  const positiveIds = candidate.evidenceIds;
+  const marketContext = `${candidate.definition?.industry ?? ""} ${candidate.definition?.companyProfile ?? candidate.targetCustomer ?? ""} ${candidate.jobToBeDone}`;
+  const positiveIds = filterEvidenceIdsForClaim("customer_pain", gap?.problemStatement ?? candidate.jobToBeDone, candidate.evidenceIds, input.evidence, marketContext);
   const independent = independentEvidenceCount(positiveIds, input.evidence);
-  const activeCounterevidence = input.evidence.filter((item) => item.searchAngleIds.some((id) => id.startsWith("falsify_")));
+  const activeCounterevidence = input.evidence.filter((item) => item.relevanceAssessment.acceptedForMarket && item.searchAngleIds.some((id) => id.startsWith("falsify_")));
   const idsMatching = (pattern: RegExp) => activeCounterevidence.filter((item) => pattern.test(`${item.title} ${item.summary}`)).map((item) => item.id);
   const critical = new Set<FalsificationDimension>(["demand", "economics", "distribution", "technical_feasibility"]);
   const hypotheses: FalsificationHypothesis[] = HYPOTHESES.map(([dimension, statement]) => {
@@ -174,15 +181,17 @@ export function falsifyCandidate(candidate: IdeaCandidate, input: {
       else risk = Math.max(5, Math.round(maxSimilarity * 10));
     }
     if (dimension === "economics") {
-      if (gap?.willingnessToPaySignal) supportingEvidenceIds.push(...gap.supportingEvidenceIds);
+      if (gap?.willingnessToPaySignal) supportingEvidenceIds.push(...filterEvidenceIdsForClaim("willingness_to_pay", gap.willingnessToPaySignal, gap.supportingEvidenceIds, input.evidence, marketContext));
       counterEvidenceIds.push(...idsMatching(/unit economics|support cost|acquisition cost|too expensive|infrastructure cost|small market|pricing/i));
     }
     if (dimension === "distribution") {
-      supportingEvidenceIds.push(...input.evidence.filter((item) => item.sourceType === "job_posting" || /procurement|rfp|partner|marketplace|community/i.test(`${item.title} ${item.summary}`)).map((item) => item.id));
+      const distributionIds = input.evidence.filter((item) => item.sourceType === "job_posting" || /procurement|rfp|partner|marketplace|community/i.test(`${item.title} ${item.summary}`)).map((item) => item.id);
+      supportingEvidenceIds.push(...filterEvidenceIdsForClaim("market_spend", "A reachable buying or procurement channel exists", distributionIds, input.evidence, marketContext));
       counterEvidenceIds.push(...idsMatching(/acquisition|distribution|procurement|trusted channel|sales cycle/i));
     }
     if (dimension === "technical_feasibility") {
-      supportingEvidenceIds.push(...input.evidence.filter((item) => ["documentation", "github", "research", "patent"].includes(item.sourceType)).map((item) => item.id));
+      const technicalIds = input.evidence.filter((item) => ["documentation", "github", "research", "patent"].includes(item.sourceType)).map((item) => item.id);
+      supportingEvidenceIds.push(...filterEvidenceIdsForClaim("automation_capability", candidate.mechanism, technicalIds, input.evidence, marketContext));
       counterEvidenceIds.push(...idsMatching(/technical limitation|unreliable|accuracy|latency|infrastructure|hardware cost/i));
       risk = candidate.technology && /sensor|edge|hardware/i.test(candidate.technology) ? 7 : 5;
     }
@@ -201,13 +210,14 @@ export function falsifyCandidate(candidate: IdeaCandidate, input: {
       risk = /replace|new system/i.test(candidate.workflowPosition) ? 8 : 5;
     }
     if (dimension === "defensibility") {
-      counterEvidenceIds.push(...idsMatching(/incumbent|bundle|copy|open.source|commodity/i));
+      counterEvidenceIds.push(...filterEvidenceIdsForClaim("competitor_weakness", "Incumbents, open source, or AI can copy, bundle, or commoditize the mechanism", idsMatching(/incumbent|bundle|copy|open.source|commodity|commodit|capability becomes free/i), input.evidence, marketContext));
       risk = maxSimilarity > 0.55 ? 8 : 6;
     }
     if (dimension === "regulation") {
       const regulatory = input.evidence.filter((item) => item.sourceType === "regulator" || /regulat|rule|policy/i.test(`${item.title} ${item.summary}`));
-      counterEvidenceIds.push(...regulatory.map((item) => item.id));
-      risk = regulatory.length ? 6 : 5;
+      const eligibleRegulatory = filterEvidenceIdsForClaim("regulation", `Applicable regulation for ${candidate.jobToBeDone}`, regulatory.map((item) => item.id), input.evidence, marketContext);
+      counterEvidenceIds.push(...eligibleRegulatory);
+      risk = eligibleRegulatory.length ? 6 : 5;
     }
     const support = unique(supportingEvidenceIds);
     const counter = unique(counterEvidenceIds);
@@ -241,6 +251,11 @@ export function falsifyCandidate(candidate: IdeaCandidate, input: {
     evidenceIds: unique([...item.supportingEvidenceIds, ...item.counterEvidenceIds]),
   }));
   const competitorEvidenceIds = unique(gap?.counterEvidenceIds ?? []);
+  const failedAttemptIds = filterEvidenceIdsForClaim("falsification_risk", "Prior companies or attempts failed in this buyer and workflow context",
+    input.evidence.filter((item) => /failed|failure|shut down|shutdown|discontinued|low adoption|abandon/i.test(`${item.title} ${item.summary}`)).map((item) => item.id), input.evidence, marketContext);
+  const aiCommoditizationIds = filterEvidenceIdsForClaim("competitor_weakness", "AI, incumbent bundling, or open source can commoditize the core capability",
+    input.evidence.filter((item) => /\bai\b|artificial intelligence|commodit|bundle|open.source|capability becomes free/i.test(`${item.title} ${item.summary}`)).map((item) => item.id), input.evidence, marketContext);
+  const constraintSearchObserved = input.evidence.some((item) => item.searchAngleIds.some((id) => /^falsify_2_|failed_attempt/i.test(id)));
   return {
     candidateId: candidate.id, hypotheses,
     argumentsFor: [
@@ -253,6 +268,16 @@ export function falsifyCandidate(candidate: IdeaCandidate, input: {
         ? [{ claim: "Retrieved competitors address part of the job; similarity reduces differentiation and defensibility but is not by itself decisive.", evidenceIds: competitorEvidenceIds }]
         : [{ claim: "No targeted competitive resolution evidence was retrieved; competition remains unknown, not cleared.", evidenceIds: [] }],
     survivalScore, outcome, decisiveRisks, unknownCriticalCount, residualUnmetDemand,
+    searchCoverage: {
+      failedCompaniesPriorAttempts: {
+        searched: constraintSearchObserved, status: failedAttemptIds.length ? classifyClaim(failedAttemptIds, input.evidence) : "UNKNOWN",
+        evidenceIds: failedAttemptIds, rationale: failedAttemptIds.length ? "Relevant failed-company or prior-attempt evidence was retrieved." : "The focused search did not establish a relevant prior failed attempt; the result remains UNKNOWN.",
+      },
+      aiCommoditization: {
+        searched: constraintSearchObserved, status: aiCommoditizationIds.length ? classifyClaim(aiCommoditizationIds, input.evidence) : "UNKNOWN",
+        evidenceIds: aiCommoditizationIds, rationale: aiCommoditizationIds.length ? "Relevant AI, bundling, open-source, or commoditization evidence was retrieved." : "The focused search did not establish AI commoditization in this buyer/workflow context; the result remains UNKNOWN.",
+      },
+    },
     reason: outcome === "survived" ? "The concept cleared the positive-evidence gate; competitor existence was separated from adequate resolution, and no known fatal risk or excessive critical unknowns survived the adversarial pass." : outcome === "mutate" ? "The evidence-backed core remains promising, but exactly one bounded constraint mutation may be retested." : residualUnmetDemand.adequateSameJobSameUserSolution ? "A close substitute already solves the same job for the same user, and the residual-demand assessment found no meaningful remaining gap." : "A decisive non-competition factor, counterevidence, or too many critical unknowns overwhelm the current case; competitor existence alone did not cause rejection.",
   };
 }

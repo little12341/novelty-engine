@@ -74,10 +74,8 @@ test("competitor extraction only fills fields supported by evidence", () => {
   assert.match(competitor.targetCustomer.value ?? "", /contractors/i);
   assert.equal(competitor.likelyWeaknesses.value, null);
   const unknownSource = normalizeResults([{ angle, results: [{ url: "https://unknown.example", title: "UnknownCo", snippet: "Workflow software." }] }], "2026-08-24T00:00:00.000Z", 20);
-  const [unknown] = extractCompetitors(unknownSource);
-  assert.equal(unknown.pricing.value, null);
-  assert.equal(unknown.targetCustomer.value, null);
-  assert.deepEqual(unknown.targetCustomer.evidenceIds, []);
+  assert.equal(extractCompetitors(unknownSource).length, 0,
+    "an unrelated generic page title must not be promoted into a competitor entity");
 });
 
 test("complaint mining clusters duplicates and flags isolated complaints", () => {

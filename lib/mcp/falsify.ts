@@ -7,6 +7,7 @@ import { getConfiguredProvider } from "../research/providers.ts";
 import { getResearchResultById } from "../research/store.ts";
 import { researchLimits } from "../research/pipeline.ts";
 import type { CandidateGap, IdeaCandidate, SearchAngle } from "../research/types.ts";
+import { resolveCandidateId } from "../research/candidate-ids.ts";
 
 function focusedAngles(opportunity: string, limit: number): SearchAngle[] {
   const base = opportunity.replace(/\s+/g, " ").trim().slice(0, 700);
@@ -14,7 +15,7 @@ function focusedAngles(opportunity: string, limit: number): SearchAngle[] {
     { kind: "direct_competitors", suffix: "existing products closest substitutes same user same job adequately solved features pricing", purpose: "Counterevidence that a close substitute adequately solves the same job for the same user" },
     { kind: "customer_complaints", suffix: "unresolved complaints workaround switched cancelled underserved too expensive unreliable trust unavailable", purpose: "Residual unmet demand despite competitors: complaints, workarounds, switching, segments, price/performance, trust, and distribution" },
     { kind: "substitutes", suffix: "startup shut down failure economics acquisition support cost", purpose: "Counterevidence from failed attempts and unfavorable economics" },
-    { kind: "change_signals", suffix: "regulation liability privacy security technical limitation", purpose: "Counterevidence from regulation, liability, trust, and feasibility constraints" },
+    { kind: "change_signals", suffix: "regulation liability privacy security technical limitation AI commoditization incumbent bundle open source capability becomes free", purpose: "Counterevidence from regulation, liability, trust, feasibility, and AI commoditization constraints" },
   ];
   return definitions.slice(0, limit).map((item, index) => ({
     id: `falsify_${index + 1}_${createHash("sha1").update(`${base}:${item.kind}`).digest("hex").slice(0, 7)}`,
@@ -22,25 +23,38 @@ function focusedAngles(opportunity: string, limit: number): SearchAngle[] {
   }));
 }
 
-function syntheticCandidate(opportunity: string): IdeaCandidate {
+export function candidateFromSuppliedOpportunity(opportunity: string): IdeaCandidate {
   const id = `candidate_external_${createHash("sha1").update(opportunity).digest("hex").slice(0, 10)}`;
   const name = opportunity.split(/[.!?\n]/)[0].trim().slice(0, 100) || "External candidate";
+  const target = opportunity.match(/\b(?:for|serving|target(?:ing)?|sold to)\s+((?:US\s+)?(?:general contractors?|specialty trades?|subcontractors?|commercial cleaning (?:companies|operators)|independent restaurants?|restaurant operators?|aquaculture (?:operators|farms)|small businesses|[a-z-]+\s+teams?)(?:\s+or\s+(?:specialty trades?|subcontractors?|[a-z-]+\s+teams?))?)/i)?.[1] ?? null;
+  const buyer = /general contractor|specialty trad|subcontractor/i.test(target ?? "") ? "owner, operations manager, or risk/compliance lead"
+    : /restaurant/i.test(target ?? "") ? "owner-operator or operations director"
+      : /cleaning/i.test(target ?? "") ? "owner or field operations manager"
+        : target ? "the accountable operations buyer named by the supplied target segment" : "UNKNOWN from supplied candidate";
+  const workaround = opportunity.match(/\b(?:spreadsheets?|excel|email|paper|manual(?:ly)?|phone calls?|text messages?)\b/i)?.[0] ?? "UNKNOWN from supplied candidate";
   return {
-    id, name, summary: opportunity, targetCustomer: null, payer: null,
-    jobToBeDone: "unknown from supplied candidate", mechanism: opportunity,
+    id, name, summary: opportunity, targetCustomer: target, payer: target ? buyer : null,
+    jobToBeDone: opportunity, mechanism: opportunity,
     interface: "unknown", technology: null, businessModel: null, distribution: null,
     dataSource: null, ownershipModel: null, workflowPosition: "unknown", differentiator: "unknown",
     sourceGapIds: ["gap_external"], sourceGraphHoleIds: [], sourceContradictionIds: [], sourceStitchingIds: [],
     sourceSignalIds: [], sourceFailedAttemptIds: [], evidenceIds: [], iteration: 0,
     rootCandidateId: id, mechanismFamily: "externally supplied mechanism", crossDomainTransfer: null,
+    definition: target ? {
+      industry: /contractor|trade|subcontractor/i.test(target) ? "US contracting and specialty trades" : target,
+      companyProfile: target, buyer, decisionMaker: buyer, specificProblem: opportunity,
+      currentWorkaround: workaround, economicConsequence: "UNKNOWN until measured in focused validation",
+      proposedMechanism: opportunity, whyExistingSolutionsFail: "UNKNOWN until supported by eligible evidence", evidenceIds: [],
+    } : undefined,
   };
 }
 
 export async function activelyFalsifyOpportunity(input: { opportunity: string; run_id?: string; candidate_id?: string }) {
   const prior = input.run_id ? await getResearchResultById(input.run_id) : null;
   if (input.run_id && !prior) throw new RangeError(`Research run ${input.run_id} was not found or has expired.`);
-  const candidate = input.candidate_id
-    ? prior?.candidates.find((item) => item.id === input.candidate_id)
+  const canonicalCandidateId = input.candidate_id && prior ? resolveCandidateId(prior, input.candidate_id) : null;
+  const candidate = canonicalCandidateId
+    ? prior?.candidates.find((item) => item.id === canonicalCandidateId)
     : undefined;
   if (input.candidate_id && !candidate) throw new RangeError(`Candidate ${input.candidate_id} was not found in run ${input.run_id}.`);
 
@@ -59,7 +73,7 @@ export async function activelyFalsifyOpportunity(input: { opportunity: string; r
   const newEvidence = normalizeResults(successful, new Date().toISOString(), 20);
   if (newEvidence.length === 0) throw new Error("Focused searches returned no usable public counterevidence. Risks remain unknown; no evidence was fabricated.");
 
-  const selected = candidate ?? syntheticCandidate(input.opportunity);
+  const selected = candidate ?? candidateFromSuppliedOpportunity(input.opportunity);
   const sourceGaps = prior?.gaps.filter((gap) => selected.sourceGapIds.includes(gap.id)) ?? [];
   const externalGap: CandidateGap = {
     id: "gap_external", problemStatement: input.opportunity, affectedSegment: null, currentWorkaround: null,

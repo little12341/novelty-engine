@@ -15,6 +15,7 @@ import {
 } from "./schemas.ts";
 import { summarizeCompetitors, summarizeGaps, summarizeResearch } from "./summaries.ts";
 import { freshCompetitorExpansion } from "../research/competitor-discovery.ts";
+import { resolveCandidateId } from "../research/candidate-ids.ts";
 
 type ToolDependencies = {
   research: typeof runResearch;
@@ -113,8 +114,10 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
     annotations,
   }, ({ run_id, limit, cursor, fresh_expand, candidate_id }, context) => observed("inspect_competitors", async () => {
     const stored = await requiredRun(deps.getRun, run_id);
-    const result = fresh_expand ? await deps.expandCompetitors(stored, candidate_id, context.mcpReq.signal) : stored;
-    return { ...summarizeCompetitors(result, limit, cursor), freshExpansion: fresh_expand, candidateId: candidate_id ?? null, competitorRecall: result.competitorRecall };
+    const canonicalCandidateId = candidate_id ? resolveCandidateId(stored, candidate_id) : null;
+    if (candidate_id && !canonicalCandidateId) throw new RangeError(`Candidate ${candidate_id} was not found in run ${run_id}.`);
+    const result = fresh_expand ? await deps.expandCompetitors(stored, canonicalCandidateId ?? undefined, context.mcpReq.signal) : stored;
+    return { ...summarizeCompetitors(result, limit, cursor, canonicalCandidateId ?? undefined), freshExpansion: fresh_expand, candidateId: canonicalCandidateId, candidateIdMapping: result.candidateIdMapping, competitorRecall: result.competitorRecall };
   }));
 
   server.registerTool("falsify_opportunity", {
@@ -180,12 +183,19 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
     inputSchema: inspectRunInput, annotations: { ...annotations, openWorldHint: false },
   }, ({ run_id }) => observed("source_check", async () => {
     const run = await requiredRun(deps.getRun, run_id);
+    const unsupportedClaims = run.claimLineage.filter((item) => item.major && item.supportingEvidenceIds.length === 0);
+    const roleMismatches = run.claimLineage.filter((item) => item.evidenceDecisions.some((decision) => !decision.roleCompatible));
+    const relevanceRejections = run.claimLineage.filter((item) => item.evidenceDecisions.some((decision) => decision.roleCompatible && !decision.relevant));
     return {
       runId: run.id, coverage: run.coverage, checkpoint: run.checkpoints.find((item) => item.name === "citation_validation"),
+      citationCoverage: run.citationCoverage,
       snapshotWarnings: { duplicates: run.evidenceSnapshot.duplicateWarnings, missingFamilies: run.evidenceSnapshot.missingSourceFamilyWarnings },
-      unsupportedClaims: run.evidenceSnapshot.normalizedClaims.filter((item) => item.status === "UNKNOWN"),
+      unsupportedClaims,
+      supportRoleMismatches: roleMismatches,
+      relevanceRejections,
+      claimLineage: run.claimLineage,
       contradictions: run.assumptionLedger.filter((item) => item.factState === "CONTRADICTED"),
-      sources: run.sources.map((item) => ({ id: item.id, url: item.sourceUrl, assessment: item.sourceAssessment, security: item.security })),
+      sources: run.sources.map((item) => ({ id: item.id, url: item.sourceUrl, pageIdentity: item.pageIdentity, relevanceAssessment: item.relevanceAssessment, assessment: item.sourceAssessment, security: item.security })),
     };
   }));
 

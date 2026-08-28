@@ -13,6 +13,7 @@ import { runResearch } from "../research/pipeline.ts";
 import { ResearchConfigurationError } from "../research/providers.ts";
 import { clearMemoryProtection } from "../research/protection.ts";
 import { acquireProtection } from "../research/protection.ts";
+import { auditClaim, citationCoverageAudit } from "../research/claim-support.ts";
 import type { ProviderSearchResult, ResearchResult, SearchProvider } from "../research/types.ts";
 
 const fixture = JSON.parse(await readFile(new URL("../research/fixtures/v2-market.json", import.meta.url), "utf8")) as ProviderSearchResult[];
@@ -113,13 +114,23 @@ test("inspect_competitors optionally performs fresh expansion through shared rec
 
 test("source-check intent target is the Novelty source_check tool for a completed run", async () => {
   const result = await getFixtureRun();
-  await withClient({ getRun: async (id) => id === result.id ? result : null }, async (client) => {
+  const vendor = result.sources.find((item) => item.sourceAssessment.provenance === "company_controlled")!;
+  const mismatched = auditClaim({
+    claim: "Small field-service customers report this pain first hand.", claimType: "customer_pain",
+    evidenceIds: [vendor.id], evidence: result.sources, marketContext: result.query, idSeed: "mcp-role-mismatch",
+  });
+  const claimLineage = [...result.claimLineage, mismatched];
+  const audited = { ...result, claimLineage, citationCoverage: citationCoverageAudit(claimLineage) };
+  await withClient({ getRun: async (id) => id === result.id ? audited : null }, async (client) => {
     const called = await client.callTool({ name: "source_check", arguments: { run_id: result.id } });
     assert.equal(called.isError, undefined);
-    const payload = called.structuredContent as { runId: string; coverage: object; sources: unknown[] };
+    const payload = called.structuredContent as { runId: string; coverage: object; sources: unknown[]; unsupportedClaims: Array<{ id: string }>; supportRoleMismatches: Array<{ id: string }>; citationCoverage: { totalMajorClaims: number } };
     assert.equal(payload.runId, result.id);
     assert.ok(payload.coverage);
     assert.ok(payload.sources.length > 0);
+    assert.ok(payload.unsupportedClaims.some((item) => item.id === mismatched.id));
+    assert.ok(payload.supportRoleMismatches.some((item) => item.id === mismatched.id));
+    assert.equal(payload.citationCoverage.totalMajorClaims, audited.citationCoverage.totalMajorClaims);
   });
 });
 
@@ -170,6 +181,10 @@ test("falsify_opportunity routes the validated candidate to focused falsificatio
           mechanismMateriallyChangesOutcome: { present: null, claimStatus: "UNKNOWN", evidenceIds: [], rationale: "Fixture unknown." },
           meaningfulResidualGap: false, adequateSameJobSameUserSolution: false,
           conclusion: "residual_gap_uncertain" as const, rationale: "Fixture assessment.", evidenceIds: [],
+        },
+        searchCoverage: {
+          failedCompaniesPriorAttempts: { status: "UNKNOWN" as const, searched: false, evidenceIds: [], rationale: "Fixture unknown." },
+          aiCommoditization: { status: "UNKNOWN" as const, searched: false, evidenceIds: [], rationale: "Fixture unknown." },
         },
       },
       citations: [{ id: "ev_test", title: "Counterevidence", url: "https://example.test/counterevidence", confidence: 0.7 }],

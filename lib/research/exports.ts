@@ -20,10 +20,15 @@ export function structuredExport(result: ResearchResult) {
     evidenceLineage: result.output.evidenceLineage, decisiveRisks: result.output.decisiveRisks,
     coverageConfidence: { coverage: result.coverage, stopDecision: result.stopDecision, warnings: result.warnings },
     validationTests: result.output.validationTests, companyProfile: result.companyProfile,
-    sources: result.sources, checkpoints: result.checkpoints, budgetUsage: result.budgetUsage,
+    sources: result.sources.map(({ supports, ...source }) => ({
+      ...source, discoveryPurpose: supports,
+      supportsClaims: result.claimLineage.filter((claim) => claim.supportingEvidenceIds.includes(source.id)).map((claim) => claim.id),
+      rejectedForClaims: result.claimLineage.filter((claim) => claim.rejectedEvidenceIds.includes(source.id)).map((claim) => claim.id),
+    })), checkpoints: result.checkpoints, budgetUsage: result.budgetUsage,
     candidateLifecycles: result.candidateLifecycles, evidenceGates: result.evidenceGates,
     assumptionLedger: result.assumptionLedger, adversarialReviews: result.adversarialReviews,
     searchBranches: result.searchBranches, taskGraph: result.taskGraph, nextBestAction: result.nextBestAction,
+    claimLineage: result.claimLineage, citationCoverage: result.citationCoverage, candidateIdMapping: result.candidateIdMapping,
   };
 }
 
@@ -37,7 +42,7 @@ export function markdownExport(result: ResearchResult): string {
     ["Survivors", result.output.survivors.map((item) => `- ${item.candidate.name}: ${item.candidate.summary}\n  - Confidence: ${item.score.confidenceLabel}\n  - Falsification: ${item.falsification.reason}`).join("\n") || "No candidate survived."],
     ["Evidence Lineage", result.output.evidenceLineage.map((item) => `- ${item.summary} [${item.evidenceIds.join(", ")}]`).join("\n") || "No survivor lineage."],
     ["Decisive Risks", result.output.decisiveRisks.flatMap((item) => item.risks.map((risk) => `- ${item.candidateId} / ${risk.dimension}: ${risk.reason}`)).join("\n") || "No decisive risk established; see UNKNOWNs."],
-    ["Coverage / Confidence", `${result.coverage.coverageStatus}. Missing source families: ${result.coverage.missingCriticalSourceFamilies.join(", ") || "none"}. Counterevidence budget exhausted: ${result.coverage.counterevidenceBudgetExhausted}.`],
+    ["Coverage / Confidence", `${result.coverage.coverageStatus}. Major-claim citation coverage: ${result.citationCoverage.supportedMajorClaims}/${result.citationCoverage.totalMajorClaims}. Role mismatches: ${result.citationCoverage.roleMismatchedMajorClaims}. Relevance rejections: ${result.citationCoverage.relevanceRejectedMajorClaims}. Missing source families: ${result.coverage.missingCriticalSourceFamilies.join(", ") || "none"}. Counterevidence budget exhausted: ${result.coverage.counterevidenceBudgetExhausted}.`],
     ["24–72 Hour Validation Tests", result.output.validationTests.map((item) => `- ${item.action} Success: ${item.successThreshold} Failure: ${item.failureThreshold}`).join("\n") || "No survivor validation test."],
   ];
   return `# Novelty Engine Research Report\n\n**Run:** ${result.id}  \n**Query:** ${result.query}  \n**Completed:** ${result.completedAt}\n\n${sections.map(([heading, body]) => `## ${heading}\n\n${body}`).join("\n\n")}`;
@@ -61,10 +66,10 @@ const csvRows = (rows: unknown[][]) => rows.map((row) => row.map(csvCell).join("
 
 export function csvExport(result: ResearchResult): string {
   return csvRows([
-    ["candidate_id", "name", "lifecycle", "opportunity_score", "evidence_confidence", "novelty_score", "demand_authenticity", "distribution_viability", "ai_commoditization_risk", "next_action"],
+    ["candidate_id", "name", "lifecycle", "opportunity_score", "evidence_confidence", "novelty_score", "closest_competitor_similarity", "demand_authenticity", "distribution_viability", "ai_commoditization_risk", "next_action"],
     ...result.finalOpportunities.map((item) => [
       item.candidate.id, item.candidate.name, item.lifecycle?.classification ?? "survived", item.score.score,
-      item.score.evidenceConfidence?.score ?? "", item.score.noveltyScore?.score ?? "",
+      item.score.evidenceConfidence?.score ?? "", item.score.noveltyScore?.score ?? "", item.falsification.residualUnmetDemand.closestCompetitorSimilarity ?? "",
       item.score.intelligence?.demandAuthenticity ?? "", item.score.intelligence?.distributionViability ?? "",
       item.score.intelligence?.aiCommoditization ?? "", result.nextBestAction?.candidateId === item.candidate.id ? result.nextBestAction.action : "",
     ]),
@@ -73,8 +78,11 @@ export function csvExport(result: ResearchResult): string {
 
 export function competitorMatrixExport(result: ResearchResult): string {
   return csvRows([
-    ["competitor", "website", "target_customer", "pricing", "features", "positioning", "weaknesses", "evidence_ids"],
-    ...result.competitors.map((item) => [item.name.value, item.website, item.targetCustomer.value, item.pricing.value, item.keyFeatures.value?.join("; "), item.positioning.value, item.likelyWeaknesses.value?.join("; "), item.evidenceIds.join("; ")]),
+    ["competitor", "canonical_domain", "classification", "website", "target_customer", "pricing", "features", "positioning", "weaknesses", "closest_similarity", "matched_dimensions", "unmatched_dimensions", "evidence_ids"],
+    ...result.competitors.map((item) => {
+      const similarity = result.similarities.filter((row) => row.leftId === item.id || row.rightId === item.id).sort((a, b) => b.score - a.score)[0];
+      return [item.name.value, item.canonicalDomain, item.classification, item.website, item.targetCustomer.value, item.pricing.value, item.keyFeatures.value?.join("; "), item.positioning.value, item.likelyWeaknesses.value?.join("; "), similarity?.score ?? "", similarity?.matchingDimensions.join("; ") ?? "", similarity?.nonMatchingDimensions?.join("; ") ?? "", item.evidenceIds.join("; ")];
+    }),
   ]);
 }
 
@@ -90,7 +98,12 @@ export function exportResearchResult(result: ResearchResult, format: ResearchExp
   if (format === "csv") return csvExport(result);
   if (format === "competitor_matrix") return competitorMatrixExport(result);
   if (format === "validation_plan") return { runId: result.id, nextBestAction: result.nextBestAction, plans: result.finalOpportunities.map((item) => item.validationPlan) };
-  if (format === "opportunity_brief") return result.finalOpportunities.map((item) => ({ candidate: item.candidate, lifecycle: item.lifecycle, evidenceGate: item.evidenceGate, score: item.score, whyNotBuilt: item.whyNotBuilt, decisiveRisks: item.falsification.decisiveRisks, nextValidation: item.validationExperiment }));
-  if (format === "bibliography") return result.sources.map((item) => ({ title: item.title, url: item.sourceUrl, retrievedAt: item.retrievedAt, sourceType: item.sourceType, quality: item.sourceAssessment, supports: item.supports }));
+  if (format === "opportunity_brief") return result.finalOpportunities.map((item) => ({ candidate: item.candidate, lifecycle: item.lifecycle, evidenceGate: item.evidenceGate, score: item.score, closestCompetitorSimilarity: item.falsification.residualUnmetDemand.closestCompetitorSimilarity, similarityDimensions: item.nearestAnalogues, whyNotBuilt: item.whyNotBuilt, decisiveRisks: item.falsification.decisiveRisks, falsificationSearchCoverage: item.falsification.searchCoverage, nextValidation: item.validationExperiment }));
+  if (format === "bibliography") return result.sources.map((item) => ({
+    title: item.title, url: item.sourceUrl, retrievedAt: item.retrievedAt, sourceType: item.sourceType,
+    pageIdentity: item.pageIdentity, relevanceAssessment: item.relevanceAssessment, quality: item.sourceAssessment,
+    supportsClaims: result.claimLineage.filter((claim) => claim.supportingEvidenceIds.includes(item.id)).map((claim) => ({ id: claim.id, claim: claim.claim, claimType: claim.claimType })),
+    rejectedForClaims: result.claimLineage.filter((claim) => claim.rejectedEvidenceIds.includes(item.id)).map((claim) => ({ id: claim.id, claimType: claim.claimType })),
+  }));
   return investorMemoExport(result);
 }

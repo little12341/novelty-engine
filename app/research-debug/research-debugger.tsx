@@ -57,7 +57,8 @@ export default function ResearchDebugger({ initialConfiguration, initialMcpHealt
     try {
       const response = await fetch("/api/mcp/health", { cache: "no-store" });
       if (!response.ok) throw new Error(`Health check returned ${response.status}`);
-      setMcpHealth(await response.json());
+      const readiness = await response.json() as { status?: string };
+      setMcpHealth((current) => ({ ...current, ok: readiness.status === "ok" }));
       setHealthError(null);
     } catch (caught) {
       setHealthError(caught instanceof Error ? caught.message : "Health check failed");

@@ -55,16 +55,7 @@ const client = new Client({ name: "novelty-engine-http-integration", version: "1
 try {
   const healthResponse = await waitForHealth();
   const health = await healthResponse.json();
-  assert.equal(health.ok, true);
-  assert.equal(health.endpoint, "/api/mcp");
-  assert.equal(health.healthEndpoint, "/api/mcp/health");
-  assert.equal(health.providerConfigured, true);
-  assert.equal(health.toolCount, expectedTools.length);
-  assert.equal(health.protectionMode, "local-development");
-  assert.equal("recentCalls" in health, false);
-  assert.equal("recentErrors" in health, false);
-  assert.equal("provider" in health, false);
-  assert.equal("protection" in health, false);
+  assert.deepEqual(health, { status: "ok", version: "2.2.0" });
 
   const debug = await fetch(new URL("/research-debug", origin), { redirect: "manual" });
   assert.equal(debug.status, 404, "Production research inspector must remain unavailable");

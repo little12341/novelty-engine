@@ -69,8 +69,8 @@ export function deriveFalsificationAngles(query: string, candidateSummaries: str
     },
     {
       kind: "active_falsification_constraints",
-      suffix: `unit economics support cost technical limitation trust privacy liability regulation adoption failure ${focus}`,
-      purpose: "Active counterevidence: economics, feasibility, behavior, trust, liability, regulation, and defensibility constraints",
+      suffix: `unit economics support cost technical limitation trust privacy liability regulation adoption failure failed company shutdown prior attempt AI commoditization incumbent bundle open source capability becomes free ${focus}`,
+      purpose: "Active counterevidence: economics, feasibility, behavior, trust, liability, regulation, failed companies/prior attempts, AI commoditization, and defensibility constraints",
     },
   ];
   return angles.slice(0, Math.max(0, limit)).map((angle, index) => ({

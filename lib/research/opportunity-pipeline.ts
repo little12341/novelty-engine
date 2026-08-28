@@ -126,7 +126,8 @@ export function runOpportunityPipeline(input: {
     const lifecycle = buildCandidateLifecycle(candidate, { falsification, gate: evidenceGate, rejected: undefined, at: (input.now ?? new Date()).toISOString() });
     return {
       candidate, fingerprint: fingerprints.find((item) => item.candidateId === candidate.id)!,
-      nearestAnalogues: similarities.filter((item) => item.leftId === candidate.id || item.rightId === candidate.id).slice(0, 3),
+      nearestAnalogues: similarities.filter((item) => (item.leftId === candidate.id || item.rightId === candidate.id)
+        && competitorFingerprints.some((competitor) => competitor.candidateId === (item.leftId === candidate.id ? item.rightId : item.leftId))).slice(0, 3),
       falsification, lineage: lineages.find((item) => item.candidateId === candidate.id)!, score,
       validationExperiment, evidenceGate, lifecycle, assumptionLedger, whyNotBuilt, counterfactual, moatStressTest, adversarialReview,
       validationPlan: buildValidationPlan(candidate, validationExperiment, assumptionLedger),

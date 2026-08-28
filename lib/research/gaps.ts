@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { CandidateGap, ComplaintCluster, Competitor, Evidence, GapPenalty, GapScoreFactors, UnderservedSegment } from "./types.ts";
 import { independentEvidenceCount } from "./quality.ts";
+import { assessEvidenceForClaim } from "./claim-support.ts";
 
 const clamp = (value: number, min = 0, max = 10) => Math.min(max, Math.max(min, value));
 
@@ -46,8 +47,10 @@ export function detectGaps(
     }));
     const landscapeCompetitors = relatedCompetitors.length ? relatedCompetitors : competitors.slice(0, 3);
     const counterEvidenceIds = landscapeCompetitors.flatMap((item) => item.evidenceIds).filter((id) => !complaint.representativeEvidenceIds.includes(id)).slice(0, 5);
-    const priceSignal = supportingEvidence.find((item) => /\$|€|£|pay|price|cost|budget/i.test(item.summary));
-    const timing = evidence.find((item) => item.searchAngleIds.some((id) => id.includes("angle_09")) && /202[5-9]|new|regulat|launch|adopt/i.test(`${item.title} ${item.summary}`));
+    const priceSignal = supportingEvidence.find((item) => /\$|€|£|would pay|budget|procurement|hiring/i.test(item.summary)
+      && assessEvidenceForClaim("willingness_to_pay", complaint.normalizedProblem, item, complaint.affectedSegment ?? "").accepted);
+    const timing = evidence.find((item) => item.searchAngleIds.some((id) => id.includes("angle_09")) && /202[5-9]|new|regulat|launch|adopt/i.test(`${item.title} ${item.summary}`)
+      && assessEvidenceForClaim("market_timing", complaint.normalizedProblem, item, complaint.affectedSegment ?? "").accepted);
     const factors: GapScoreFactors = {
       painSeverity: complaint.severity === "high" ? 9 : complaint.severity === "medium" ? 6 : 3,
       complaintRecurrence: clamp(2 + complaint.evidenceCount * 1.7),

@@ -58,7 +58,10 @@ test("weak initial niches trigger bounded adjacent search and preserve exhausted
   assert.ok(run.searchBranches.length > 0);
   assert.ok(run.searchBranches.every((item) => item.learnedFromKillReasons.length >= 0 && item.searchAngleIds.length === 1));
   assert.ok(calls <= run.limits.maxProviderCalls);
-  assert.equal(run.budgetUsage.exhausted, false, "provider/search budget truth must not be conflated with a completed expansion branch set");
+  assert.equal(run.budgetUsage.exhausted, run.budgetUsage.providerCalls >= run.limits.maxProviderCalls,
+    "exhaustion must reflect actual provider-call usage");
+  assert.equal(run.budgetUsage.expansionStopReason === "budget_exhausted", run.budgetUsage.exhausted,
+    "the stop reason and authoritative exhaustion state must agree");
   assert.ok(["survivor_found", "coverage_plateau", "budget_exhausted"].includes(run.budgetUsage.expansionStopReason ?? ""));
   assert.ok(run.nextBestAction.action.length > 0);
 });

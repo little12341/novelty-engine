@@ -7,6 +7,7 @@ import type {
   SupportedValue,
   UnderservedSegment,
 } from "./types.ts";
+import { normalizeOrganizationName, preferredEntityName } from "./entity-resolution.ts";
 
 function stableId(prefix: string, value: string): string {
   return `${prefix}_${createHash("sha1").update(value).digest("hex").slice(0, 10)}`;
@@ -14,13 +15,6 @@ function stableId(prefix: string, value: string): string {
 
 function supported<T>(value: T | null, evidenceIds: string[], confidence: number): SupportedValue<T> {
   return { value, evidenceIds: value === null ? [] : evidenceIds, confidence: value === null ? 0 : confidence };
-}
-
-function productName(title: string, hostname: string): string {
-  const parts = title.split(/\s+[|–—:]\s+|\s+-\s+/).map((part) => part.trim());
-  const candidate = parts.find((part) => !/^(home|pricing|features?|plans?|documentation)$/i.test(part));
-  if (candidate && candidate.length >= 2 && candidate.length <= 70) return candidate.replace(/\s+(?:reviews?|pricing|plans?|features?|documentation)$/i, "").trim();
-  return hostname.split(".")[0].replace(/(^|[-_])\w/g, (match) => match.replace(/[-_]/, "").toUpperCase());
 }
 
 const FEATURE_TERMS = ["scheduling", "invoicing", "automation", "mobile", "reporting", "payments", "integrations", "collaboration", "compliance", "certificate tracking", "insurance", "vendor management", "risk", "procurement", "analytics", "crm", "marketplace", "workflow"];
@@ -43,15 +37,9 @@ function extractTargetCustomer(text: string): string | null {
 }
 
 function competitorGroupKey(item: Evidence): string {
-  const url = new URL(item.normalizedUrl);
-  const host = url.hostname.replace(/^(app|docs|help|support)\./, "");
-  if (["review", "product_directory", "app_marketplace"].includes(item.sourceType)) {
-    const parts = url.pathname.split("/").filter(Boolean);
-    const marker = parts.findIndex((part) => /products?|software|apps?/i.test(part));
-    const product = marker >= 0 ? parts[marker + 1] : parts[0];
-    if (product) return `${host}/${product.toLowerCase()}`;
-  }
-  return host;
+  const name = preferredEntityName(item);
+  const isProfile = item.pageIdentity.pageKind === "product_profile";
+  return isProfile && name ? `brand:${normalizeOrganizationName(name)}` : `domain:${item.pageIdentity.canonicalDomain}`;
 }
 
 function snippets(items: Evidence[], pattern: RegExp, limit = 4): { values: string[]; ids: string[] } {
@@ -60,7 +48,8 @@ function snippets(items: Evidence[], pattern: RegExp, limit = 4): { values: stri
 }
 
 export function extractCompetitors(evidence: Evidence[]): Competitor[] {
-  const eligible = evidence.filter((item) => ["official_company", "pricing", "documentation", "review", "product_directory", "app_marketplace"].includes(item.sourceType));
+  const eligible = evidence.filter((item) => item.pageIdentity.entityEligible && item.relevanceAssessment.acceptedForMarket
+    && !item.sourceAssessment.discoveryOnly);
   const grouped = new Map<string, Evidence[]>();
   for (const item of eligible) {
     const key = competitorGroupKey(item);
@@ -69,8 +58,8 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
     grouped.set(key, group);
   }
 
-  const extracted = [...grouped.entries()].slice(0, 30).map(([groupKey, items]) => {
-    const primary = items[0];
+  const extracted = [...grouped.entries()].slice(0, 30).map(([, items]) => {
+    const primary = items.find((item) => ["company_product", "company_pricing", "company_documentation"].includes(item.pageIdentity.pageKind)) ?? items[0];
     const host = new URL(primary.normalizedUrl).hostname.replace(/^(app|docs|help|support)\./, "");
     const allText = items.map((item) => `${item.title}. ${item.summary}`).join(" ");
     const ids = items.map((item) => item.id);
@@ -78,7 +67,8 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
     const pricing = pricingEvidence ? extractPricing(`${pricingEvidence.title} ${pricingEvidence.summary}`) : null;
     const features = extractFeatures(allText);
     const positioning = primary.summary || null;
-    const name = productName(primary.title, host);
+    const name = preferredEntityName(primary) ?? items.map(preferredEntityName).find((item): item is string => Boolean(item));
+    if (!name) return null;
     const hostStem = host.split(".")[0];
     const weaknessEvidence = evidence.filter((item) => DISCUSSION_TYPES.has(item.sourceType) && new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b|\\b${hostStem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(`${item.title} ${item.summary}`));
     const target = extractTargetCustomer(allText);
@@ -99,10 +89,13 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
       && !/\b(?:software|saas|platform|application|automation product)\b/i.test(allText);
     const substituteOnly = substituteLanguage || items.every((item) => item.searchAngleIds.some((id) => /adjacent|substitute/i.test(id))
       && !item.searchAngleIds.some((id) => /direct|competitor_primary|competitor_crosscheck|competitor_escalation/i.test(id)));
+    const entityDomain = items.find((item) => !["product_profile"].includes(item.pageIdentity.pageKind))?.pageIdentity.canonicalDomain ?? null;
+    const canonicalOrganizationId = entityDomain ? `org:${entityDomain}` : `brand:${normalizeOrganizationName(name)}`;
+    const classification = substituteOnly ? "substitute" as const : "direct_competitor" as const;
     return {
-      id: stableId("comp", groupKey),
+      id: stableId("comp", canonicalOrganizationId), canonicalOrganizationId, canonicalDomain: entityDomain,
       name: supported(name, [primary.id], 0.72),
-      website: ["review", "product_directory", "app_marketplace"].includes(primary.sourceType) ? primary.normalizedUrl : new URL(primary.normalizedUrl).origin,
+      website: entityDomain ? `https://${entityDomain}/` : primary.normalizedUrl,
       targetCustomer: supported(target, target ? ids : [], target ? 0.68 : 0),
       coreJobToBeDone: supported(positioning, [primary.id], 0.58),
       pricing: supported(pricing, pricingEvidence && pricing ? [pricingEvidence.id] : [], pricing ? 0.82 : 0),
@@ -111,6 +104,7 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
       likelyStrengths: supported(features.length ? features.slice(0, 3) : null, features.length ? ids : [], features.length ? 0.55 : 0),
       likelyWeaknesses: supported(weaknessEvidence.length ? weaknessEvidence.slice(0, 3).map((item) => item.summary) : null, weaknessEvidence.map((item) => item.id), weaknessEvidence.length ? 0.65 : 0),
       relationship: supported<"direct" | "substitute">(substituteOnly ? "substitute" : "direct", ids, .64),
+      classification,
       intelligence: {
         funding: supported(funding.values[0] ?? null, funding.ids, funding.ids.length ? .6 : 0),
         headcount: supported(headcount?.summary ?? null, headcount ? [headcount.id] : [], headcount ? .6 : 0),
@@ -125,14 +119,22 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
         strategicDirection: supported(strategic?.summary ?? null, strategic ? [strategic.id] : [], strategic ? .5 : 0),
       },
       evidenceIds: completeIds,
+      sourcePageIds: ids,
     };
-  });
-  const deduplicated = new Map<string, Competitor>();
+  }).filter((item) => item !== null) as Competitor[];
+  const deduplicated: Competitor[] = [];
   for (const competitor of extracted) {
-    const key = (competitor.name.value ?? competitor.id).toLowerCase().replace(/[^a-z0-9]/g, "");
-    const existing = deduplicated.get(key);
-    if (!existing) { deduplicated.set(key, competitor); continue; }
+    const nameKey = normalizeOrganizationName(competitor.name.value ?? competitor.id);
+    const existing = deduplicated.find((item) => item.canonicalDomain && item.canonicalDomain === competitor.canonicalDomain
+      || normalizeOrganizationName(item.name.value ?? item.id) === nameKey);
+    if (!existing) { deduplicated.push(competitor); continue; }
     existing.evidenceIds = [...new Set([...existing.evidenceIds, ...competitor.evidenceIds])];
+    existing.sourcePageIds = [...new Set([...existing.sourcePageIds, ...competitor.sourcePageIds])];
+    if (!existing.canonicalDomain && competitor.canonicalDomain) {
+      existing.canonicalDomain = competitor.canonicalDomain;
+      existing.canonicalOrganizationId = competitor.canonicalOrganizationId;
+      existing.website = competitor.website;
+    }
     for (const field of ["targetCustomer", "coreJobToBeDone", "pricing", "keyFeatures", "positioning", "likelyStrengths", "likelyWeaknesses", "relationship"] as const) {
       const incoming = competitor[field];
       if (incoming && existing[field] && existing[field]!.value === null && incoming.value !== null) Object.assign(existing[field]!, incoming);
@@ -144,7 +146,7 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
       else current.evidenceIds = [...new Set([...current.evidenceIds, ...incoming.evidenceIds])];
     }
   }
-  return [...deduplicated.values()];
+  return deduplicated;
 }
 
 interface ComplaintRule {
@@ -189,7 +191,7 @@ function findWorkaround(text: string): string | null {
 export function clusterComplaints(evidence: Evidence[]): ComplaintCluster[] {
   const buckets = new Map<string, { rule: ComplaintRule; evidence: Evidence[]; segments: string[]; workarounds: string[] }>();
   for (const item of evidence) {
-    if (!DISCUSSION_TYPES.has(item.sourceType)) continue;
+    if (!DISCUSSION_TYPES.has(item.sourceType) || !item.relevanceAssessment.acceptedForMarket || item.sourceAssessment.discoveryOnly) continue;
     const text = `${item.title}. ${item.summary}`;
     for (const rule of COMPLAINT_RULES) {
       if (!rule.patterns.some((pattern) => pattern.test(text))) continue;
@@ -231,6 +233,7 @@ export function clusterComplaints(evidence: Evidence[]): ComplaintCluster[] {
 export function detectUnderservedSegments(evidence: Evidence[]): UnderservedSegment[] {
   const groups = new Map<string, Evidence[]>();
   for (const item of evidence) {
+    if (item.sourceAssessment.sourceFamily !== "user_voice" || !item.relevanceAssessment.acceptedForMarket || item.sourceAssessment.discoveryOnly) continue;
     const segment = findSegment(`${item.title}. ${item.summary}`);
     if (!segment) continue;
     const items = groups.get(segment) ?? [];

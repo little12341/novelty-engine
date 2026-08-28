@@ -34,18 +34,20 @@ export function assessCoverage(input: {
   angles: SearchAngle[]; successfulAngleIds: string[]; evidence: Evidence[]; regulatedMarket: boolean;
   counterevidenceBudgetExhausted?: boolean;
 }): ResearchCoverage {
-  const types = [...new Set(input.evidence.map((item) => item.sourceType))];
+  const relevantEvidence = input.evidence.filter((item) => item.relevanceAssessment.acceptedForMarket);
+  const types = [...new Set(relevantEvidence.map((item) => item.sourceType))];
   const familyCoverage = Object.fromEntries(Object.entries(SOURCE_FAMILIES).map(([family, accepted]) => [
-    family, input.evidence.filter((item) => accepted.includes(item.sourceType)).length,
+    family, relevantEvidence.filter((item) => accepted.includes(item.sourceType)
+      && !(family === "competitor" && (!item.pageIdentity.entityEligible || item.sourceAssessment.discoveryOnly))).length,
   ])) as ResearchCoverage["sourceFamilyCoverage"];
   const missing: string[] = [];
   if (familyCoverage.competitor === 0) missing.push("competitor");
   if (familyCoverage.user_voice < 2) missing.push("user_voice");
   if (familyCoverage.commercial === 0) missing.push("commercial");
   if (input.regulatedMarket && familyCoverage.institutional === 0) missing.push("institutional/regulatory");
-  const independent = new Set(input.evidence.map((item) => item.sourceAssessment.independenceGroup)).size;
+  const independent = new Set(relevantEvidence.map((item) => item.sourceAssessment.independenceGroup)).size;
   const successRatio = input.angles.length ? input.successfulAngleIds.length / input.angles.length : 0;
-  const weighted = input.evidence.reduce((sum, item) => sum + item.sourceAssessment.overallWeight, 0);
+  const weighted = relevantEvidence.reduce((sum, item) => sum + item.sourceAssessment.overallWeight, 0);
   const duplicateClaimsCollapsed = input.evidence.reduce((sum, item) => sum + item.duplicateSourceUrls.length, 0);
   const kindsForFamily: Record<keyof ResearchCoverage["sourceFamilyCoverage"], SearchAngle["kind"][]> = {
     competitor: ["direct_competitors", "competitor_high_recall_primary", "competitor_high_recall_crosscheck", "competitor_recall_escalation", "adjacent_categories", "substitutes", "active_falsification_competition"],
@@ -63,11 +65,11 @@ export function assessCoverage(input: {
         : requested.some((angle) => successful.has(angle.id)) ? "attempted_unavailable" : "attempted_unavailable";
     return [family, state];
   })) as ResearchCoverage["sourceFamilyAttempts"];
-  const coverageStatus = input.evidence.length < 4 || independent < 3 || familyCoverage.user_voice < 2 || successRatio < .4
+  const coverageStatus = relevantEvidence.length < 4 || independent < 3 || familyCoverage.user_voice < 2 || successRatio < .4
     ? "insufficient" : missing.length || successRatio < .75 || types.length < 3 ? "partial" : "adequate";
   return {
     requestedAngles: input.angles.length, successfulAngles: input.successfulAngleIds.length,
-    failedAngles: Math.max(0, input.angles.length - input.successfulAngleIds.length), usableSourceCount: input.evidence.length,
+    failedAngles: Math.max(0, input.angles.length - input.successfulAngleIds.length), usableSourceCount: relevantEvidence.length,
     independentSourceCount: independent, sourceTypeCount: types.length, sourceTypes: types,
     sourceFamilyCoverage: familyCoverage, missingCriticalSourceFamilies: missing,
     sourceFamilyAttempts,

@@ -3,6 +3,7 @@ import { listPlatformRecords, putPlatformRecord } from "./platform-store.ts";
 import { getResearchResultById } from "./store.ts";
 import { validateExternalResearchUrl } from "./url-policy.ts";
 import type { ExternalValidationOutcome, ValidationExperiment } from "./types.ts";
+import { resolveCandidateId } from "./candidate-ids.ts";
 
 const EXPERIMENT_TYPES: ValidationExperiment["type"][] = ["fake_door", "cold_outreach", "concierge", "manual_service", "clickable_prototype", "preorder", "pricing_test", "comparison_ad", "marketplace_listing", "waitlist", "interview", "technical_poc"];
 
@@ -12,7 +13,8 @@ export async function recordValidationOutcome(input: {
 }): Promise<ExternalValidationOutcome> {
   const run = await getResearchResultById(input.runId);
   if (!run) throw new RangeError("Research run was not found.");
-  const opportunity = run.finalOpportunities.find((item) => item.candidate.id === input.candidateId);
+  const canonicalCandidateId = resolveCandidateId(run, input.candidateId);
+  const opportunity = run.finalOpportunities.find((item) => item.candidate.id === canonicalCandidateId);
   if (!opportunity) throw new RangeError("Only a recorded research survivor can receive an external validation outcome.");
   if (!EXPERIMENT_TYPES.includes(input.experimentType)) throw new RangeError("Unsupported validation experiment type.");
   const observedMetrics = input.observedMetrics.map((item) => item.trim().slice(0, 500)).filter(Boolean).slice(0, 20);

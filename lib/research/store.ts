@@ -6,6 +6,9 @@ import { RESEARCH_ENGINE_VERSION, RESEARCH_SCHEMA_VERSION } from "./types.ts";
 import { querySimilarity } from "./normalize.ts";
 import { getDurableRedis } from "./durable.ts";
 import { operationalLog, safeErrorCategory } from "../http-safety.ts";
+import { assessMarketRelevance, inferPageIdentity, normalizeOrganizationName } from "./entity-resolution.ts";
+import { buildResearchClaimLineage, citationCoverageAudit } from "./claim-support.ts";
+import { buildCandidateIdMapping } from "./candidate-ids.ts";
 
 interface CacheEntry { result: ResearchResult; expiresAt: number }
 
@@ -17,8 +20,12 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
   result.engineVersion ??= RESEARCH_ENGINE_VERSION;
   result.depth ??= "standard";
   result.mode ??= "research_market";
-  result.sources = (result.sources ?? []).map((source) => ({
+  result.sources = (result.sources ?? []).map((source) => {
+    const fallbackQuery = result.query ?? source.supports ?? "research market";
+    return {
     ...source,
+    pageIdentity: source.pageIdentity ?? inferPageIdentity(source.normalizedUrl, source.title, source.summary, source.sourceType),
+    relevanceAssessment: source.relevanceAssessment ?? assessMarketRelevance(fallbackQuery, source.title, source.summary),
     security: source.security ?? { treatedAsUntrustedData: true, promptInjectionDetected: false, ignoredDirectiveCategories: [] },
     sourceAssessment: {
       ...source.sourceAssessment,
@@ -28,7 +35,18 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
       observationKind: source.sourceAssessment.observationKind ?? "mixed",
       discoveryOnly: source.sourceAssessment.discoveryOnly ?? false,
     },
-  }));
+  }; });
+  result.competitors = (result.competitors ?? []).map((competitor) => {
+    const relationship = competitor.relationship?.value === "substitute" ? "substitute" as const : "direct_competitor" as const;
+    const domain = competitor.canonicalDomain ?? (() => { try { return new URL(competitor.website).hostname.replace(/^www\./, ""); } catch { return null; } })();
+    return {
+      ...competitor,
+      canonicalDomain: domain,
+      canonicalOrganizationId: competitor.canonicalOrganizationId ?? (domain ? `org:${domain}` : `brand:${normalizeOrganizationName(competitor.name.value ?? competitor.id)}`),
+      classification: competitor.classification ?? relationship,
+      sourcePageIds: competitor.sourcePageIds ?? competitor.evidenceIds,
+    };
+  });
   result.coverage = {
     ...result.coverage,
     sourceFamilyAttempts: result.coverage.sourceFamilyAttempts ?? Object.fromEntries(Object.entries(result.coverage.sourceFamilyCoverage).map(([family, count]) => [family, count > 0 ? "covered" : "not_attempted"])) as ResearchResult["coverage"]["sourceFamilyAttempts"],
@@ -43,6 +61,8 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
     gracefulDegradation: result.budgetUsage.gracefulDegradation ?? (result.stopDecision.status === "insufficient_evidence" ? "insufficient_evidence" : "none"),
     expansionStopReason: result.budgetUsage.expansionStopReason ?? "not_needed",
   };
+  if (result.budgetUsage.exhausted) result.budgetUsage.expansionStopReason = "budget_exhausted";
+  else if (result.budgetUsage.expansionStopReason === "budget_exhausted") result.budgetUsage.expansionStopReason = "no_useful_branch_remaining";
   result.limits.minCredibleCompetitors ??= 5;
   result.limits.competitorQueriesPerCandidate ??= 2;
   result.competitorRecall ??= {
@@ -78,6 +98,22 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
     successCriterion: result.finalOpportunities[0]?.validationExperiment.successThreshold ?? "New independent evidence resolves a critical unknown.",
     killCriterion: result.finalOpportunities[0]?.validationExperiment.failureThreshold ?? "The configured hard research budget is exhausted without a survivor.",
   };
+  result.falsificationResults = (result.falsificationResults ?? []).map((item) => ({
+    ...item,
+    searchCoverage: item.searchCoverage ?? {
+      failedCompaniesPriorAttempts: { status: "UNKNOWN", searched: false, evidenceIds: [], rationale: "Historical V2.2 record predates explicit failed-attempt search coverage." },
+      aiCommoditization: { status: "UNKNOWN", searched: false, evidenceIds: [], rationale: "Historical V2.2 record predates explicit AI-commoditization search coverage." },
+    },
+  }));
+  result.candidateIdMapping ??= buildCandidateIdMapping(result.candidates ?? [], result.candidates ?? []);
+  result.claimLineage ??= buildResearchClaimLineage({
+    query: result.query, sources: result.sources, competitors: result.competitors, gaps: result.gaps,
+    candidates: result.candidates, falsificationResults: result.falsificationResults,
+    weakSignals: result.weakSignals, companyProfile: result.companyProfile,
+  });
+  result.citationCoverage ??= citationCoverageAudit(result.claimLineage);
+  result.evidenceSnapshot.claimLineage ??= structuredClone(result.claimLineage);
+  result.evidenceSnapshot.citationCoverage ??= structuredClone(result.citationCoverage);
   return result;
 }
 

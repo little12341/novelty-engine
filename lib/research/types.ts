@@ -5,6 +5,49 @@ export type ClaimStatus = "VERIFIED" | "INFERRED" | "UNKNOWN";
 export type FactState = "KNOWN" | "INFERRED" | "UNKNOWN" | "CONTRADICTED";
 export type ResearchDepth = "fast" | "standard" | "deep";
 
+export type ResearchClaimType =
+  | "company_existence" | "vendor_feature" | "vendor_positioning" | "vendor_integration" | "vendor_pricing"
+  | "customer_pain" | "pain_frequency" | "customer_workaround" | "willingness_to_pay"
+  | "unmet_demand" | "underserved_status" | "competitor_weakness" | "successful_outcome"
+  | "regulation" | "market_spend" | "market_timing" | "automation_capability"
+  | "competitor_relationship" | "market_gap" | "candidate_hypothesis" | "falsification_risk";
+
+export type EntityRelationship =
+  | "direct_competitor" | "substitute" | "aggregator_directory"
+  | "publisher_listicle" | "marketplace" | "evidence_only";
+
+export interface ClaimEvidenceDecision {
+  evidenceId: string;
+  accepted: boolean;
+  roleCompatible: boolean;
+  relevant: boolean;
+  supportRole: "vendor_controlled" | "user_voice" | "government_official" | "independent_market" | "technical" | "marketplace" | "unknown";
+  relevanceScore: number;
+  matchedTerms: string[];
+  reason: string;
+}
+
+export interface ClaimLineageRecord {
+  id: string;
+  claim: string;
+  claimType: ResearchClaimType;
+  major: boolean;
+  status: ClaimStatus;
+  requestedEvidenceIds: string[];
+  supportingEvidenceIds: string[];
+  rejectedEvidenceIds: string[];
+  evidenceDecisions: ClaimEvidenceDecision[];
+  rationale: string;
+}
+
+export interface CitationCoverageAudit {
+  supportedMajorClaims: number;
+  totalMajorClaims: number;
+  roleMismatchedMajorClaims: number;
+  relevanceRejectedMajorClaims: number;
+  coverageRatio: number;
+}
+
 export type ResearchMode =
   | "find_business" | "research_market" | "research_company" | "find_competitors"
   | "find_gaps" | "falsify" | "validate_idea" | "compare_ideas";
@@ -164,6 +207,22 @@ export interface Evidence {
   claimFingerprint: string;
   duplicateSourceUrls: string[];
   duplicateSourceTypes: SourceType[];
+  pageIdentity: {
+    canonicalDomain: string;
+    pageKind: "company_product" | "company_pricing" | "company_documentation" | "product_profile" | "article" | "comparison" | "directory" | "marketplace" | "report_pdf" | "social_article" | "government" | "research" | "user_discussion" | "other";
+    relationship: EntityRelationship;
+    organizationSignals: string[];
+    explicitEntityNames: string[];
+    entityEligible: boolean;
+    rationale: string;
+  };
+  relevanceAssessment: {
+    acceptedForMarket: boolean;
+    score: number;
+    matchedTerms: string[];
+    missingAnchors: string[];
+    rationale: string;
+  };
   security: {
     treatedAsUntrustedData: true;
     promptInjectionDetected: boolean;
@@ -193,6 +252,8 @@ export interface TraceableClaim {
   status: ClaimStatus;
   evidenceIds: string[];
   rationale: string;
+  claimType?: ResearchClaimType;
+  supportAudit?: ClaimEvidenceDecision[];
 }
 
 export interface SupportedValue<T> {
@@ -217,6 +278,8 @@ export interface CompetitorIntelligence {
 
 export interface Competitor {
   id: string;
+  canonicalOrganizationId: string;
+  canonicalDomain: string | null;
   name: SupportedValue<string>;
   website: string;
   targetCustomer: SupportedValue<string>;
@@ -227,8 +290,10 @@ export interface Competitor {
   likelyStrengths: SupportedValue<string[]>;
   likelyWeaknesses: SupportedValue<string[]>;
   relationship?: SupportedValue<"direct" | "substitute">;
+  classification: "direct_competitor" | "substitute";
   intelligence: CompetitorIntelligence;
   evidenceIds: string[];
+  sourcePageIds: string[];
 }
 
 export interface ComplaintCluster {
@@ -620,6 +685,10 @@ export interface FalsificationResult {
   decisiveRisks: Array<{ dimension: FalsificationDimension; risk: number; status: ClaimStatus; reason: string; evidenceIds: string[] }>;
   unknownCriticalCount: number;
   residualUnmetDemand: ResidualUnmetDemandAssessment;
+  searchCoverage: {
+    failedCompaniesPriorAttempts: { status: ClaimStatus; searched: boolean; evidenceIds: string[]; rationale: string };
+    aiCommoditization: { status: ClaimStatus; searched: boolean; evidenceIds: string[]; rationale: string };
+  };
 }
 
 export interface OpportunityScoreFactors {
@@ -939,7 +1008,7 @@ export interface StopDecision {
 export interface FinalOutputSchema {
   researchLandscape: {
     coverage: ResearchCoverage;
-    competitors: Array<{ id: string; name: string | null; website: string; claimStatus: ClaimStatus; evidenceIds: string[] }>;
+    competitors: Array<{ id: string; name: string | null; website: string; classification: "direct_competitor" | "substitute"; canonicalDomain: string | null; claimStatus: ClaimStatus; evidenceIds: string[] }>;
     sourceTypeCounts: Partial<Record<SourceType, number>>;
   };
   signals: Array<{ id: string; label: string; status: ClaimStatus; evidenceIds: string[] }>;
@@ -964,7 +1033,12 @@ export interface PipelineBudgetUsage {
   sourceCount: number;
   exhausted: boolean;
   gracefulDegradation: "none" | "partial_provider_failure" | "counterevidence_budget_exhausted" | "insufficient_evidence";
-  expansionStopReason?: "not_needed" | "survivor_found" | "budget_exhausted" | "coverage_plateau" | "duplicate_branches" | "provider_limit" | "user_cancelled";
+  expansionStopReason?: "not_needed" | "survivor_found" | "success" | "budget_exhausted" | "coverage_plateau" | "duplicate_branches" | "provider_limit" | "user_cancelled" | "no_useful_branch_remaining";
+}
+
+export interface CandidateIdMapping {
+  canonicalIds: string[];
+  provisionalToCanonical: Record<string, string>;
 }
 
 export interface CandidateCompetitorRecall {
@@ -1002,9 +1076,12 @@ export interface EvidenceSnapshot {
   normalizedClaims: Array<{ evidenceId: string; claim: string; status: ClaimStatus; sourceAssessment: Evidence["sourceAssessment"] }>;
   duplicateWarnings: Array<{ evidenceId: string; duplicateSourceUrls: string[] }>;
   missingSourceFamilyWarnings: string[];
+  claimLineage?: ClaimLineageRecord[];
+  citationCoverage?: CitationCoverageAudit;
 }
 
 export interface CompanyProfile {
+  requestedIdentity?: { name: string; normalizedName: string; canonicalDomain: string | null };
   identity: TraceableClaim;
   productsServices: TraceableClaim[];
   targetUsers: TraceableClaim[];
@@ -1092,6 +1169,9 @@ export interface ResearchResult {
   roleOutputs: ResearchRoleOutput[];
   checkpoints: PipelineCheckpoint[];
   evidenceSnapshot: EvidenceSnapshot;
+  claimLineage: ClaimLineageRecord[];
+  citationCoverage: CitationCoverageAudit;
+  candidateIdMapping: CandidateIdMapping;
   companyProfile: CompanyProfile | null;
   ideationContext: IdeationContext;
   warnings: string[];

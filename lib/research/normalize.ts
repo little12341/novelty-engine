@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Evidence, ProviderSearchResult, SearchAngle, SourceType } from "./types.ts";
 import { sanitizeUntrustedResearchText } from "./governance.ts";
 import { validateExternalResearchUrl } from "./url-policy.ts";
+import { assessMarketRelevance, inferPageIdentity } from "./entity-resolution.ts";
 
 const TRACKING_PARAMS = new Set([
   "fbclid", "gclid", "mc_cid", "mc_eid", "ref", "ref_src", "source",
@@ -49,7 +50,7 @@ export function inferSourceType(urlString: string): SourceType {
   if (host.includes("reddit.com")) return "reddit";
   if (host.includes("github.com")) return "github";
   if (/g2\.com|capterra\.|trustpilot\.|trustradius\.|getapp\./.test(host)) return "review";
-  if (/producthunt\.|betalist\.|crunchbase\./.test(host)) return "product_directory";
+  if (/producthunt\.|betalist\.|crunchbase\.|sourceforge\./.test(host)) return "product_directory";
   if (/apps\.apple\.com|play\.google\.com|marketplace\./.test(host)) return "app_marketplace";
   if (/patents\.google\.|patentscope\.|uspto\.|epo\.org/.test(host)) return "patent";
   if (/arxiv\.|pubmed\.|nih\.gov|nature\.|sciencedirect\.|springer\.|jstor\.|doi\.org|semanticscholar\./.test(host)) return "research";
@@ -60,7 +61,7 @@ export function inferSourceType(urlString: string): SourceType {
   if (/forum|community|discuss/.test(host) || /\/forum|\/community|\/discussions/.test(path)) return "forum";
   if (/pricing|plans|packages/.test(path)) return "pricing";
   if (/docs|documentation|help|support|developers/.test(host) || /\/docs|\/help|\/support/.test(path)) return "documentation";
-  if (/techcrunch|forbes|reuters|bloomberg|wired|industry|journal|magazine/.test(host)) return "industry_publication";
+  if (/techcrunch|forbes|reuters|bloomberg|wired|linkedin|medium\.|industry|journal|magazine/.test(host)) return "industry_publication";
   return "official_company";
 }
 
@@ -214,8 +215,17 @@ export function normalizeResults(
       const directness = directnessScore(sourceType);
       const independence = .9;
       const overallWeight = Math.round((quality * .35 + directness * .3 + recency * .2 + independence * .15) * 100) / 100;
-      const trust = trustMetadata(sourceType, angle.kind);
-      const discoveryOnly = isVendorSeoListicle(normalizedUrl, title);
+       const pageIdentity = inferPageIdentity(normalizedUrl, title, summary, sourceType);
+       const relevanceAssessment = assessMarketRelevance(angle.query, title, `${normalizedUrl} ${summary}`);
+       const trust = trustMetadata(sourceType, angle.kind);
+       if (pageIdentity.relationship === "publisher_listicle" && trust.provenance !== "company_controlled") {
+         trust.provenance = "independent_secondary";
+         trust.sourceFamily = "general";
+         trust.commercialBiasRisk = "medium";
+         trust.observationKind = "mixed";
+       }
+       const discoveryOnly = isVendorSeoListicle(normalizedUrl, title)
+         || ["publisher_listicle", "aggregator_directory", "marketplace"].includes(pageIdentity.relationship);
       const ignoredDirectiveCategories = [...new Set([
         ...screenedTitle.ignoredDirectiveCategories,
         ...screenedSummary.ignoredDirectiveCategories,
@@ -234,7 +244,9 @@ export function normalizeResults(
         searchAngleIds: [angle.id],
         claimFingerprint: claimKey,
         duplicateSourceUrls: [],
-        duplicateSourceTypes: [],
+         duplicateSourceTypes: [],
+         pageIdentity,
+         relevanceAssessment,
         security: {
           treatedAsUntrustedData: true,
           promptInjectionDetected: ignoredDirectiveCategories.length > 0,
@@ -247,9 +259,9 @@ export function normalizeResults(
           repetitionRisk: "none",
           discoveryOnly,
           ...trust,
-          rationale: discoveryOnly
-            ? "Vendor-authored SEO/listicle content is retained for discovery and context only; it cannot independently establish pain or willingness to pay."
-            : `Weighted by ${sourceType} quality, claim directness, publication recency, and publisher independence; search rank is not treated as truth.`,
+           rationale: discoveryOnly
+             ? `${pageIdentity.rationale} It is retained for discovery/context and cannot independently establish pain, willingness to pay, unmet demand, underserved status, competitor weakness, outcomes, or regulatory interpretation.`
+             : `Weighted by ${sourceType} quality, claim directness, publication recency, and publisher independence; search rank is not treated as truth. ${relevanceAssessment.rationale}`,
         },
       };
       byUrl.set(normalizedUrl, normalized);
