@@ -12,6 +12,7 @@ export type ResearchExportFormat = "json" | "markdown" | "print" | "csv" | "comp
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]!));
 
 export function structuredExport(result: ResearchResult) {
+  const sourceById = new Map(result.sources.map((item) => [item.id, item]));
   return {
     schemaVersion: result.schemaVersion, engineVersion: result.engineVersion, depth: result.depth, runId: result.id, query: result.query, mode: result.mode, completedAt: result.completedAt,
     retrievalMode: result.retrievalMode, retrieval: result.retrieval, runLineage: result.runLineage,
@@ -29,11 +30,20 @@ export function structuredExport(result: ResearchResult) {
     candidateLifecycles: result.candidateLifecycles, evidenceGates: result.evidenceGates,
     assumptionLedger: result.assumptionLedger, adversarialReviews: result.adversarialReviews,
     searchBranches: result.searchBranches, taskGraph: result.taskGraph, nextBestAction: result.nextBestAction,
-    claimLineage: result.claimLineage, citationCoverage: result.citationCoverage, candidateIdMapping: result.candidateIdMapping,
+    claimLineage: result.claimLineage.map((claim) => ({
+      ...claim,
+      supportingSources: claim.supportingEvidenceIds.map((id) => sourceById.get(id)).filter(Boolean)
+        .map((source) => ({ evidenceId: source!.id, title: source!.title, url: source!.sourceUrl, retrievedAt: source!.retrievedAt })),
+      rejectedSources: claim.rejectedEvidenceIds.map((id) => sourceById.get(id)).filter(Boolean)
+        .map((source) => ({ evidenceId: source!.id, title: source!.title, url: source!.sourceUrl })),
+    })), citationCoverage: result.citationCoverage, candidateIdMapping: result.candidateIdMapping,
   };
 }
 
 export function markdownExport(result: ResearchResult): string {
+  const sourceById = new Map(result.sources.map((item) => [item.id, item]));
+  const citations = (ids: string[]) => ids.map((id) => sourceById.get(id)).filter(Boolean)
+    .map((source) => `[${source!.title}](${source!.sourceUrl})`).join("; ") || "no qualifying source";
   const sections = [
     ["Research Landscape", `Status: ${result.stopDecision.status}\n\nSources: ${result.sources.length}; independent: ${result.coverage.independentSourceCount}; retrieval: ${result.retrievalMode}; provider: ${result.provider.displayName}; hosted provider calls: ${result.retrieval.hostedProviderCalls}.`],
     ["Signals", result.output.signals.map((item) => `- ${item.label} — ${item.status} [${item.evidenceIds.join(", ")}]`).join("\n") || "No supported signals."],
@@ -41,9 +51,9 @@ export function markdownExport(result: ResearchResult): string {
     ["Candidate Ideas", result.output.candidateIdeas.map((item) => `- ${item.name} — ${item.status}`).join("\n") || "No candidates generated."],
     ["Rejected Ideas + Why", result.output.rejectedIdeas.map((item) => `- ${item.name}: ${item.reason}`).join("\n") || "None recorded."],
     ["Survivors", result.output.survivors.map((item) => `- ${item.candidate.name}: ${item.candidate.summary}\n  - Confidence: ${item.score.confidenceLabel}\n  - Falsification: ${item.falsification.reason}`).join("\n") || "No candidate survived."],
-    ["Evidence Lineage", result.output.evidenceLineage.map((item) => `- ${item.summary} [${item.evidenceIds.join(", ")}]`).join("\n") || "No survivor lineage."],
+    ["Evidence Lineage", result.claimLineage.map((item) => `- **${item.status} — ${item.claimType.replaceAll("_", " ")}:** ${item.claim}\n  - Sources: ${citations(item.supportingEvidenceIds)}${item.rejectedEvidenceIds.length ? `\n  - Rejected citations: ${citations(item.rejectedEvidenceIds)}` : ""}`).join("\n") || "No claim lineage."],
     ["Decisive Risks", result.output.decisiveRisks.flatMap((item) => item.risks.map((risk) => `- ${item.candidateId} / ${risk.dimension}: ${risk.reason}`)).join("\n") || "No decisive risk established; see UNKNOWNs."],
-    ["Coverage / Confidence", `${result.coverage.coverageStatus}. Major-claim citation coverage: ${result.citationCoverage.supportedMajorClaims}/${result.citationCoverage.totalMajorClaims}. Role mismatches: ${result.citationCoverage.roleMismatchedMajorClaims}. Relevance rejections: ${result.citationCoverage.relevanceRejectedMajorClaims}. Missing source families: ${result.coverage.missingCriticalSourceFamilies.join(", ") || "none"}. Counterevidence budget exhausted: ${result.coverage.counterevidenceBudgetExhausted}.`],
+    ["Coverage / Confidence", `${result.coverage.coverageStatus}. Major-claim citation coverage: ${result.citationCoverage.supportedMajorClaims}/${result.citationCoverage.totalMajorClaims}. Partial support: ${result.citationCoverage.partialSupportClaims}. Contradicted: ${result.citationCoverage.contradictedClaims}. Role mismatches: ${result.citationCoverage.roleMismatchedMajorClaims}. Relevance rejections: ${result.citationCoverage.relevanceRejectedMajorClaims}. Missing evidence IDs: ${result.citationCoverage.missingEvidenceIdClaims}. Missing source families: ${result.coverage.missingCriticalSourceFamilies.join(", ") || "none"}. Counterevidence budget exhausted: ${result.coverage.counterevidenceBudgetExhausted}.`],
     ["24–72 Hour Validation Tests", result.output.validationTests.map((item) => `- ${item.action} Success: ${item.successThreshold} Failure: ${item.failureThreshold}`).join("\n") || "No survivor validation test."],
   ];
   return `# Novelty Engine Research Report\n\n**Run:** ${result.id}  \n**Query:** ${result.query}  \n**Completed:** ${result.completedAt}\n\n${sections.map(([heading, body]) => `## ${heading}\n\n${body}`).join("\n\n")}`;

@@ -18,6 +18,18 @@ function supported<T>(value: T | null, evidenceIds: string[], confidence: number
 }
 
 const FEATURE_TERMS = ["scheduling", "invoicing", "automation", "mobile", "reporting", "payments", "integrations", "collaboration", "compliance", "certificate tracking", "insurance", "vendor management", "risk", "procurement", "analytics", "crm", "marketplace", "workflow"];
+const PRODUCT_RELATIONSHIP = /\b(?:offers?|provides?|built for|designed for|serves?|software|saas|platform|product|service|application|app|tool|system|solution|automation|helps?|enables?)\b/i;
+const DISCUSSION_TYPES = new Set(["reddit", "forum", "github", "review", "app_marketplace"]);
+const EXPERIENCE_VERB = String.raw`(?:use|used|using|tried|run|manage|work|spent|pay|paid|switch|switched|went|return|struggl|miss|chase|worr|disappoint|frustrat|cop(?:y|ies|ied)|re[- ]?enter|export|maintain|track|email|reconcil|have|has)\w*`;
+const DIRECT_EXPERIENCE = new RegExp(String.raw`\b(?:i|we|my|our)\b[^.?!]{0,120}\b${EXPERIENCE_VERB}`, "i");
+const ATTRIBUTED_EXPERIENCE = new RegExp(String.raw`\b(?:customers?|contractors?|reviewers?|participants?|operators?|coordinators?|managers?|users?|teams?|workers?|companies)\s+(?:says?|report|reports|describe|describes)\b[^.?!]{0,120}\b${EXPERIENCE_VERB}`, "i");
+const RESEARCH_PROMPT = /\b(?:trying to understand|would love to hear|asks? whether|few questions|looking for feedback|market-research prompt|survey)\b/i;
+
+function hasDirectCustomerExperience(item: Evidence): boolean {
+  const text = `${item.title}. ${item.summary}`;
+  if (RESEARCH_PROMPT.test(text)) return false;
+  return DIRECT_EXPERIENCE.test(text) || ATTRIBUTED_EXPERIENCE.test(text);
+}
 
 function extractFeatures(text: string): string[] {
   const lower = text.toLowerCase();
@@ -42,6 +54,23 @@ function competitorGroupKey(item: Evidence): string {
   return isProfile && name ? `brand:${normalizeOrganizationName(name)}` : `domain:${item.pageIdentity.canonicalDomain}`;
 }
 
+function explicitEntityMention(item: Evidence, aliases: string[], domainStem: string): boolean {
+  const text = `${item.title} ${item.summary}`;
+  return [...aliases, domainStem].some((value) => value.length >= 4
+    && new RegExp(`(?:^|[^a-z0-9])${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`, "i").test(text));
+}
+
+function parentCompany(text: string, brand: string): string | null {
+  const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const byline = text.match(new RegExp(`\\b${escaped}\\b[^.]{0,50}?\\b(?:by|from|owned by|a (?:product|brand|subsidiary) of)\\s+([A-Z][A-Za-z0-9&.' -]{2,60})`, "i"));
+  return byline?.[1]?.trim().replace(/[.,;:]$/, "") ?? null;
+}
+
+function observedDate(items: Evidence[], edge: "first" | "last"): string {
+  const dates = items.map((item) => item.retrievedAt).filter((value) => !Number.isNaN(new Date(value).getTime())).sort();
+  return (edge === "first" ? dates[0] : dates.at(-1)) ?? new Date(0).toISOString();
+}
+
 function snippets(items: Evidence[], pattern: RegExp, limit = 4): { values: string[]; ids: string[] } {
   const matched = items.filter((item) => pattern.test(`${item.title} ${item.summary}`)).slice(0, limit);
   return { values: matched.map((item) => item.summary), ids: matched.map((item) => item.id) };
@@ -63,16 +92,31 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
     const host = new URL(primary.normalizedUrl).hostname.replace(/^(app|docs|help|support)\./, "");
     const allText = items.map((item) => `${item.title}. ${item.summary}`).join(" ");
     const ids = items.map((item) => item.id);
-    const pricingEvidence = items.find((item) => item.sourceType === "pricing" || extractPricing(`${item.title} ${item.summary}`));
+    const directIdentityEvidence = items.filter((item) => ["company_product", "company_pricing", "company_documentation"].includes(item.pageIdentity.pageKind)
+      && item.sourceAssessment.provenance === "company_controlled" && item.pageIdentity.discussedEntity);
+    const independentIdentityCount = new Set(items.filter((item) => item.pageIdentity.pageKind === "product_profile")
+      .map((item) => item.sourceAssessment.independenceGroup)).size;
+    if (directIdentityEvidence.length === 0 && independentIdentityCount < 2) return null;
+    const relationshipEvidence = items.filter((item) => item.pageIdentity.claimedCompetitiveRole === "competitor_candidate"
+      && item.relevanceAssessment.acceptedForMarket
+      && (PRODUCT_RELATIONSHIP.test(`${item.title} ${item.summary}`)
+        || item.sourceAssessment.provenance === "company_controlled" && ["company_product", "company_pricing", "company_documentation"].includes(item.pageIdentity.pageKind)));
+    if (relationshipEvidence.length === 0) return null;
+    const pricingEvidence = items.find((item) => item.sourceType === "pricing" && item.pageIdentity.pageKind === "company_pricing"
+      && extractPricing(`${item.title} ${item.summary}`));
     const pricing = pricingEvidence ? extractPricing(`${pricingEvidence.title} ${pricingEvidence.summary}`) : null;
     const features = extractFeatures(allText);
     const positioning = primary.summary || null;
     const name = preferredEntityName(primary) ?? items.map(preferredEntityName).find((item): item is string => Boolean(item));
     if (!name) return null;
     const hostStem = host.split(".")[0];
-    const weaknessEvidence = evidence.filter((item) => DISCUSSION_TYPES.has(item.sourceType) && new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b|\\b${hostStem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(`${item.title} ${item.summary}`));
+    const aliases = [...new Set(items.flatMap((item) => item.pageIdentity.explicitEntityNames).filter(Boolean))];
+    const weaknessEvidence = evidence.filter((item) => DISCUSSION_TYPES.has(item.sourceType)
+      && item.relevanceAssessment.acceptedForMarket && !item.sourceAssessment.discoveryOnly
+      && hasDirectCustomerExperience(item)
+      && explicitEntityMention(item, aliases, hostStem));
     const target = extractTargetCustomer(allText);
-    const mentions = evidence.filter((item) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b|\\b${hostStem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(`${item.title} ${item.summary}`));
+    const mentions = evidence.filter((item) => item.relevanceAssessment.acceptedForMarket && explicitEntityMention(item, aliases, hostStem));
     const funding = snippets(mentions, /raised|funding|series [a-z]|venture|seed round/i, 2);
     const headcount = mentions.find((item) => /\b\d+[,+]? employees|headcount|team of \d+/i.test(`${item.title} ${item.summary}`));
     const hiring = snippets(mentions, /hiring|job opening|careers|recruit/i);
@@ -84,12 +128,18 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
     const channels = snippets(mentions, /marketplace|agency|partner channel|direct sales|self.serve|app store/i);
     const launches = snippets(mentions, /launch|released|introduced|announced|new product/i);
     const strategic = mentions.find((item) => /strategy|roadmap|expanding|focus|positioning|mission/i.test(`${item.title} ${item.summary}`));
-    const completeIds = [...new Set([...ids, ...weaknessEvidence.map((item) => item.id), ...mentions.map((item) => item.id)])];
+    const completeIds = [...new Set([
+      ...ids,
+      ...weaknessEvidence.map((item) => item.id),
+      ...funding.ids, ...hiring.ids, ...reviews.ids, ...complaints.ids, ...partnerships.ids,
+      ...integrations.ids, ...channels.ids, ...launches.ids,
+      ...(headcount ? [headcount.id] : []), ...(traffic ? [traffic.id] : []), ...(strategic ? [strategic.id] : []),
+    ])];
     const substituteLanguage = /\b(?:manual|spreadsheet|paper|shared inbox|consultant|broker|agency service|outsourced|in-house|do it yourself|diy)\b/i.test(allText)
       && !/\b(?:software|saas|platform|application|automation product)\b/i.test(allText);
     const substituteOnly = substituteLanguage || items.every((item) => item.searchAngleIds.some((id) => /adjacent|substitute/i.test(id))
       && !item.searchAngleIds.some((id) => /direct|competitor_primary|competitor_crosscheck|competitor_escalation/i.test(id)));
-    const entityDomain = items.find((item) => !["product_profile"].includes(item.pageIdentity.pageKind))?.pageIdentity.canonicalDomain ?? null;
+    const entityDomain = directIdentityEvidence[0]?.pageIdentity.canonicalDomain ?? null;
     const canonicalOrganizationId = entityDomain ? `org:${entityDomain}` : `brand:${normalizeOrganizationName(name)}`;
     const classification = substituteOnly ? "substitute" as const : "direct_competitor" as const;
     return {
@@ -103,8 +153,20 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
       positioning: supported(positioning, [primary.id], 0.65),
       likelyStrengths: supported(features.length ? features.slice(0, 3) : null, features.length ? ids : [], features.length ? 0.55 : 0),
       likelyWeaknesses: supported(weaknessEvidence.length ? weaknessEvidence.slice(0, 3).map((item) => item.summary) : null, weaknessEvidence.map((item) => item.id), weaknessEvidence.length ? 0.65 : 0),
-      relationship: supported<"direct" | "substitute">(substituteOnly ? "substitute" : "direct", ids, .64),
+      relationship: supported<"direct" | "substitute">(substituteOnly ? "substitute" : "direct", relationshipEvidence.map((item) => item.id), .64),
       classification,
+      aliases,
+      productBrand: name,
+      parentCompany: parentCompany(allText, name),
+      entityFingerprint: canonicalOrganizationId,
+      firstObservedDate: observedDate(items, "first"),
+      mostRecentObservedDate: observedDate(items, "last"),
+      independentSourceCount: new Set(items.map((item) => item.sourceAssessment.independenceGroup)).size,
+      supportingEvidenceCount: ids.length,
+      counterEvidenceCount: weaknessEvidence.length,
+      sourceFamilyCoverage: [...new Set(items.map((item) => item.sourceAssessment.sourceFamily))],
+      competitorStatus: directIdentityEvidence.length || independentIdentityCount >= 2 ? "supported" : "uncertain",
+      materialChangeSincePreviousRun: null,
       intelligence: {
         funding: supported(funding.values[0] ?? null, funding.ids, funding.ids.length ? .6 : 0),
         headcount: supported(headcount?.summary ?? null, headcount ? [headcount.id] : [], headcount ? .6 : 0),
@@ -125,11 +187,19 @@ export function extractCompetitors(evidence: Evidence[]): Competitor[] {
   const deduplicated: Competitor[] = [];
   for (const competitor of extracted) {
     const nameKey = normalizeOrganizationName(competitor.name.value ?? competitor.id);
-    const existing = deduplicated.find((item) => item.canonicalDomain && item.canonicalDomain === competitor.canonicalDomain
-      || normalizeOrganizationName(item.name.value ?? item.id) === nameKey);
+    const existing = deduplicated.find((item) => item.canonicalDomain && competitor.canonicalDomain
+      ? item.canonicalDomain === competitor.canonicalDomain
+      : !item.canonicalDomain && !competitor.canonicalDomain && normalizeOrganizationName(item.name.value ?? item.id) === nameKey);
     if (!existing) { deduplicated.push(competitor); continue; }
     existing.evidenceIds = [...new Set([...existing.evidenceIds, ...competitor.evidenceIds])];
     existing.sourcePageIds = [...new Set([...existing.sourcePageIds, ...competitor.sourcePageIds])];
+    existing.aliases = [...new Set([...existing.aliases, ...competitor.aliases])];
+    existing.independentSourceCount = Math.max(existing.independentSourceCount, competitor.independentSourceCount);
+    existing.supportingEvidenceCount = existing.sourcePageIds.length;
+    existing.counterEvidenceCount = new Set([...existing.likelyWeaknesses.evidenceIds, ...competitor.likelyWeaknesses.evidenceIds]).size;
+    existing.sourceFamilyCoverage = [...new Set([...existing.sourceFamilyCoverage, ...competitor.sourceFamilyCoverage])];
+    existing.firstObservedDate = [existing.firstObservedDate, competitor.firstObservedDate].sort()[0];
+    existing.mostRecentObservedDate = [existing.mostRecentObservedDate, competitor.mostRecentObservedDate].sort().at(-1)!;
     if (!existing.canonicalDomain && competitor.canonicalDomain) {
       existing.canonicalDomain = competitor.canonicalDomain;
       existing.canonicalOrganizationId = competitor.canonicalOrganizationId;
@@ -167,8 +237,6 @@ const COMPLAINT_RULES: ComplaintRule[] = [
   { label: "Unavailable for the needed customer or region", type: "distribution", patterns: [/not available|only enterprise|minimum seats|not in (?:my|our) country|region|small business|solo/i], severity: "medium" },
 ];
 
-const DISCUSSION_TYPES = new Set(["reddit", "forum", "github", "review", "app_marketplace"]);
-
 function findSegment(text: string): string | null {
   const segments: Array<[RegExp, string]> = [
     [/solo|freelancer|one-person/i, "solo operators"],
@@ -191,7 +259,8 @@ function findWorkaround(text: string): string | null {
 export function clusterComplaints(evidence: Evidence[]): ComplaintCluster[] {
   const buckets = new Map<string, { rule: ComplaintRule; evidence: Evidence[]; segments: string[]; workarounds: string[] }>();
   for (const item of evidence) {
-    if (!DISCUSSION_TYPES.has(item.sourceType) || !item.relevanceAssessment.acceptedForMarket || item.sourceAssessment.discoveryOnly) continue;
+    if (!DISCUSSION_TYPES.has(item.sourceType) || !item.relevanceAssessment.acceptedForMarket
+      || item.sourceAssessment.discoveryOnly || !hasDirectCustomerExperience(item)) continue;
     const text = `${item.title}. ${item.summary}`;
     for (const rule of COMPLAINT_RULES) {
       if (!rule.patterns.some((pattern) => pattern.test(text))) continue;
@@ -226,6 +295,17 @@ export function clusterComplaints(evidence: Evidence[]): ComplaintCluster[] {
       churnReasons: items.filter((item) => /cancel|churn|switched|went back|abandon|stopped using/i.test(`${item.title} ${item.summary}`)).slice(0, 5).map((item) => item.summary),
       buyingObjections: items.filter((item) => /too expensive|not worth|procurement|security review|hard to use|too complex|trust/i.test(`${item.title} ${item.summary}`)).slice(0, 5).map((item) => item.summary),
       jobsToBeDone: items.filter((item) => /need to|trying to|so (?:we|i) can|job|workflow|reconcile|coordinate|schedule|invoice/i.test(`${item.title} ${item.summary}`)).slice(0, 5).map((item) => item.summary),
+      firstObservedDate: observedDate(items, "first"),
+      mostRecentObservedDate: observedDate(items, "last"),
+      independentSourceCount: independentCount,
+      supportingEvidenceCount: items.length,
+      counterEvidenceCount: 0,
+      sourceFamilyCoverage: [...new Set(items.map((item) => item.sourceAssessment.sourceFamily))],
+      complaintCategory: isIsolated ? "isolated" : rule.type,
+      affectedCustomerSegment: segments[0] ?? null,
+      workaround: workarounds[0] ?? null,
+      confidence: Math.min(.95, .32 + independentCount * .16 + items.length * .06),
+      materialChangeSincePreviousRun: null,
     };
   }).sort((a, b) => b.evidenceCount - a.evidenceCount);
 }
@@ -233,7 +313,8 @@ export function clusterComplaints(evidence: Evidence[]): ComplaintCluster[] {
 export function detectUnderservedSegments(evidence: Evidence[]): UnderservedSegment[] {
   const groups = new Map<string, Evidence[]>();
   for (const item of evidence) {
-    if (item.sourceAssessment.sourceFamily !== "user_voice" || !item.relevanceAssessment.acceptedForMarket || item.sourceAssessment.discoveryOnly) continue;
+    if (item.sourceAssessment.sourceFamily !== "user_voice" || !item.relevanceAssessment.acceptedForMarket
+      || item.sourceAssessment.discoveryOnly || !hasDirectCustomerExperience(item)) continue;
     const segment = findSegment(`${item.title}. ${item.summary}`);
     if (!segment) continue;
     const items = groups.get(segment) ?? [];

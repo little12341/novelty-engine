@@ -1,7 +1,7 @@
 export const RESEARCH_SCHEMA_VERSION = "2.1.0" as const;
 export const RESEARCH_ENGINE_VERSION = "2.2.0" as const;
 
-export type ClaimStatus = "VERIFIED" | "INFERRED" | "UNKNOWN";
+export type ClaimStatus = "VERIFIED" | "INFERRED" | "UNKNOWN" | "CONTRADICTED";
 export type FactState = "KNOWN" | "INFERRED" | "UNKNOWN" | "CONTRADICTED";
 export type ResearchDepth = "fast" | "standard" | "deep";
 export type RetrievalMode = "supplied_sources" | "hosted";
@@ -22,9 +22,13 @@ export interface ClaimEvidenceDecision {
   accepted: boolean;
   roleCompatible: boolean;
   relevant: boolean;
+  partialSupport: boolean;
+  contradicts: boolean;
   supportRole: "vendor_controlled" | "user_voice" | "government_official" | "independent_market" | "technical" | "marketplace" | "unknown";
   relevanceScore: number;
+  claimCoverage: number;
   matchedTerms: string[];
+  missingClaimTerms: string[];
   reason: string;
 }
 
@@ -46,6 +50,9 @@ export interface CitationCoverageAudit {
   totalMajorClaims: number;
   roleMismatchedMajorClaims: number;
   relevanceRejectedMajorClaims: number;
+  missingEvidenceIdClaims: number;
+  partialSupportClaims: number;
+  contradictedClaims: number;
   coverageRatio: number;
 }
 
@@ -54,7 +61,7 @@ export type ResearchMode =
   | "find_gaps" | "falsify" | "validate_idea" | "compare_ideas";
 
 export type ResearchRole =
-  | "market_mapping" | "competitor_analysis" | "complaint_workaround_mining"
+  | "market_mapping" | "competitor_analysis" | "customer_pain_analysis"
   | "structural_gap_detection" | "adversarial_falsification" | "source_verification"
   | "company_analysis" | "opportunity_synthesis";
 
@@ -175,6 +182,7 @@ export interface ProviderSearchResult {
   publishedAt?: string | null;
   rank?: number;
   retrievedAt?: string | null;
+  suppliedContentScope?: "content" | "excerpt";
   suppliedMetadata?: {
     declaredSourceType?: SourceType | null;
     declaredPublisher?: string | null;
@@ -224,7 +232,20 @@ export interface Evidence {
     organizationSignals: string[];
     explicitEntityNames: string[];
     entityEligible: boolean;
+    sourcePublisher: { name: string | null; domain: string };
+    discussedEntity: { name: string; normalizedName: string; canonicalDomain: string | null } | null;
+    targetMarket: string | null;
+    productCategory: string | null;
+    customerSegment: string | null;
+    claimedCompetitiveRole: "competitor_candidate" | "substitute_candidate" | "mentioned_only" | "unknown";
     rationale: string;
+  };
+  discussionSample?: {
+    sampleUnit: "post" | "comment" | "page" | "search_excerpt" | "unknown";
+    fullPageAccess: "available" | "not_available" | "unknown";
+    threadOrPageCount: number;
+    coverageNote: string;
+    authorStored: false;
   };
   relevanceAssessment: {
     acceptedForMarket: boolean;
@@ -307,6 +328,18 @@ export interface Competitor {
   likelyWeaknesses: SupportedValue<string[]>;
   relationship?: SupportedValue<"direct" | "substitute">;
   classification: "direct_competitor" | "substitute";
+  aliases: string[];
+  productBrand: string | null;
+  parentCompany: string | null;
+  entityFingerprint: string;
+  firstObservedDate: string;
+  mostRecentObservedDate: string;
+  independentSourceCount: number;
+  supportingEvidenceCount: number;
+  counterEvidenceCount: number;
+  sourceFamilyCoverage: Evidence["sourceAssessment"]["sourceFamily"][];
+  competitorStatus: "supported" | "uncertain";
+  materialChangeSincePreviousRun: boolean | null;
   intelligence: CompetitorIntelligence;
   evidenceIds: string[];
   sourcePageIds: string[];
@@ -329,6 +362,17 @@ export interface ComplaintCluster {
   churnReasons: string[];
   buyingObjections: string[];
   jobsToBeDone: string[];
+  firstObservedDate: string;
+  mostRecentObservedDate: string;
+  independentSourceCount: number;
+  supportingEvidenceCount: number;
+  counterEvidenceCount: number;
+  sourceFamilyCoverage: Evidence["sourceAssessment"]["sourceFamily"][];
+  complaintCategory: GapType;
+  affectedCustomerSegment: string | null;
+  workaround: string | null;
+  confidence: number;
+  materialChangeSincePreviousRun: boolean | null;
 }
 
 export interface UnderservedSegment {
@@ -1180,6 +1224,7 @@ export interface ResearchResult {
   mode: Exclude<ResearchMode, "compare_ideas">;
   depth: ResearchDepth;
   canonicalQuery: string;
+  stableMarketKey: string;
   status: "complete" | "partial";
   startedAt: string;
   completedAt: string;
@@ -1297,7 +1342,8 @@ export interface ResearchMemoryProfile extends ResearchUserContext {
 export type FeedbackKind =
   | "useful" | "wrong" | "irrelevant" | "already_known" | "missing_competitor"
   | "competitor_does_not_solve_job" | "opportunity_already_exists" | "source_is_weak"
-  | "validation_result_success" | "validation_result_failure" | "installation_problem" | "mcp_failure";
+  | "validation_result_success" | "validation_result_failure" | "installation_problem" | "mcp_failure"
+  | "citation_problem" | "stored_run_failure" | "website_issue" | "general_feedback";
 
 export interface ResearchFeedback {
   id: string;
@@ -1362,6 +1408,25 @@ export interface ChangeDetectionResult {
     beforeEvidenceConfidence: number | null;
     afterEvidenceConfidence: number | null;
     status: "appeared" | "strengthened" | "weakened" | "stable" | "disappeared";
+  }>;
+  competitorChanges: {
+    newCompetitorIds: string[];
+    noLongerFoundCompetitorIds: string[];
+    pricingChangedCompetitorIds: string[];
+  };
+  complaintChanges: {
+    newCategories: string[];
+    categoriesNoLongerFound: string[];
+    categoriesWithMoreIndependentEvidence: string[];
+    categoriesWithWeakerEvidence: string[];
+  };
+  claimTransitions: Array<{
+    claimType: ResearchClaimType;
+    claim: string;
+    before: ClaimStatus;
+    after: ClaimStatus;
+    beforeEvidenceIds: string[];
+    afterEvidenceIds: string[];
   }>;
 }
 

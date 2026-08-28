@@ -32,7 +32,7 @@ export async function addSourcesToResearchRun(input: {
   const additionalAsSources: SuppliedResearchSource[] = uniqueAdditional.map((item) => ({
     url: item.url,
     title: item.title,
-    snippet: item.snippet,
+    ...(item.suppliedContentScope === "content" ? { content: item.snippet } : { snippet: item.snippet }),
     publicationDate: item.publishedAt,
     retrievedAt: item.retrievedAt,
     sourceType: item.suppliedMetadata?.declaredSourceType ?? undefined,

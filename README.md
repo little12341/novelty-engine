@@ -2,9 +2,9 @@
 
 Novelty Engine 2.2 is an evidence-driven search-and-elimination platform plus a Claude Skill. Its recommended default is `Claude/web search → research_from_sources → normalize → challenge → falsify → validate → persist/export`: Claude gathers public evidence with the user's web capability, while Novelty performs the full evidence pipeline without a Tavily or Brave call. Optional hosted retrieval remains available for backward-compatible or explicitly requested deep research. The engine preserves the V2.1 public result schema while adding persisted candidate lifecycles and kill reasons, adjacent expansion, configurable evidence gates, independent Bull/Bear/Judge records, specialist task graphs, assumption ledgers, founder constraints, separate opportunity/novelty/evidence-confidence scores, one next-best action, richer exports, and an architecturally separate financial-signal backtester.
 
-Production website: [https://www.novelty-engine.com](https://www.novelty-engine.com)
+Production website: [https://novelty-engine.com](https://novelty-engine.com)
 
-It never treats missing search results as proof of demand, and it never fills unsupported competitors, prices, complaints, or citations from model memory. Claims remain `VERIFIED`, `INFERRED`, or `UNKNOWN`; fact records also distinguish `KNOWN`, `INFERRED`, `UNKNOWN`, and `CONTRADICTED`. Normal research can end at `SURVIVED/VALIDATING`, but never `VALIDATED` unless both the strict evidence gate and external validation evidence pass. An `insufficient_evidence` stop produces no forced ideas.
+It never treats missing search results as proof of demand, and it never fills unsupported competitors, prices, complaints, or citations from model memory. Claims remain `VERIFIED`, `INFERRED`, `UNKNOWN`, or `CONTRADICTED`; fact records distinguish `KNOWN`, `INFERRED`, `UNKNOWN`, and `CONTRADICTED`. Normal research can end at `SURVIVED/VALIDATING`, but never `VALIDATED` unless both the strict evidence gate and external validation evidence pass. An `insufficient_evidence` stop produces no forced ideas.
 
 Competitors validate that a job or market may exist; their existence is never an automatic rejection. Every candidate in a competitive landscape receives an explicit residual-unmet-demand assessment covering repeated unresolved complaints, workaround prevalence, switching behavior, underserved segments, price/performance gaps, trust failures, distribution gaps, and whether the proposed mechanism materially changes the outcome. Similarity can reduce differentiation and defensibility, but competition is decisive only when close substitutes already solve the same job for the same user with no meaningful residual gap.
 
@@ -17,7 +17,7 @@ Claude browser / Claude Code -> Claude web search -> bounded public source objec
   -> source-verification role -> injection screening + trust metadata + deduplication
   -> market / competitor / complaint / gap / company roles over one evidence set
   -> source quality/independence/repetition assessment -> competitor + substitute map
-  -> complaint/workaround mining -> Opportunity Graph -> graph-hole detection
+  -> customer pain analysis -> Opportunity Graph -> graph-hole detection
   -> weak signals -> failed-attempt mining -> assumption contradictions
   -> evidence gate + stop decision -> candidate lifecycle -> novelty/collision fingerprints
   -> independent Bull/Bear/Judge + 11-dimension falsification -> evidence requirements / bounded mutation
@@ -51,7 +51,7 @@ Each normalized source records its URL, title, inferred source type, date, searc
 
 Competitor fields use an evidence-carrying value shape: `{ value, evidenceIds, confidence }`. Public pricing is extracted only when a retrieved result states a price or pricing phrase. Target customers, weaknesses, and other unsupported fields remain `null` with no evidence IDs.
 
-Complaint mining clusters repeated language into product, pricing, usability, distribution, integration, trust, or compliance gaps. It records evidence count, severity, affected segment, workaround, links, and whether the complaint is isolated. Gap scoring exposes ten 0–10 heuristic factors and named penalties for absence-only reasoning, weak evidence, one-off complaints, and crowded incumbent markets without a wedge. Scores prioritize review; they are not probabilities or market forecasts.
+Customer pain analysis finds and analyzes a bounded sample of publicly indexed discussions, reviews, and complaints, then clusters supported repeated language into product, pricing, usability, distribution, integration, trust, or compliance gaps. It records sample limits, evidence count, retrieval date, direct URLs, severity, affected segment, workaround, and whether the complaint is isolated. One excerpt is never called recurring demand, and engagement is not treated as purchasing intent. Gap scoring exposes ten 0–10 heuristic factors and named penalties for absence-only reasoning, weak evidence, one-off complaints, and crowded incumbent markets without a wedge. Scores prioritize review; they are not probabilities or market forecasts.
 
 ## Retrieval modes and optional provider setup
 
@@ -61,7 +61,8 @@ No search-provider key is required for the recommended supplied-source workflow.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `HOSTED_SEARCH_ENABLED` | No; default `true` for backward compatibility | Set `false` to block every Tavily/Brave adapter call centrally, even when keys exist |
+| `NEXT_PUBLIC_PRIVACY_CONTACT_URL` | Required before public launch | Working HTTPS privacy-request form or working `mailto:` URL; configure it at build time because Next.js exposes this value to the policy page |
+| `HOSTED_SEARCH_ENABLED` | No; default `false` | Set `true` only to opt into deployment-owned Tavily/Brave retrieval; any other value blocks those adapters centrally |
 | `BRAVE_SEARCH_API_KEY` | Only for optional hosted mode | Brave Search API subscription token |
 | `TAVILY_API_KEY` | Only for optional hosted mode | Tavily Search API key |
 | `SEARCH_PROVIDER` | No; default `auto` | `brave`, `tavily`, or `auto` (Brave first) |
@@ -139,27 +140,29 @@ Successful local runs are saved as an immutable run-ID file and a canonical-quer
 
 ## Research API
 
-The production research endpoint is `https://www.novelty-engine.com/api/research`. Keep relative `/api/research` calls inside the deployed application so they remain same-origin.
+The production research endpoint is `https://novelty-engine.com/api/research`. Keep relative `/api/research` calls inside the deployed application so they remain same-origin.
 
-`GET /api/research` reports the available retrieval modes without exposing keys. `POST /api/research` accepts the backward-compatible hosted request below, plus `retrieval_mode: supplied_sources` with 1–48 strict source objects containing `url`, `title`, and at least one of `snippet`, `excerpt`, or `content`.
+`GET /api/research` reports the available retrieval modes without exposing keys. `POST /api/research` defaults to the zero-provider-credit supplied-source flow and requires 1–48 strict source objects containing `url`, `title`, and at least one of `snippet`, `excerpt`, or `content`. The backward-compatible hosted flow works only when the request explicitly sends `retrieval_mode: hosted` and the deployment explicitly enables and configures it.
 
 ```json
 {
   "query": "give me 5 business ideas in home services",
   "mode": "find_business",
   "depth": "standard",
+  "retrieval_mode": "hosted",
   "userContext": { "teamSize": 2, "timeToMvpWeeks": 6, "riskTolerance": "low" },
   "bypassCache": false
 }
 ```
 
-The same endpoint accepts the documented research command prefixes. For comparison, send `{ "mode": "compare_ideas", "ideas": ["...", "..."] }`. Current-run `userContext` overrides any explicitly selected opt-in memory profile. Supporting endpoints cover searchable history, exports, notes/tags/folders/decision logs, measured validation outcomes, filtered saved-run feeds, memory, feedback, watchlists, and explicit watchlist checks; inspect `GET /api/research/openapi` for the current contract.
+The same endpoint accepts the documented research command prefixes in explicit hosted mode. For a provider-backed comparison, send `{ "mode": "compare_ideas", "retrieval_mode": "hosted", "ideas": ["...", "..."] }`. Supplied-source comparisons should be created as separate `research_from_sources` runs and compared through MCP. Current-run `userContext` overrides any explicitly selected opt-in memory profile. Supporting endpoints cover searchable history, exports, notes/tags/folders/decision logs, measured validation outcomes, filtered saved-run feeds, memory, feedback, watchlists, and explicit watchlist checks; inspect `GET /api/research/openapi` for the current contract.
 
 Company research keeps the free-text path and also accepts authoritative structured identifiers. At least one query or identifier is required:
 
 ```json
 {
   "mode": "research_company",
+  "retrieval_mode": "hosted",
   "query": "Research Certificial and its competitors",
   "company_name": "Certificial",
   "domain": "certificial.com",
@@ -177,12 +180,12 @@ The backward-compatible `ResearchResult` schema now carries `engineVersion: 2.2.
 The production connector endpoint is:
 
 ```text
-https://www.novelty-engine.com/api/mcp
+https://novelty-engine.com/api/mcp
 ```
 
 It uses Vercel's `mcp-handler` 2.x implementation pattern with the official MCP TypeScript SDK v2: stateless Streamable HTTP, native MCP `2026-07-28`, and built-in stateless compatibility for 2025-era Streamable HTTP clients. Deprecated HTTP+SSE is not exposed. `GET /api/mcp/health` checks readiness without starting a paid research run.
 
-Existing connectors configured with the apex-domain redirect or `https://novelty-engine.vercel.app/api/mcp` remain supported for backward compatibility. Use the redirect-free canonical `www.novelty-engine.com` endpoints for every new installation.
+Existing connectors configured with `https://www.novelty-engine.com` or `https://novelty-engine.vercel.app` should remain supported by deployment/DNS compatibility configuration. Use the redirect-free canonical `https://novelty-engine.com` endpoints for every new installation. MCP POST compatibility must be implemented at the platform or proxy layer without an unsafe application redirect.
 
 The deliberate, additive tool surface now contains **20 tools**. The first three are the recommended zero-provider-credit orchestration surface:
 
@@ -227,11 +230,12 @@ Concise MCP summaries include an `ideationContextGuide`. The actual typed `ideat
 
 ### Install the Claude Skill
 
-For Claude on the web or desktop, download [the current Skill package](https://www.novelty-engine.com/novelty-engine.zip), then:
+For Claude on the web or desktop, download [the current Skill package](https://novelty-engine.com/novelty-engine.zip), then:
 
-1. Open **Customize → Skills**.
-2. Choose **+ Create skill → Upload a skill**.
-3. Upload the ZIP directly and enable Novelty Engine.
+1. Open **Settings → Capabilities** and enable **Code execution and file creation**. Team/Enterprise owners must also enable the organization-level Skills and Code execution/file creation controls.
+2. Open **Customize → Skills**.
+3. Choose **+ Create skill → Upload a skill**.
+4. Upload the ZIP directly and enable Novelty Engine.
 
 For Claude Code, extract the ZIP and run these commands from beside the extracted `novelty-engine` folder:
 
@@ -248,11 +252,11 @@ See [Claude's current custom Skill instructions](https://support.claude.com/en/a
 
 After deployment:
 
-1. Upload and enable the Novelty Engine ZIP under **Customize → Skills** as described above.
+1. Enable **Code execution and file creation**, then upload and enable the Novelty Engine ZIP under **Customize → Skills** as described above.
 2. On individual plans (Free/Pro/Max), open **Customize → Connectors**, click **+**, then choose **Add custom connector**. On Team/Enterprise, an Owner or Primary Owner first uses **Organization settings → Connectors → Add → Custom → Web**; members then connect it under **Customize → Connectors**.
-3. Name it `Novelty Engine` and paste `https://www.novelty-engine.com/api/mcp`.
+3. Name it `Novelty Engine` and paste `https://novelty-engine.com/api/mcp`.
 4. In a chat, use the **+** button at lower left, open **Connectors**, and enable Novelty Engine for the conversation. Then type a Novelty intent or ask for market-gap research normally.
-5. Open `https://www.novelty-engine.com/api/mcp/health`, then make one small research request and confirm Claude returns a Novelty `research_…` run ID with citations. The internal `/research-debug` inspector intentionally returns 404 in production.
+5. Open `https://novelty-engine.com/api/mcp/health`, then make one small research request and confirm Claude returns a Novelty `research_…` run ID with citations. The internal `/research-debug` inspector intentionally returns 404 in production.
 
 Claude's remote connector supports authless and OAuth servers. This project initially defaults to authless public access protected by distributed limits when Upstash is configured. Leave `NOVELTY_MCP_ACCESS_TOKEN` unset for that browser flow. The optional static bearer token is useful for programmable MCP clients, but Claude's custom-connector form does not provide a general custom-header field; add OAuth at the isolated auth wrapper before requiring authentication in Claude browser.
 
@@ -268,7 +272,7 @@ cp -R skill/novelty-engine ~/.claude/skills/
 Set the backend URL in the environment used by Claude Code:
 
 ```bash
-export NOVELTY_RESEARCH_API_URL="https://www.novelty-engine.com/api/research"
+export NOVELTY_RESEARCH_API_URL="https://novelty-engine.com/api/research"
 ```
 
 The Skill’s `scripts/research.mjs` helper posts the complete ideation request plus the JSON array at `NOVELTY_RESEARCH_SOURCES_FILE` to the backend and returns structured JSON. It refuses source-less requests by default; `NOVELTY_ALLOW_HOSTED_SEARCH=true` is an explicit opt-in to hosted retrieval. When the backend is unavailable, the Skill uses a bounded local process but must label market openings as hypothesis-led, not research-backed; fixtures are never a fallback.
@@ -328,12 +332,19 @@ npm run eval:score -- evals/results/local.json
 
 1. Import the repository as a Next.js project.
 2. Keep the default build command (`npm run build`) and output settings.
-3. Set `HOSTED_SEARCH_ENABLED=false` for a provider-spend-proof deployment. Add `SEARCH_PROVIDER` and one server-side key only if optional hosted retrieval is desired; never use `NEXT_PUBLIC_` prefixes.
+3. Set `HOSTED_SEARCH_ENABLED=false` for a provider-spend-proof deployment. Add `SEARCH_PROVIDER` and one server-side key only if optional hosted retrieval is desired; never use `NEXT_PUBLIC_` prefixes for provider secrets.
 4. Add an Upstash Redis integration (required for authless public research on a multi-instance Vercel deployment) and expose its REST URL/token variables.
-5. Tune per-client, concurrency, request-size, run-time, persistence, and—only when hosted mode is enabled—daily/monthly provider budgets.
-6. Deploy, check `GET https://www.novelty-engine.com/api/mcp/health`, connect `https://www.novelty-engine.com/api/mcp` in Claude, and confirm Claude web search → `research_from_sources` returns a run ID, citations, `retrievalMode: supplied_sources`, and `providerCalls: 0`. Verify `/research-debug` returns 404.
+5. In **Vercel Project Settings → Environment Variables**, configure `NEXT_PUBLIC_PRIVACY_CONTACT_URL` with a working HTTPS privacy-request form or working `mailto:` URL for the **Production** environment. Configure the **Preview** environment too if policy pages will be validated there. Next.js bundles `NEXT_PUBLIC_` values at build time, so rebuild/redeploy after setting or changing it.
+6. Tune per-client, concurrency, request-size, run-time, persistence, and—only when hosted mode is enabled—daily/monthly provider budgets.
+7. Deploy, check `GET https://novelty-engine.com/api/mcp/health`, connect `https://novelty-engine.com/api/mcp` in Claude, and confirm Claude web search → `research_from_sources` returns a run ID, citations, `retrievalMode: supplied_sources`, and `providerCalls: 0`. Verify `/research-debug` returns 404.
 
 Vercel functions cannot rely on local files for cross-instance history. This build uses Upstash Redis REST when configured and falls back to warm-instance memory on Vercel. Public production use should configure Redis; memory-only limits are suitable for local/single-instance evaluation, not a distributed free service. Automatic hashed client-network scoping protects run discovery today; OAuth/account-level identity remains intentionally outside the tool definitions so it can later replace that boundary without rewriting them. No deploy or push is performed by repository scripts.
+
+## Privacy, retention, licensing, and support
+
+The public policy pages are `/privacy`, `/terms`, and `/about`. The implementation-level retention facts and third-party boundaries are documented on the Privacy page. For local development, set `NEXT_PUBLIC_PRIVACY_CONTACT_URL` in the project-root `.env.local`. For Vercel, set it under **Project Settings → Environment Variables** for **Production** (and **Preview** when testing there), then rebuild/redeploy because the value is bundled into the client-facing policy page at build time. It must be a working HTTPS contact form or working `mailto:` address before public launch; the repository deliberately has no unauthenticated delete-by-run-ID endpoint. General non-private reports can use the homepage feedback form or GitHub issues.
+
+The repository and packaged Skill remain MIT licensed. Generated research output does not currently have a separate stated license. See [`docs/licensing-audit.md`](docs/licensing-audit.md) and [`docs/domain-compatibility.md`](docs/domain-compatibility.md) for the exact audit and alias requirements.
 
 ## Current scope
 

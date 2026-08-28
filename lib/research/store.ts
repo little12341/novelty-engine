@@ -20,6 +20,7 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
   result.engineVersion ??= RESEARCH_ENGINE_VERSION;
   result.depth ??= "standard";
   result.mode ??= "research_market";
+  result.stableMarketKey ??= `market_${createHash("sha256").update(result.canonicalQuery ?? result.query ?? result.id).digest("hex").slice(0, 16)}`;
   result.retrievalMode ??= result.provider?.id?.startsWith("supplied_sources") ? "supplied_sources" : "hosted";
   result.retrieval ??= {
     mode: result.retrievalMode,
@@ -31,9 +32,15 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
   result.runLineage ??= { rootRunId: result.id, parentRunId: null, version: 1, reason: "fresh_run" };
   result.sources = (result.sources ?? []).map((source) => {
     const fallbackQuery = result.query ?? source.supports ?? "research market";
+    const inferredIdentity = inferPageIdentity(source.normalizedUrl, source.title, source.summary, source.sourceType);
     return {
     ...source,
-    pageIdentity: source.pageIdentity ?? inferPageIdentity(source.normalizedUrl, source.title, source.summary, source.sourceType),
+    pageIdentity: { ...inferredIdentity, ...(source.pageIdentity ?? {}) },
+    discussionSample: source.discussionSample ?? (["reddit", "forum", "review", "app_marketplace"].includes(source.sourceType) ? {
+      sampleUnit: "search_excerpt", fullPageAccess: "not_available", threadOrPageCount: 1,
+      coverageNote: "Analysis is limited to this publicly indexed excerpt and direct URL; full thread, page, post, or comment coverage was not available to the retrieval provider.",
+      authorStored: false,
+    } : undefined),
     relevanceAssessment: source.relevanceAssessment ?? assessMarketRelevance(fallbackQuery, source.title, source.summary),
     security: source.security ?? { treatedAsUntrustedData: true, promptInjectionDetected: false, ignoredDirectiveCategories: [] },
     sourceAssessment: {
@@ -54,6 +61,35 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
       canonicalOrganizationId: competitor.canonicalOrganizationId ?? (domain ? `org:${domain}` : `brand:${normalizeOrganizationName(competitor.name.value ?? competitor.id)}`),
       classification: competitor.classification ?? relationship,
       sourcePageIds: competitor.sourcePageIds ?? competitor.evidenceIds,
+      aliases: competitor.aliases ?? [competitor.name.value].filter((item): item is string => Boolean(item)),
+      productBrand: competitor.productBrand ?? competitor.name.value ?? null,
+      parentCompany: competitor.parentCompany ?? null,
+      entityFingerprint: competitor.entityFingerprint ?? (domain ? `domain:${domain}` : `brand:${normalizeOrganizationName(competitor.name.value ?? competitor.id)}`),
+      firstObservedDate: competitor.firstObservedDate ?? result.completedAt,
+      mostRecentObservedDate: competitor.mostRecentObservedDate ?? result.completedAt,
+      independentSourceCount: competitor.independentSourceCount ?? new Set(competitor.evidenceIds.map((id) => result.sources.find((source) => source.id === id)?.sourceAssessment.independenceGroup).filter(Boolean)).size,
+      supportingEvidenceCount: competitor.supportingEvidenceCount ?? competitor.evidenceIds.length,
+      counterEvidenceCount: competitor.counterEvidenceCount ?? 0,
+      sourceFamilyCoverage: competitor.sourceFamilyCoverage ?? [...new Set(competitor.evidenceIds.map((id) => result.sources.find((source) => source.id === id)?.sourceAssessment.sourceFamily).filter((item): item is ResearchResult["sources"][number]["sourceAssessment"]["sourceFamily"] => Boolean(item)))],
+      competitorStatus: competitor.competitorStatus ?? "supported",
+      materialChangeSincePreviousRun: competitor.materialChangeSincePreviousRun ?? null,
+    };
+  });
+  result.complaintClusters = (result.complaintClusters ?? []).map((cluster) => {
+    const evidence = cluster.representativeEvidenceIds.map((id) => result.sources.find((source) => source.id === id)).filter((item): item is ResearchResult["sources"][number] => Boolean(item));
+    return {
+      ...cluster,
+      firstObservedDate: cluster.firstObservedDate ?? evidence.map((item) => item.publicationDate ?? item.retrievedAt).sort()[0] ?? result.completedAt,
+      mostRecentObservedDate: cluster.mostRecentObservedDate ?? evidence.map((item) => item.publicationDate ?? item.retrievedAt).sort().at(-1) ?? result.completedAt,
+      independentSourceCount: cluster.independentSourceCount ?? new Set(evidence.map((item) => item.sourceAssessment.independenceGroup)).size,
+      supportingEvidenceCount: cluster.supportingEvidenceCount ?? cluster.representativeEvidenceIds.length,
+      counterEvidenceCount: cluster.counterEvidenceCount ?? 0,
+      sourceFamilyCoverage: cluster.sourceFamilyCoverage ?? [...new Set(evidence.map((item) => item.sourceAssessment.sourceFamily))],
+      complaintCategory: cluster.complaintCategory ?? cluster.gapType,
+      affectedCustomerSegment: cluster.affectedCustomerSegment ?? cluster.affectedSegment,
+      workaround: cluster.workaround ?? cluster.currentWorkaround,
+      confidence: cluster.confidence ?? Math.min(1, cluster.evidenceCount / 3),
+      materialChangeSincePreviousRun: cluster.materialChangeSincePreviousRun ?? null,
     };
   });
   result.coverage = {
@@ -124,7 +160,7 @@ function normalizeStoredResult(raw: ResearchResult): ResearchResult {
     candidates: result.candidates, falsificationResults: result.falsificationResults,
     weakSignals: result.weakSignals, companyProfile: result.companyProfile,
   });
-  result.citationCoverage ??= citationCoverageAudit(result.claimLineage);
+  result.citationCoverage = citationCoverageAudit(result.claimLineage);
   result.evidenceSnapshot.claimLineage ??= structuredClone(result.claimLineage);
   result.evidenceSnapshot.citationCoverage ??= structuredClone(result.citationCoverage);
   return result;

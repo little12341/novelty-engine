@@ -134,17 +134,32 @@ test("source-check intent target is the Novelty source_check tool for a complete
     claim: "Small field-service customers report this pain first hand.", claimType: "customer_pain",
     evidenceIds: [vendor.id], evidence: result.sources, marketContext: result.query, idSeed: "mcp-role-mismatch",
   });
-  const claimLineage = [...result.claimLineage, mismatched];
-  const audited = { ...result, claimLineage, citationCoverage: citationCoverageAudit(claimLineage) };
+  const missing = auditClaim({
+    claim: "A missing snapshot record proves a material fact.", claimType: "market_gap",
+    evidenceIds: ["ev_missing_snapshot"], evidence: result.sources, marketContext: result.query, idSeed: "mcp-missing-evidence",
+  });
+  const partial = { ...mismatched, id: "claim_partial_support", evidenceDecisions: mismatched.evidenceDecisions.map((decision) => ({ ...decision, partialSupport: true })) };
+  const contradicted = { ...mismatched, id: "claim_contradicted", status: "CONTRADICTED" as const };
+  const wrongAttribution = { ...mismatched, id: "claim_wrong_attribution", claimType: "vendor_feature" as const,
+    evidenceDecisions: mismatched.evidenceDecisions.map((decision) => ({ ...decision, reason: "The source does not identify the company or product associated with the claim." })) };
+  const claimLineage = [...result.claimLineage, mismatched, missing, partial, contradicted, wrongAttribution];
+  const sources = result.sources.map((source, index) => index === 0 ? { ...source, sourceUrl: "not-a-public-url" } : source);
+  const audited = { ...result, sources, claimLineage, citationCoverage: citationCoverageAudit(claimLineage) };
   await withClient({ getRun: async (id) => id === result.id ? audited : null }, async (client) => {
     const called = await client.callTool({ name: "source_check", arguments: { run_id: result.id } });
     assert.equal(called.isError, undefined);
-    const payload = called.structuredContent as { runId: string; coverage: object; sources: unknown[]; unsupportedClaims: Array<{ id: string }>; supportRoleMismatches: Array<{ id: string }>; citationCoverage: { totalMajorClaims: number } };
+    const payload = called.structuredContent as { runId: string; coverage: object; sources: unknown[]; unsupportedClaims: Array<{ id: string }>; supportRoleMismatches: Array<{ id: string }>; citationCoverage: { totalMajorClaims: number }; issues: Record<string, Array<{ id?: string; claimId?: string }>> };
     assert.equal(payload.runId, result.id);
     assert.ok(payload.coverage);
     assert.ok(payload.sources.length > 0);
     assert.ok(payload.unsupportedClaims.some((item) => item.id === mismatched.id));
     assert.ok(payload.supportRoleMismatches.some((item) => item.id === mismatched.id));
+    assert.ok(payload.issues.missingEvidenceIds.some((item) => item.claimId === missing.id));
+    assert.ok(payload.issues.missingUrls.length > 0);
+    assert.ok(payload.issues.partialSupport.some((item) => item.id === partial.id));
+    assert.ok(payload.issues.wrongCompetitorAttribution.some((item) => item.id === wrongAttribution.id));
+    assert.ok(payload.issues.contradictions.some((item) => item.id === contradicted.id));
+    assert.ok(Array.isArray(payload.issues.syndicatedDuplicates));
     assert.equal(payload.citationCoverage.totalMajorClaims, audited.citationCoverage.totalMajorClaims);
   });
 });
@@ -460,7 +475,7 @@ test("public cost-bearing MCP calls fail closed on Vercel without distributed pr
 
 test("health and MCP summaries never expose configured secret values", async () => {
   const secret = "super-secret-provider-value";
-  const health = mcpHealthSnapshot({ NODE_ENV: "test", TAVILY_API_KEY: secret, NOVELTY_MCP_ACCESS_TOKEN: "another-secret" });
+  const health = mcpHealthSnapshot({ NODE_ENV: "test", HOSTED_SEARCH_ENABLED: "true", TAVILY_API_KEY: secret, NOVELTY_MCP_ACCESS_TOKEN: "another-secret" });
   assert.equal(health.provider.configured, true);
   assert.equal(health.authentication.mode, "bearer-token");
   assert.doesNotMatch(JSON.stringify(health), new RegExp(secret));

@@ -17,8 +17,11 @@ import type { ProviderSearchResult, SearchProvider } from "./types.ts";
 const localServiceRows: ProviderSearchResult[] = [
   { url: "https://routeclean.example/pricing", title: "RouteClean pricing for local cleaning teams", snippet: "Scheduling and dispatch software for local cleaners costs $89 per month.", publishedAt: "2026-04-01" },
   { url: "https://maidops.example/docs/integrations", title: "MaidOps integrations", snippet: "Documentation lists scheduling, invoicing, and dispatch but no property-manager API.", publishedAt: "2026-04-05" },
+  { url: "https://cleanroute.example/product", title: "CleanRoute scheduling for cleaning teams", snippet: "CleanRoute provides scheduling and dispatch workflow software for small commercial cleaning companies.", publishedAt: "2026-04-08" },
+  { url: "https://janitorialflow.example/product", title: "JanitorialFlow operations software", snippet: "JanitorialFlow offers job scheduling and proof-of-service workflow software for local cleaning companies.", publishedAt: "2026-04-10" },
+  { url: "https://maidboard.example/product", title: "MaidBoard cleaning operations", snippet: "MaidBoard provides booking, scheduling, and dispatch software for small cleaning teams.", publishedAt: "2026-04-12" },
   { url: "https://reddit.com/r/smallbusiness/comments/cleaning_reentry", title: "Cleaning team re-enters every turnover", snippet: "We manually copy and paste property turnover details from email into scheduling because the software doesn't integrate.", publishedAt: "2026-05-01" },
-  { url: "https://community.cleaners.example/workaround", title: "Spreadsheet workaround for recurring cleaning", snippet: "Three local cleaners still use a spreadsheet and text messages because dispatch tools require too much manual entry.", publishedAt: "2026-05-08" },
+  { url: "https://community.cleaners.example/workaround", title: "Spreadsheet workaround for recurring cleaning", snippet: "Our three-person local cleaning team still uses a spreadsheet and text messages because dispatch tools require too much manual entry.", publishedAt: "2026-05-08" },
   { url: "https://g2.com/products/routeclean/reviews", title: "RouteClean reviews", snippet: "Small teams say it is too expensive and they went back to paper when customer sync failed.", publishedAt: "2026-05-20" },
   { url: "https://jobs.example.com/cleaning-dispatch-coordinator", title: "Cleaning dispatch coordinator", snippet: "Hiring a coordinator to re-enter bookings, assign cleaners, and reconcile invoices for a local service company.", publishedAt: "2026-06-01" },
   { url: "https://industry.example/cleanbot-discontinued", title: "CleanBot discontinued", snippet: "CleanBot was discontinued because onboarding and integration support costs exceeded what local cleaning firms would pay.", publishedAt: "2025-11-01" },
@@ -31,7 +34,7 @@ test("local/service market and deterministic roles preserve all quality gates", 
   assert.notEqual(run.stopDecision.status, "insufficient_evidence");
   assert.ok(run.finalOpportunities.length > 0);
   assert.deepEqual(run.roleOutputs.map((item) => item.role), [
-    "source_verification", "market_mapping", "competitor_analysis", "complaint_workaround_mining",
+    "source_verification", "market_mapping", "competitor_analysis", "customer_pain_analysis",
     "structural_gap_detection", "adversarial_falsification", "company_analysis", "opportunity_synthesis",
   ]);
   assert.ok(run.checkpoints.some((item) => item.name === "citation_validation" && item.status === "passed"));
@@ -104,7 +107,11 @@ test("change detection suppresses trivial copies and exports preserve canonical 
   const before = await runResearch("Research local cleaning operations and dispatch gaps", { provider, persist: false, bypassCache: true });
   const after = structuredClone(before);
   after.id = "research_20260825130000_deadbeef";
-  after.competitors[0].name.value = "New RouteClean Competitor";
+  after.competitors.push({
+    ...structuredClone(before.competitors[0]), id: "comp_new_routeclean", canonicalOrganizationId: "org:newrouteclean.example",
+    canonicalDomain: "newrouteclean.example", entityFingerprint: "org:newrouteclean.example", website: "https://newrouteclean.example/",
+    name: { value: "New RouteClean Competitor", evidenceIds: before.competitors[0].name.evidenceIds, confidence: .72 },
+  });
   after.coverage.coverageStatus = "partial";
   after.stopDecision.status = "partial_research";
   const change = compareResearchRuns(before, after);

@@ -56,7 +56,7 @@ export function sanitizeUntrustedResearchText(value: string): {
 const ROLE_PERMISSIONS: Record<ResearchRole, ResearchRoleOutput["permissions"]> = {
   market_mapping: ["read_retrieved_evidence", "derive_structured_records"],
   competitor_analysis: ["read_retrieved_evidence", "derive_structured_records"],
-  complaint_workaround_mining: ["read_retrieved_evidence", "derive_structured_records"],
+  customer_pain_analysis: ["read_retrieved_evidence", "derive_structured_records"],
   structural_gap_detection: ["read_retrieved_evidence", "derive_structured_records"],
   adversarial_falsification: ["read_retrieved_evidence", "derive_structured_records", "request_bounded_search"],
   source_verification: ["read_retrieved_evidence", "derive_structured_records"],
@@ -87,7 +87,7 @@ export function buildRoleOutputs(input: {
     row("source_verification", evidenceIds, ["Retrieved content was treated as untrusted data; normalization, injection screening, and claim deduplication ran once for all roles."]),
     row("market_mapping", input.competitors.map((item) => item.id)),
     row("competitor_analysis", input.competitors.map((item) => item.id)),
-    row("complaint_workaround_mining", input.complaints.map((item) => item.id)),
+    row("customer_pain_analysis", input.complaints.map((item) => item.id)),
     row("structural_gap_detection", input.gaps.map((item) => item.id)),
     row("adversarial_falsification", input.falsificationResults.map((item) => item.candidateId), ["Only this role may request bounded counterevidence searches; all roles reuse the shared evidence set."]),
     row("company_analysis", input.companyRecordIds ?? [], input.companyRecordIds?.length ? [] : ["Not requested for this mode."]),

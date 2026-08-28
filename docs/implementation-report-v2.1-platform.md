@@ -13,7 +13,7 @@ The following roles are deterministic stage boundaries recorded in `ResearchResu
 1. Source Verification — screens untrusted text, normalizes URLs/claims, assigns trust metadata, and deduplicates repeated/syndicated evidence once.
 2. Market Mapping — consumes the shared evidence set and emits supported market/graph records.
 3. Competitor Analysis — emits evidence-carrying direct competitor and substitute records; unsupported fields stay null.
-4. Complaint/Workaround Mining — emits complaint clusters and manual/workaround records.
+4. Customer Pain Analysis — emits bounded discussion/complaint clusters and manual/workaround records.
 5. Structural Gap Detection — emits supported gaps and penalties from those shared records.
 6. Adversarial Falsification — is the only role permitted to request the bounded candidate-focused search allowance, then emits structured factor arguments and outcomes.
 7. Company Analysis — runs only in company mode and separates company-controlled claims, third-party evidence, and unknowns.

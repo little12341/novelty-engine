@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { deriveBusinessSearchAngles, deriveSearchAngles, deriveFalsificationAngles, deriveEvidenceGapAngles, buildProviderQuery } from "./angles.ts";
 import { clusterComplaints, detectUnderservedSegments, extractCompetitors } from "./analyze.ts";
 import { detectGaps } from "./gaps.ts";
@@ -87,7 +87,7 @@ function ideationContext(result: Omit<ResearchResult, "ideationContext">): Ideat
     ...item.falsification.hypotheses.flatMap((hypothesis) => [...hypothesis.supportingEvidenceIds, ...hypothesis.counterEvidenceIds]),
   ]).forEach((id) => selectedEvidenceIds.add(id));
   return {
-    instruction: "Use finalOutput and ranked survivors as the starting point. Preserve VERIFIED, INFERRED, and UNKNOWN claim labels. Cite evidence IDs using sourceUrl. A missing competitor is a search result, not a validated opportunity; competitor existence validates a possible job but is not an automatic veto. Use residualUnmetDemand to distinguish market crowding from adequate same-user/same-job resolution. Scores are heuristics and must stay paired with written reasoning. Never revive rejected candidates without new evidence and a bounded mutation/falsification pass.",
+    instruction: "Use finalOutput and ranked survivors as the starting point. Preserve VERIFIED, INFERRED, UNKNOWN, and CONTRADICTED claim labels. Cite evidence IDs using sourceUrl. A missing competitor is a search result, not a validated opportunity; competitor existence validates a possible job but is not an automatic veto. Use residualUnmetDemand to distinguish market crowding from adequate same-user/same-job resolution. Scores are heuristics and must stay paired with written reasoning. Never revive rejected candidates without new evidence and a bounded mutation/falsification pass.",
     topGaps,
     competitors,
     evidence: result.sources.filter((item) => selectedEvidenceIds.has(item.id)),
@@ -421,6 +421,7 @@ export async function runResearch(rawQuery: string, options: ResearchRequestOpti
     mode,
     depth,
     canonicalQuery,
+    stableMarketKey: `market_${createHash("sha256").update(canonicalQuery).digest("hex").slice(0, 16)}`,
     status: failures.length || stopDecision.status !== "proceed" ? "partial" as const : "complete" as const,
     startedAt,
     completedAt,

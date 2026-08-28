@@ -55,7 +55,7 @@ export function evaluateEvidenceGate(candidate: IdeaCandidate, input: {
   externallyValidated?: boolean;
 }): EvidenceGateResult {
   const thresholds = input.thresholds ?? evidenceGateThresholds();
-  const marketContext = `${candidate.definition?.industry ?? ""} ${candidate.definition?.companyProfile ?? candidate.targetCustomer ?? ""} ${candidate.jobToBeDone}`;
+  const marketContext = `${candidate.definition?.industry ?? ""} ${candidate.definition?.companyProfile ?? candidate.targetCustomer ?? ""} ${candidate.definition?.specificProblem ?? input.gap?.problemStatement ?? ""}`;
   const gapIds = filterEvidenceIdsForClaim("customer_pain", input.gap?.problemStatement ?? candidate.jobToBeDone,
     input.gap?.supportingEvidenceIds ?? [], input.evidence, marketContext);
   const relevantIds = [...new Set([...candidate.evidenceIds, ...gapIds, ...(input.gap?.counterEvidenceIds ?? [])])];

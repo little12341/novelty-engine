@@ -27,7 +27,7 @@ export class SuppliedSourcesRequiredError extends Error {
 }
 
 export function hostedSearchEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return (env.HOSTED_SEARCH_ENABLED ?? "true").trim().toLowerCase() !== "false";
+  return (env.HOSTED_SEARCH_ENABLED ?? "false").trim().toLowerCase() === "true";
 }
 
 export function assertHostedSearchEnabled(env: NodeJS.ProcessEnv = process.env): void {

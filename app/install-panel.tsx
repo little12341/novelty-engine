@@ -2,17 +2,17 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { productionMcpEndpoint, productionMcpHealthEndpoint } from "@/lib/site";
+import { githubUrl, productionMcpEndpoint, productionMcpHealthEndpoint, productionSkillDownloadUrl } from "@/lib/site";
 
 const installCommands = "mkdir -p ~/.claude/skills\ncp -R novelty-engine ~/.claude/skills/";
 
 function useCopyFeedback() {
-  const [copyState, setCopyState] = useState<{ target: "commands" | "mcp" | null; status: "idle" | "copied" | "error" }>({ target: null, status: "idle" });
+  const [copyState, setCopyState] = useState<{ target: "skill" | "commands" | "mcp" | null; status: "idle" | "copied" | "error" }>({ target: null, status: "idle" });
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (resetTimer.current) clearTimeout(resetTimer.current); }, []);
 
-  async function copyText(target: "commands" | "mcp", value: string) {
+  async function copyText(target: "skill" | "commands" | "mcp", value: string) {
     try {
       let copied = false;
       if (navigator.clipboard?.writeText) {
@@ -48,7 +48,7 @@ function useCopyFeedback() {
     resetTimer.current = setTimeout(() => setCopyState({ target: null, status: "idle" }), 2200);
   }
 
-  const label = (target: "commands" | "mcp") => copyState.target === target
+  const label = (target: "skill" | "commands" | "mcp") => copyState.target === target
     ? copyState.status === "copied" ? "Copied" : copyState.status === "error" ? "Copy failed" : "Copy"
     : "Copy";
 
@@ -149,25 +149,25 @@ export function HeroInstallPanel() {
         </span>
         <div className="hero-install-content">
           <h2 id="hero-skill-title">Install as a Claude Skill</h2>
-          <p><a href="/novelty-engine.zip" download>Download the Skill package</a>. Upload the ZIP in Claude under <strong>Customize → Skills</strong>, or extract it for Claude Code.</p>
-          <pre><code>{installCommands}</code></pre>
+          <p><a href="/novelty-engine.zip" download>Download the Skill package</a>, then upload the ZIP under <strong>Customize → Skills</strong>.</p>
+          <code className="hero-mcp-url">{productionSkillDownloadUrl}</code>
         </div>
-        <button className="hero-copy-button liquid-glass" type="button" onClick={() => copyText("commands", installCommands)} aria-label="Copy both Claude Skill setup commands">
+        <button className="hero-copy-button liquid-glass" type="button" onClick={() => copyText("skill", productionSkillDownloadUrl)} aria-label="Copy Skill download URL">
           <svg className="copy-glyph" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <rect x="6.2" y="6.2" width="10.2" height="10.2" rx="1.4" />
             <path d="M13.8 6.2V4.8c0-.8-.6-1.4-1.4-1.4H4.8c-.8 0-1.4.6-1.4 1.4v7.6c0 .8.6 1.4 1.4 1.4h1.4" />
           </svg>
-          {label("commands")}
+          {label("skill")}
         </button>
         <span className="sr-only" role="status" aria-live="polite">
-          {copyState.target === "commands" && copyState.status === "copied" ? "Both install commands copied to clipboard." : copyState.target === "commands" && copyState.status === "error" ? "Could not copy the install commands." : ""}
+          {copyState.target === "skill" && copyState.status === "copied" ? "Skill download URL copied to clipboard." : copyState.target === "skill" && copyState.status === "error" ? "Could not copy the Skill download URL." : ""}
         </span>
       </section>
 
       <section className="hero-install-row hero-mcp-row" aria-labelledby="hero-mcp-title">
         <div className="hero-install-content">
           <h2 id="hero-mcp-title">Connect through MCP</h2>
-          <p>Connects your AI client directly to the Novelty Engine MCP server.</p>
+          <p>Add this custom connector so Claude can send bounded public evidence to Novelty Engine.</p>
           <code className="hero-mcp-url">{productionMcpEndpoint}</code>
         </div>
         <button className="hero-copy-button liquid-glass" type="button" onClick={() => copyText("mcp", productionMcpEndpoint)} aria-label="Copy MCP endpoint">
@@ -204,7 +204,7 @@ export function InstallPanel() {
         <div>
           <p className="option-kicker">Claude Skill</p>
           <h3>Upload or install the Skill.</h3>
-          <p><a href="/novelty-engine.zip" download>Download the current Skill package</a>. In Claude, use <strong>Customize → Skills → + Create skill → Upload a skill</strong>. For Claude Code, extract it and run:</p>
+          <p><a href="/novelty-engine.zip" download>Download the current Skill package</a>. For Claude Code, extract it into your local skills directory. These commands are optional and only for the Claude Code route:</p>
         </div>
         <div className="command-block">
           <div className="command-header">
@@ -230,7 +230,7 @@ export function InstallPanel() {
         <div>
           <p className="option-kicker">Claude browser</p>
           <h3>Connect the evidence engine once.</h3>
-          <p>After enabling the Skill, open <strong>Customize → Connectors → + → Add custom connector</strong> and paste the MCP endpoint. Claude can gather sources with its own web access; Novelty analyzes them without requiring you to provide Tavily or Brave keys.</p>
+          <p>First enable <strong>Code execution and file creation</strong> under <strong>Settings → Capabilities</strong>, then upload and enable the Skill under <strong>Customize → Skills</strong>. Open <strong>Customize → Connectors → + → Add custom connector</strong> and paste the MCP endpoint. Claude can gather sources with its own web access; Novelty analyzes them without requiring you to provide Tavily or Brave keys.</p>
         </div>
         <div className="command-block mcp-command">
           <div className="command-header">
@@ -247,6 +247,10 @@ export function InstallPanel() {
           {copyState.target === "mcp" && copyState.status === "copied" ? "MCP endpoint copied to clipboard." : copyState.target === "mcp" && copyState.status === "error" ? "Could not copy the MCP endpoint." : ""}
         </span>
       </article>
+      <details className="self-hosting-details">
+        <summary>Optional self-hosting setup</summary>
+        <p>Self-hosting and Brave or Tavily provider adapters are optional. Provider keys are never required for the normal Claude supplied-source flow. See the <a href={`${githubUrl}#optional-self-hosting`} target="_blank" rel="noreferrer">technical README</a> for runtime, environment, and deployment instructions.</p>
+      </details>
     </div>
   );
 }

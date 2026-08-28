@@ -29,15 +29,15 @@ test("source URL normalization removes trackers and fragments", () => {
 });
 
 test("missing provider credentials fail explicitly instead of selecting fixtures", () => {
-  assert.throws(() => getConfiguredProvider({ NODE_ENV: "test" }), (error) => error instanceof ResearchConfigurationError && /not configured/i.test(error.message));
+  assert.throws(() => getConfiguredProvider({ NODE_ENV: "test", HOSTED_SEARCH_ENABLED: "true" }), (error) => error instanceof ResearchConfigurationError && /not configured/i.test(error.message));
 });
 
 test("obvious placeholder provider keys are unconfigured and auto mode can use the other valid provider", () => {
   assert.throws(
-    () => getConfiguredProvider({ NODE_ENV: "test", SEARCH_PROVIDER: "brave", BRAVE_SEARCH_API_KEY: "your_brave_key" }),
+    () => getConfiguredProvider({ NODE_ENV: "test", HOSTED_SEARCH_ENABLED: "true", SEARCH_PROVIDER: "brave", BRAVE_SEARCH_API_KEY: "your_brave_key" }),
     (error) => error instanceof ResearchConfigurationError && /not configured/i.test(error.message),
   );
-  assert.equal(getConfiguredProvider({ NODE_ENV: "test", SEARCH_PROVIDER: "auto", BRAVE_SEARCH_API_KEY: "your_brave_key", TAVILY_API_KEY: "tvly-valid-test-value" }).id, "tavily");
+  assert.equal(getConfiguredProvider({ NODE_ENV: "test", HOSTED_SEARCH_ENABLED: "true", SEARCH_PROVIDER: "auto", BRAVE_SEARCH_API_KEY: "your_brave_key", TAVILY_API_KEY: "tvly-valid-test-value" }).id, "tavily");
 });
 
 test("deduplication prevents repeated URLs from inflating evidence", () => {
@@ -78,7 +78,7 @@ test("competitor extraction only fills fields supported by evidence", () => {
     "an unrelated generic page title must not be promoted into a competitor entity");
 });
 
-test("complaint mining clusters duplicates and flags isolated complaints", () => {
+test("customer pain analysis clusters duplicates and flags isolated complaints", () => {
   const angle = deriveSearchAngles("contractor complaints", 3)[2];
   const sources = normalizeResults([{ angle, results: fixture.slice(2, 7) }], "2026-08-24T00:00:00.000Z", 20);
   const clusters = clusterComplaints(sources);
@@ -87,6 +87,16 @@ test("complaint mining clusters duplicates and flags isolated complaints", () =>
   assert.ok(integration.evidenceCount >= 2);
   assert.equal(integration.isIsolated, false);
   assert.ok(clusters.some((cluster) => cluster.currentWorkaround === "spreadsheet" || cluster.currentWorkaround === "copy and paste"));
+});
+
+test("market-research prompts are not counted as firsthand complaint evidence", () => {
+  const angle = deriveSearchAngles("contractor complaints", 3)[2];
+  const sources = normalizeResults([{ angle, results: [{
+    url: "https://reddit.com/r/Contractor/comments/survey/questions",
+    title: "How is everyone tracking contractor paperwork?",
+    snippet: "I am trying to understand this market and would love to hear whether teams use spreadsheets or manual reminders.",
+  }] }], "2026-08-24T00:00:00.000Z", 20);
+  assert.deepEqual(clusterComplaints(sources), []);
 });
 
 test("gap scoring transparently penalizes weak, one-off, absence-only cases", () => {

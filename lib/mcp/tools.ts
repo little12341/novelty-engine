@@ -304,9 +304,20 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
     inputSchema: inspectRunInput, annotations: { ...annotations, openWorldHint: false },
   }, ({ run_id }) => observed("source_check", async () => {
     const run = await requiredRun(deps.getRun, run_id);
-    const unsupportedClaims = run.claimLineage.filter((item) => item.major && item.supportingEvidenceIds.length === 0);
+    const sourceIds = new Set(run.sources.map((item) => item.id));
+    const unsupportedClaims = run.claimLineage.filter((item) => item.major && item.status === "UNKNOWN");
+    const contradictedClaims = run.claimLineage.filter((item) => item.status === "CONTRADICTED");
     const roleMismatches = run.claimLineage.filter((item) => item.evidenceDecisions.some((decision) => !decision.roleCompatible));
-    const relevanceRejections = run.claimLineage.filter((item) => item.evidenceDecisions.some((decision) => decision.roleCompatible && !decision.relevant));
+    const relevanceRejections = run.claimLineage.filter((item) => item.evidenceDecisions.some((decision) => decision.roleCompatible && !decision.relevant && !decision.partialSupport));
+    const partialSupport = run.claimLineage.filter((item) => item.evidenceDecisions.some((decision) => decision.partialSupport));
+    const missingEvidenceIds = run.claimLineage.flatMap((claim) => claim.requestedEvidenceIds
+      .filter((id) => !sourceIds.has(id)).map((evidenceId) => ({ claimId: claim.id, claim: claim.claim, evidenceId })));
+    const missingUrls = run.sources.filter((item) => {
+      try { return !new URL(item.sourceUrl).hostname; } catch { return true; }
+    }).map((item) => ({ evidenceId: item.id, value: item.sourceUrl }));
+    const competitorClaimTypes = new Set(["company_existence", "competitor_relationship", "vendor_feature", "vendor_positioning", "vendor_integration", "vendor_pricing", "competitor_weakness"]);
+    const wrongCompetitorAttribution = run.claimLineage.filter((claim) => competitorClaimTypes.has(claim.claimType)
+      && claim.evidenceDecisions.some((decision) => !decision.accepted && /company|product|entity|competitive relationship/i.test(decision.reason)));
     const domainGroups = run.sources.reduce((groups, item) => {
       const key = item.sourceAssessment.independenceGroup;
       groups.set(key, [...(groups.get(key) ?? []), item]);
@@ -320,11 +331,25 @@ export function registerNoveltyTools(server: McpServer, dependencies: Partial<To
       coverage: run.coverage, checkpoint: run.checkpoints.find((item) => item.name === "citation_validation"),
       citationCoverage: run.citationCoverage,
       snapshotWarnings: { duplicates: run.evidenceSnapshot.duplicateWarnings, sameDomainDuplicates, missingFamilies: run.evidenceSnapshot.missingSourceFamilyWarnings },
+      issues: {
+        missingEvidenceIds,
+        missingUrls,
+        partialSupport,
+        unrelatedEvidence: relevanceRejections,
+        wrongCompetitorAttribution,
+        syndicatedDuplicates: [
+          ...run.sources.filter((item) => item.duplicateSourceUrls.length || item.sourceAssessment.repetitionRisk === "likely")
+            .map((item) => ({ evidenceId: item.id, canonicalUrl: item.sourceUrl, duplicateUrls: item.duplicateSourceUrls, independenceGroup: item.sourceAssessment.independenceGroup })),
+          ...sameDomainDuplicates,
+        ],
+        unsupportedClaims,
+        contradictions: [...contradictedClaims, ...run.assumptionLedger.filter((item) => item.factState === "CONTRADICTED")],
+      },
       unsupportedClaims,
       supportRoleMismatches: roleMismatches,
       relevanceRejections,
       claimLineage: run.claimLineage,
-      contradictions: run.assumptionLedger.filter((item) => item.factState === "CONTRADICTED"),
+      contradictions: [...contradictedClaims, ...run.assumptionLedger.filter((item) => item.factState === "CONTRADICTED")],
       sources: run.sources.map((item) => ({ id: item.id, url: item.sourceUrl, pageIdentity: item.pageIdentity, relevanceAssessment: item.relevanceAssessment, assessment: item.sourceAssessment, security: item.security, suppliedMetadata: item.suppliedMetadata })),
     };
   }));

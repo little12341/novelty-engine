@@ -8,7 +8,7 @@ import { compareIdeas } from "./comparison.ts";
 import { normalizeResults } from "./normalize.ts";
 import { runResearch, runResearchFromSources } from "./pipeline.ts";
 import {
-  BraveSearchProvider, getConfiguredProvider, HostedSearchDisabledError, SuppliedSourcesRequiredError, TavilySearchProvider,
+  BraveSearchProvider, getConfiguredProvider, HostedSearchDisabledError, hostedSearchEnabled, SuppliedSourcesRequiredError, TavilySearchProvider,
 } from "./providers.ts";
 import { suppliedSourcesToProvider, validateSuppliedSources } from "./supplied-sources.ts";
 import type { ProviderSearchResult, SearchAngle, SearchProvider, SuppliedResearchSource } from "./types.ts";
@@ -16,6 +16,13 @@ import type { ProviderSearchResult, SearchAngle, SearchProvider, SuppliedResearc
 const fixture = JSON.parse(await readFile(new URL("./fixtures/v2-market.json", import.meta.url), "utf8")) as ProviderSearchResult[];
 const query = "Find underserved workflow opportunities for small field service teams";
 const at = "2026-08-28T12:00:00.000Z";
+
+test("hosted provider retrieval is disabled unless it is explicitly enabled", () => {
+  assert.equal(hostedSearchEnabled({ NODE_ENV: "test" }), false);
+  assert.equal(hostedSearchEnabled({ NODE_ENV: "test", HOSTED_SEARCH_ENABLED: "false", BRAVE_SEARCH_API_KEY: "valid-key" }), false);
+  assert.equal(hostedSearchEnabled({ NODE_ENV: "test", HOSTED_SEARCH_ENABLED: "true" }), true);
+  assert.throws(() => getConfiguredProvider({ NODE_ENV: "test", BRAVE_SEARCH_API_KEY: "valid-key" }), HostedSearchDisabledError);
+});
 
 test("supplied-source schema rejects incomplete, unsafe, credential-bearing, oversized, and unknown metadata", () => {
   const base = { url: "https://example.com/report", title: "Market report", snippet: "Specific field service workflow evidence." };
@@ -58,6 +65,21 @@ test("supplied evidence is sanitized, URL-deduped, same-domain grouped, and decl
   assert.equal(wtp.status, "UNKNOWN");
   assert.equal(pain.evidenceDecisions[0].roleCompatible, false);
   assert.equal(wtp.evidenceDecisions[0].roleCompatible, false);
+});
+
+test("bounded supplied discussion content is distinguished from a search excerpt without claiming complete thread coverage", async () => {
+  const provider = suppliedSourcesToProvider([{
+    url: "https://www.reddit.com/r/fieldservice/comments/example/workflow/",
+    title: "Field service workflow discussion",
+    content: "Our two-person field service team uses three tools, and we re-enter every completed job before invoicing.",
+    retrievedAt: at,
+  }], { now: new Date(at) }).provider;
+  const angle: SearchAngle = { id: "angle_content", kind: "customer_complaints", query, purpose: "Inspect supplied discussion content", targetedDomains: [] };
+  const [evidence] = normalizeResults([{ angle, results: await provider.search(query, { limit: 10 }) }], at, 20);
+  assert.equal(evidence.discussionSample?.sampleUnit, "page");
+  assert.equal(evidence.discussionSample?.fullPageAccess, "available");
+  assert.match(evidence.discussionSample?.coverageNote ?? "", /bounded content field/i);
+  assert.match(evidence.discussionSample?.coverageNote ?? "", /may not include every/i);
 });
 
 test("an eligible-looking source with an insufficient excerpt stays UNKNOWN", async () => {

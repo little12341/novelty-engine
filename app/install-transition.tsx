@@ -79,14 +79,14 @@ function InstallViewport() {
           <header className="transition-install-heading">
             <Image className="transition-install-crown" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized aria-hidden="true" />
             <p className="eyebrow">Install</p>
-            <h2>Install once. Connect the<br />research path that fits.</h2>
-            <p>Upload or install the Claude Skill, then connect the deployed <code>/api/mcp</code><br className="desktop-break" /> endpoint. Claude gathers sources; Novelty runs the evidence pipeline.</p>
+            <h2>Install once. Ask Claude<br />a normal research question.</h2>
+            <p>Claude browser users upload the Skill and add the connector. Claude Code users install the same Skill locally.<br className="desktop-break" /> Self-hosting details stay in the technical documentation.</p>
           </header>
           <InstallPanel />
           <ol className="transition-install-flow" aria-label="Research connection steps">
-            <li><span aria-hidden="true"><InstallStepIcon kind="install" /></span><div><strong>Install the Skill</strong><p>Upload the ZIP in Claude, or copy the extracted folder into Claude Code’s skills directory.</p></div></li>
-            <li><span aria-hidden="true"><InstallStepIcon kind="connect" /></span><div><strong>Connect research</strong><p>Add the MCP URL in Claude browser, or set the direct helper URL in Claude Code.</p></div></li>
-            <li><span aria-hidden="true"><InstallStepIcon kind="ask" /></span><div><strong>Ask normally</strong><p>Invoke <code>/novelty-engine</code> or request market-gap research.</p></div></li>
+            <li><span aria-hidden="true"><InstallStepIcon kind="install" /></span><div><strong>Upload the Skill</strong><p>Upload the ZIP in Claude, or copy the extracted folder into Claude Code’s skills directory.</p></div></li>
+            <li><span aria-hidden="true"><InstallStepIcon kind="connect" /></span><div><strong>Add the connector</strong><p>Paste the Novelty Engine MCP address in Claude’s custom connector settings.</p></div></li>
+            <li><span aria-hidden="true"><InstallStepIcon kind="ask" /></span><div><strong>Ask normally</strong><p>Ask a market, company, customer-problem, or business-idea question.</p></div></li>
           </ol>
         </div>
       </div>
@@ -115,14 +115,14 @@ function GreekScene() {
       <div className="greek-particles greek-particles-near" aria-hidden="true" />
       <PrincipleStrip />
       <div className="greek-reveal-copy">
-        <p className="eyebrow">About</p>
-        <h2 id="greek-reveal-title">Novelty Engine<br />Research System</h2>
-        <p className="greek-reveal-lede">A system for discovering real product-market gaps<br />through structured, falsifiable research.</p>
+        <p className="eyebrow">Research with visible limits</p>
+        <h2 id="greek-reveal-title">Evidence in.<br />Testable answers out.</h2>
+        <p className="greek-reveal-lede">Claude finds current public sources.<br />Novelty Engine checks what those sources can actually support.</p>
       </div>
       <div className="greek-reveal-cards">
-        <RevealCard kind="structure" title="Structured Research">Define a gap, collect evidence, and build a falsifiable case.</RevealCard>
-        <RevealCard kind="evidence" title="Falsifiable Evidence">Every claim is tested against verifiable, real-world data.</RevealCard>
-        <RevealCard kind="outcome" title="Clear Outcomes">From insight to opportunity with execution-ready clarity.</RevealCard>
+        <RevealCard kind="structure" title="Organized evidence">Keep companies, customer reports, prices, and source roles separate.</RevealCard>
+        <RevealCard kind="evidence" title="Claims checked">Attach the right source to each claim and leave unsupported details unknown.</RevealCard>
+        <RevealCard kind="outcome" title="A practical next test">See the strongest hypothesis, the biggest risk, and what to test next.</RevealCard>
       </div>
     </section>
   );
@@ -131,6 +131,7 @@ function GreekScene() {
 export function InstallTransition() {
   const shellRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   const revealRef = useRef<HTMLDivElement>(null);
@@ -143,6 +144,7 @@ export function InstallTransition() {
   useEffect(() => {
     const shell = shellRef.current;
     const stage = stageRef.current;
+    const content = contentRef.current;
     const left = leftRef.current;
     const right = rightRef.current;
     const reveal = revealRef.current;
@@ -151,7 +153,7 @@ export function InstallTransition() {
     const near = nearRef.current;
     const hawk = hawkRef.current;
     const hawkFrame = hawkFrameRef.current;
-    if (!shell || !stage || !left || !right || !reveal || !backdrop || !far || !near || !hawk || !hawkFrame) return;
+    if (!shell || !stage || !content || !left || !right || !reveal || !backdrop || !far || !near || !hawk || !hawkFrame) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let start = 0;
@@ -181,6 +183,9 @@ export function InstallTransition() {
       stage.style.setProperty("--greek-card-reveal", cardReveal.toFixed(4));
       left.style.transform = `translate3d(${-52 * opening}vw,0,0) rotate(${-0.7 * opening}deg) scale(${1 + 0.012 * opening})`;
       right.style.transform = `translate3d(${52 * opening}vw,0,0) rotate(${0.7 * opening}deg) scale(${1 + 0.012 * opening})`;
+      content.style.opacity = `${1 - opening}`;
+      content.style.transform = `scale(${1 - opening * .018})`;
+      content.style.pointerEvents = opening > .72 ? "none" : "auto";
       reveal.style.opacity = `${0.28 + revealProgress * 0.72}`;
       reveal.style.transform = `scale(${0.86 + revealProgress * 0.14})`;
       reveal.style.filter = `blur(${(1 - revealProgress) * 9}px)`;
@@ -207,14 +212,17 @@ export function InstallTransition() {
     };
     const syncAccessibleCopy = () => {
       const reduced = reducedMotion.matches;
-      left.toggleAttribute("aria-hidden", !reduced);
-      left.inert = false;
-      left.querySelectorAll<HTMLElement>("a, button").forEach((control) => {
-        if (reduced) control.removeAttribute("tabindex");
-        else control.setAttribute("tabindex", "-1");
-      });
-      right.toggleAttribute("aria-hidden", reduced);
-      right.inert = reduced;
+      content.removeAttribute("aria-hidden");
+      content.inert = false;
+      left.setAttribute("aria-hidden", "true");
+      right.setAttribute("aria-hidden", "true");
+      left.inert = true;
+      right.inert = true;
+      if (reduced) {
+        content.style.opacity = "1";
+        content.style.transform = "none";
+        content.style.pointerEvents = "auto";
+      }
     };
     const handleMotionChange = () => {
       syncAccessibleCopy();
@@ -254,12 +262,9 @@ export function InstallTransition() {
           <div className="transition-ambient transition-ambient-near" ref={nearRef} aria-hidden="true" />
         </div>
 
-        <div className="install-split-half install-split-left" ref={leftRef} aria-hidden="true">
-          <InstallViewport />
-        </div>
-        <div className="install-split-half install-split-right" ref={rightRef}>
-          <InstallViewport />
-        </div>
+        <div className="install-content-source" ref={contentRef}><InstallViewport /></div>
+        <div className="install-split-half install-split-left" ref={leftRef} aria-hidden="true" />
+        <div className="install-split-half install-split-right" ref={rightRef} aria-hidden="true" />
 
         <div className="transition-hawk" ref={hawkRef} aria-hidden="true">
           <Image ref={hawkFrameRef} src="/assets/hawk-flight-sprite-v2.png" alt="" width={1774} height={887} unoptimized />

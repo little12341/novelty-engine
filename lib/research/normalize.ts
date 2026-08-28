@@ -54,7 +54,7 @@ export function inferSourceType(urlString: string): SourceType {
   if (/apps\.apple\.com|play\.google\.com|marketplace\./.test(host)) return "app_marketplace";
   if (/patents\.google\.|patentscope\.|uspto\.|epo\.org/.test(host)) return "patent";
   if (/arxiv\.|pubmed\.|nih\.gov|nature\.|sciencedirect\.|springer\.|jstor\.|doi\.org|semanticscholar\./.test(host)) return "research";
-  if (/\.gov$|\.gov\.|europa\.eu$/.test(host)) return "regulator";
+  if (/^gov\.|\.gov$|\.gov\.|europa\.eu$/.test(host)) return "regulator";
   if (/jobs\.|careers\.|indeed\.|greenhouse\.|lever\.co|workdayjobs\./.test(host) || /\/jobs?|\/careers?/.test(path)) return "job_posting";
   if (/procurement|tenders?|solicitations?/.test(host) || /\/(?:rfp|procurement|tenders?|solicitations?)(?:\/|$)/.test(path)) return "marketplace";
   if (/amazon\.|etsy\.|ebay\.|alibaba\.|gumroad\./.test(host)) return "marketplace";
@@ -248,6 +248,15 @@ export function normalizeResults(
          duplicateSourceTypes: [],
          pageIdentity,
          relevanceAssessment,
+        discussionSample: ["reddit", "forum", "review", "app_marketplace"].includes(sourceType) ? {
+          sampleUnit: result.suppliedContentScope === "content" ? "page" : "search_excerpt",
+          fullPageAccess: result.suppliedContentScope === "content" ? "available" : "not_available",
+          threadOrPageCount: 1,
+          coverageNote: result.suppliedContentScope === "content"
+            ? "Analysis used the bounded content field supplied for this public page or thread; it may not include every post, comment, edit, or reply."
+            : "Analysis is limited to this publicly indexed excerpt and direct URL; full thread, page, post, or comment coverage was not available to the retrieval provider.",
+          authorStored: false,
+        } : undefined,
         security: {
           treatedAsUntrustedData: true,
           promptInjectionDetected: ignoredDirectiveCategories.length > 0,

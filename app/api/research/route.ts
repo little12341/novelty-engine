@@ -27,7 +27,7 @@ export function GET() {
     commands: RESEARCH_COMMANDS,
     commandRoutes: CLAUDE_COMMAND_ROUTES,
     commandCatalog: NOVELTY_COMMAND_CATALOG,
-    accepts: { method: "POST", contentType: "application/json", body: { query: "string; optional for research_company with a structured identifier", mode: "optional ResearchMode", retrieval_mode: "optional supplied_sources|hosted", sources: "bounded public source objects for supplied_sources", depth: "optional fast|standard|deep", company_name: "optional authoritative company name for research_company", domain: "optional bare public company domain", ticker: "optional ticker", country: "optional country/jurisdiction", ideas: "2-5 strings for compare_ideas", bypassCache: "optional boolean", memoryProfileId: "optional explicit opt-in profile", userContext: "optional current-run founder constraints" } },
+    accepts: { method: "POST", contentType: "application/json", body: { query: "string; optional for research_company with a structured identifier", mode: "optional ResearchMode", retrieval_mode: "supplied_sources by default; hosted must be explicit", sources: "bounded public source objects required for the default supplied-source flow", depth: "optional fast|standard|deep", company_name: "optional authoritative company name for research_company", domain: "optional bare public company domain", ticker: "optional ticker", country: "optional country/jurisdiction", ideas: "2-5 strings for compare_ideas", bypassCache: "optional boolean", memoryProfileId: "optional explicit opt-in profile", userContext: "optional current-run founder constraints" } },
   });
 }
 
@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
   const validModes = new Set<ResearchMode>(Object.values(RESEARCH_COMMANDS));
   const suppliedRequest = body.retrieval_mode === "supplied_sources" || Array.isArray(body.sources);
   if (body.retrieval_mode !== undefined && !["supplied_sources", "hosted"].includes(String(body.retrieval_mode))) return NextResponse.json({ error: "retrieval_mode must be supplied_sources or hosted." }, { status: 400 });
+  if (!suppliedRequest && body.retrieval_mode !== "hosted") return NextResponse.json({ error: "The default API flow requires a bounded sources array. Claude should gather public web evidence and retry with retrieval_mode=supplied_sources. Set retrieval_mode=hosted only for an intentional, configured provider-backed run.", code: "SUPPLIED_SOURCES_REQUIRED" }, { status: 400 });
   if (suppliedRequest && (body.mode && body.mode !== "research_market" || Array.isArray(body.ideas))) return NextResponse.json({ error: "Supplied-source API requests currently support research_market only; use MCP research_from_sources for the recommended workflow." }, { status: 400 });
   const parsedSupplied = suppliedRequest ? researchFromSourcesInput.safeParse({ query: body.query, depth: body.depth, founder_constraints: body.userContext, sources: body.sources }) : null;
   if (parsedSupplied && !parsedSupplied.success) return NextResponse.json({ error: "Invalid supplied-source request.", code: "INVALID_SUPPLIED_SOURCES", issues: parsedSupplied.error.issues.map((item) => ({ path: item.path.join("."), message: item.message })) }, { status: 400 });

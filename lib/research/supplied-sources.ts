@@ -79,6 +79,7 @@ export function validateSuppliedSources(
       snippet,
       publishedAt: publicationDate,
       retrievedAt,
+      suppliedContentScope: compactText(source.content, SUPPLIED_SOURCE_MAX_TEXT_CHARS) ? "content" : "excerpt",
       suppliedMetadata: {
         declaredSourceType: source.sourceType ?? null,
         declaredPublisher,
@@ -90,6 +91,7 @@ export function validateSuppliedSources(
     if (!existing) byUrl.set(normalizedUrl, result);
     else {
       existing.snippet = existing.snippet.length >= snippet.length ? existing.snippet : snippet;
+      if (result.suppliedContentScope === "content") existing.suppliedContentScope = "content";
       existing.suppliedMetadata!.metadataWarnings = [...new Set([...(existing.suppliedMetadata!.metadataWarnings ?? []), "duplicate_url_collapsed_at_ingestion"])];
     }
   }
@@ -127,9 +129,11 @@ export function suppliedSourcesToProvider(
 
 export function evidenceAsSuppliedSource(source: {
   sourceUrl: string; title: string; summary: string; publicationDate: string | null; sourceType: SourceType; retrievedAt: string;
+  discussionSample?: { fullPageAccess: "available" | "not_available" | "unknown" };
 }): SuppliedResearchSource {
   return {
-    url: source.sourceUrl, title: source.title, snippet: source.summary,
+    url: source.sourceUrl, title: source.title,
+    ...(source.discussionSample?.fullPageAccess === "available" ? { content: source.summary } : { snippet: source.summary }),
     publicationDate: source.publicationDate, sourceType: source.sourceType, retrievedAt: source.retrievedAt,
   };
 }

@@ -79,7 +79,7 @@ test("production QA: claim lineage rejects vendor listicles for disallowed suppo
   assert.ok(audits.every((item) => item.status === "UNKNOWN" && item.supportingEvidenceIds.length === 0));
   assert.ok(audits.every((item) => item.evidenceDecisions[0].roleCompatible === false));
   const coverage = citationCoverageAudit(audits);
-  assert.deepEqual(coverage, { supportedMajorClaims: 0, totalMajorClaims: 6, roleMismatchedMajorClaims: 6, relevanceRejectedMajorClaims: 0, coverageRatio: 0 });
+  assert.deepEqual(coverage, { supportedMajorClaims: 0, totalMajorClaims: 6, roleMismatchedMajorClaims: 6, relevanceRejectedMajorClaims: 0, missingEvidenceIdClaims: 0, partialSupportClaims: 0, contradictedClaims: 0, coverageRatio: 0 });
 });
 
 test("production QA: semantic market gates reject broad cross-market evidence", () => {

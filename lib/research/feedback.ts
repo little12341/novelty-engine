@@ -5,9 +5,9 @@ import { privateIdentity, putPlatformRecord } from "./platform-store.ts";
 const KINDS = new Set<FeedbackKind>([
   "useful", "wrong", "irrelevant", "already_known", "missing_competitor", "competitor_does_not_solve_job",
   "opportunity_already_exists", "source_is_weak", "validation_result_success", "validation_result_failure",
-  "installation_problem", "mcp_failure",
+  "installation_problem", "mcp_failure", "citation_problem", "stored_run_failure", "website_issue", "general_feedback",
 ]);
-const RUN_OPTIONAL_KINDS = new Set<FeedbackKind>(["installation_problem", "mcp_failure"]);
+const RUN_OPTIONAL_KINDS = new Set<FeedbackKind>(["installation_problem", "mcp_failure", "website_issue", "general_feedback"]);
 
 export async function saveResearchFeedback(input: {
   runId?: string; userId?: string; kind: FeedbackKind; targetId?: string; note?: string; now?: Date;

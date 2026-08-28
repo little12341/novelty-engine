@@ -1,4 +1,9 @@
-export const productionOrigin = "https://www.novelty-engine.com";
+export const productionOrigin = "https://novelty-engine.com";
 export const productionMcpEndpoint = `${productionOrigin}/api/mcp`;
 export const productionMcpHealthEndpoint = `${productionMcpEndpoint}/health`;
 export const productionResearchEndpoint = `${productionOrigin}/api/research`;
+export const productionSkillDownloadUrl = `${productionOrigin}/novelty-engine.zip`;
+export const githubUrl = "https://github.com/little12341/novelty-engine";
+export const generalFeedbackUrl = `${githubUrl}/issues/new`;
+const configuredPrivacyContact = process.env.NEXT_PUBLIC_PRIVACY_CONTACT_URL?.trim() || "";
+export const privacyContactUrl = /^(?:https:\/\/|mailto:)/i.test(configuredPrivacyContact) ? configuredPrivacyContact : null;

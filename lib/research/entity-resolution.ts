@@ -4,10 +4,12 @@ const GENERIC_HOST = /(?:^|\.)(?:g2|capterra|getapp|trustradius|trustpilot|sourc
 const DIRECTORY_HOST = /(?:^|\.)(?:g2|capterra|getapp|trustradius|trustpilot|sourceforge|producthunt|crunchbase)\./i;
 const PUBLISHER_HOST = /(?:^|\.)(?:linkedin|medium|forbes|techcrunch|reuters|bloomberg|wired)\./i;
 const ARTICLE_PATH = /\/(?:blog|blogs|resources?|articles?|guides?|news|insights?|learn|stories|reports?|whitepapers?)(?:\/|$)/i;
-const COMPARISON_LANGUAGE = /\b(?:best|top\s+\d*|alternatives?|competitors?|platforms? compared|software comparison|buyer.?s guide|ultimate guide)\b/i;
-const GENERIC_TITLE = /\b(?:best|top|benefits? of|guide to|how to|what is|market report|industry report|software comparison|platforms? compared|category|directory|white ?paper|ebook)\b/i;
+const COMPARISON_LANGUAGE = /\b(?:best|top\s+\d*|alternatives?|competitors?|(?:software|tools?|platforms?)\s+(?:compared|ranked)|(?:compared|ranked)\s+\d+|software comparison|buyer.?s guide|ultimate guide)\b/i;
+const GENERIC_TITLE = /\b(?:best|top|benefits? of|guide to|how to|what is|market report|industry report|software comparison|(?:software|tools?|platforms?)\s+(?:compared|ranked)|category|directory|white ?paper|ebook)\b/i;
 const ENTITY_SUFFIX = /\b(?:inc\.?|llc|ltd\.?|limited|corp(?:oration)?|company|technologies|technology|systems|software|solutions|platform)\b/gi;
 const TOPIC_STOP = new Set(["about", "article", "benefit", "best", "business", "category", "company", "comparison", "customer", "guide", "market", "platform", "report", "software", "solution", "system", "tool", "vendor", "workflow"]);
+const PRODUCT_LANGUAGE = /\b(?:offers?|provides?|product|service|software|platform|application|app|tool|system|solution|automation|managed service|marketplace)\b/i;
+const SUBSTITUTE_LANGUAGE = /\b(?:spreadsheet|paper|email|text messages?|phone calls?|consultant|broker|agency|outsourc|in[- ]house|manual(?:ly)?|do it yourself|diy)\b/i;
 
 export function canonicalDomain(host: string): string {
   const parts = host.toLowerCase().replace(/^www\./, "").split(".");
@@ -45,7 +47,9 @@ function explicitNames(url: URL, title: string): string[] {
   const domainStem = canonicalDomain(url.hostname).split(".")[0];
   const slug = productSlug(url);
   const candidates = [...titleSegments(title), ...(slug ? [displaySlug(slug)] : []), ...(GENERIC_HOST.test(url.hostname) ? [] : [displaySlug(domainStem)])];
-  return [...new Map(candidates.map((name) => [normalizeOrganizationName(name), name])).values()].filter((name) => {
+  const unique = new Map<string, string>();
+  for (const name of candidates) if (!unique.has(normalizeOrganizationName(name))) unique.set(normalizeOrganizationName(name), name);
+  return [...unique.values()].filter((name) => {
     const normalized = normalizeOrganizationName(name);
     const domainNormalized = normalizeOrganizationName(domainStem);
     const slugNormalized = normalizeOrganizationName(slug ?? "");
@@ -57,12 +61,29 @@ function explicitNames(url: URL, title: string): string[] {
   }).slice(0, 3);
 }
 
+function extractCustomerSegment(summary: string): string | null {
+  const match = summary.match(/\b(?:for|serves?|built for|designed for)\s+((?:(?:small|mid[- ]?market|independent|regional|regulated|enterprise|local|multi[- ]location)\s+){0,3}(?:[a-z][a-z -]{2,48}?(?:teams?|companies|businesses|operators|contractors|professionals|buyers|managers|owners|firms|organizations)))\b/i);
+  return match?.[1]?.trim() ?? null;
+}
+
+function extractProductCategory(summary: string): string | null {
+  const match = summary.match(/\b(?:is|offers?|provides?)\s+(?:an?\s+)?([a-z][a-z -]{2,55}?(?:software|platform|service|system|application|app|tool|solution|marketplace))\b/i);
+  return match?.[1]?.trim() ?? null;
+}
+
+function extractTargetMarket(summary: string): string | null {
+  const match = summary.match(/\b(?:for|serves?|within|across)\s+(?:the\s+)?([a-z][a-z -]{2,52}?(?:market|industry|sector|trade|operations))\b/i);
+  return match?.[1]?.trim() ?? null;
+}
+
 export function inferPageIdentity(urlString: string, title: string, summary: string, sourceType: SourceType): Evidence["pageIdentity"] {
   const url = new URL(urlString);
   const host = url.hostname.toLowerCase();
   const isPdf = /\.pdf$/i.test(url.pathname) || /\bpdf\b|white ?paper|market report|research report/i.test(title);
   const social = /(?:^|\.)linkedin\.com$/i.test(host) || /\/posts?\//i.test(url.pathname);
-  const comparison = COMPARISON_LANGUAGE.test(title) || ARTICLE_PATH.test(url.pathname) && COMPARISON_LANGUAGE.test(`${url.pathname} ${title}`);
+  const comparison = /\/(?:compare|comparison)(?:[-/]|$)/i.test(url.pathname)
+    || COMPARISON_LANGUAGE.test(title)
+    || ARTICLE_PATH.test(url.pathname) && COMPARISON_LANGUAGE.test(`${url.pathname} ${title}`);
   const directory = DIRECTORY_HOST.test(host) && (!productSlug(url) || /\/categories?|\/software\//i.test(url.pathname));
   const productProfile = DIRECTORY_HOST.test(host) && Boolean(productSlug(url)) && !/\/articles?|\/resources?|\/compare/i.test(url.pathname);
   const article = ARTICLE_PATH.test(url.pathname) || PUBLISHER_HOST.test(host);
@@ -82,11 +103,30 @@ export function inferPageIdentity(urlString: string, title: string, summary: str
   const names = explicitNames(url, title);
   const entityEligible = ["company_product", "company_pricing", "company_documentation", "product_profile"].includes(pageKind)
     && !comparison && names.length > 0;
+  const discussedName = names[0] ?? null;
+  const substituteCandidate = SUBSTITUTE_LANGUAGE.test(summary) && !PRODUCT_LANGUAGE.test(summary);
   return {
     canonicalDomain: canonicalDomain(host), pageKind,
     relationship: entityEligible ? "direct_competitor" : relationship,
     organizationSignals: [canonicalDomain(host), ...names.map(normalizeOrganizationName)].filter(Boolean),
     explicitEntityNames: names, entityEligible,
+    sourcePublisher: {
+      name: GENERIC_HOST.test(host) || article || directory || comparison ? canonicalDomain(host) : discussedName,
+      domain: canonicalDomain(host),
+    },
+    discussedEntity: discussedName ? {
+      name: discussedName,
+      normalizedName: normalizeOrganizationName(discussedName),
+      canonicalDomain: entityEligible && !GENERIC_HOST.test(host) ? canonicalDomain(host) : null,
+    } : null,
+    targetMarket: extractTargetMarket(summary),
+    productCategory: extractProductCategory(summary),
+    customerSegment: extractCustomerSegment(summary),
+    claimedCompetitiveRole: entityEligible && (PRODUCT_LANGUAGE.test(`${title} ${summary}`)
+      || ["company_product", "company_pricing", "company_documentation"].includes(pageKind))
+      ? "competitor_candidate"
+      : substituteCandidate ? "substitute_candidate"
+        : names.length ? "mentioned_only" : "unknown",
     rationale: entityEligible
       ? "A canonical company/product domain or structured product-profile path agrees with an explicit organization/brand signal."
       : comparison ? "Comparison/listicle identity is retained as a source page and is not promoted to a company entity."
@@ -104,7 +144,7 @@ function topicTerms(value: string): string[] {
 const ANCHORS: Array<[string, RegExp]> = [
   ["coi", /certificate(?:s)? of insurance|\bcoi\b|subcontractor insurance/i],
   ["construction", /general contractor|specialty trad|subcontractor|construction/i],
-  ["field_service", /contractors?|field[- ](?:service|workers?|teams?)|home[- ]service|mobile trad|dispatch|technicians?|scheduling|job (?:data|records?)/i],
+  ["field_service", /contractors?|field[- ](?:service|workers?|teams?)|home[- ]service|mobile trad|dispatch|technicians?|job (?:data|records?)/i],
   ["cleaning", /commercial clean|local clean|cleaning (?:compan|team|crew|service)|cleaners?|janitorial|proof of service/i],
   ["restaurant_pos", /restaurant|point.of.sale|\bpos\b/i],
   ["aquaculture_ozone", /aquaculture|ozone|fish farm/i],

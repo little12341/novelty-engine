@@ -14,13 +14,13 @@
   {
     "url": "https://community.trades.example/discussions/workflow-two",
     "title": "Three tools for one completed job",
-    "snippet": "Field workers copy and paste from the CRM to email and accounting because mobile sync fails. The duplicate entry is too expensive for a two-person company.",
+    "snippet": "Our field workers copy and paste from the CRM to email and accounting because mobile sync fails. The duplicate entry is too expensive for our two-person company.",
     "publishedAt": "2026-06-18"
   },
   {
     "url": "https://github.com/example/unofficial-dispatch-bridge/issues/88",
     "title": "Feature request: unofficial webhook integration",
-    "snippet": "A missing integration and no API forces repeated exports and imports between scheduling and inventory.",
+    "snippet": "We use this workflow, and a missing integration with no API forces us to repeat exports and imports between scheduling and inventory.",
     "publishedAt": "2026-07-03"
   },
   {

@@ -1,360 +1,128 @@
 import Image from "next/image";
-import { productionOrigin } from "@/lib/site";
+import Link from "next/link";
 import { NOVELTY_COMMAND_CATALOG } from "@/lib/research/intents";
+import { githubUrl, productionOrigin } from "@/lib/site";
 import { HeroInstallPanel } from "./install-panel";
 import { InstallTransition } from "./install-transition";
 import { BetaFeedback } from "./beta-feedback";
 
-const githubUrl = "https://github.com/little12341/novelty-engine";
 const websiteStructuredData = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "Novelty Engine",
   url: productionOrigin,
-  description: "Claude gathers public sources; Novelty Engine normalizes evidence, maps gaps, falsifies opportunities, and preserves research runs.",
+  description: "Evidence-backed market research for Claude that checks competitors, customer pain, workarounds, counterevidence, and practical validation tests.",
 };
 
-function HeroMark() {
+const usefulCommands = new Set(["/research-market", "/find-gaps", "/inspect-competitors", "/customer-pain", "/falsify", "/rerun"]);
+const homepageCommands = NOVELTY_COMMAND_CATALOG.filter((entry) => usefulCommands.has(entry.command));
+
+function BrandMark() {
+  return <Image className="brand-wreath" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized aria-hidden="true" />;
+}
+
+function Arrow({ external = false }: { external?: boolean }) {
   return (
-    <span className="mark" aria-hidden="true">
-      <svg viewBox="0 0 72 60" fill="none" focusable="false">
-        <g className="laurel-side">
-          <path className="laurel-stem" d="M36 56.7C23.2 54.6 13.5 46.6 9.7 35.8 6.2 25.8 8.4 14.6 16.5 5.1" />
-          <path className="laurel-leaf" d="M14.2 44.8C9.1 46.2 4.9 44.2 2.7 39.7c5-1.4 9.2.2 11.5 5.1Z" />
-          <path className="laurel-leaf" d="M10.4 38.1C5.3 38.3 1.9 35.5 1.1 30.8c5-.3 8.6 2.1 9.3 7.3Z" />
-          <path className="laurel-leaf" d="M8.6 30.7C4 29.5 1.7 26.1 2.1 21.6c4.7 1 7.2 4.1 6.5 9.1Z" />
-          <path className="laurel-leaf" d="M8.8 23.2C4.8 20.8 3.5 16.9 5.1 12.8c4.1 2.2 5.7 5.8 3.7 10.4Z" />
-          <path className="laurel-leaf" d="M11 16.6C8.1 13.1 8.4 9.1 11.3 5.9c3 3.3 3.1 7.1-.3 10.7Z" />
-          <path className="laurel-leaf" d="M16.8 49.9c-4.3 2.5-8.5 1.5-11.3-2.2 4.1-2.6 8.1-2 11.3 2.2Z" />
-          <path className="laurel-leaf" d="M22.7 54.3c-3.5 3.4-7.8 3.3-11.2.5 3.4-3.3 7.3-3.7 11.2-.5Z" />
-          <path className="laurel-leaf" d="M29.4 56.8c-2.6 3.8-6.7 4.5-10.5 2.5 2.4-3.8 6.1-4.8 10.5-2.5Z" />
-          <path className="laurel-leaf laurel-inner-leaf" d="M13.2 41.1c4.8.1 8-2.6 8.9-7.1-4.8-.3-8.1 2-8.9 7.1Z" />
-          <path className="laurel-leaf laurel-inner-leaf" d="M10.8 33.6c4.6-.9 7.2-4 7.2-8.4-4.6.7-7.4 3.4-7.2 8.4Z" />
-          <path className="laurel-leaf laurel-inner-leaf" d="M11.2 25.4c4-1.9 5.8-5.5 4.8-9.7-4.1 1.7-6.1 4.9-4.8 9.7Z" />
-        </g>
-        <g className="laurel-side" transform="translate(72 0) scale(-1 1)">
-          <path className="laurel-stem" d="M36 56.7C23.2 54.6 13.5 46.6 9.7 35.8 6.2 25.8 8.4 14.6 16.5 5.1" />
-          <path className="laurel-leaf" d="M14.2 44.8C9.1 46.2 4.9 44.2 2.7 39.7c5-1.4 9.2.2 11.5 5.1Z" />
-          <path className="laurel-leaf" d="M10.4 38.1C5.3 38.3 1.9 35.5 1.1 30.8c5-.3 8.6 2.1 9.3 7.3Z" />
-          <path className="laurel-leaf" d="M8.6 30.7C4 29.5 1.7 26.1 2.1 21.6c4.7 1 7.2 4.1 6.5 9.1Z" />
-          <path className="laurel-leaf" d="M8.8 23.2C4.8 20.8 3.5 16.9 5.1 12.8c4.1 2.2 5.7 5.8 3.7 10.4Z" />
-          <path className="laurel-leaf" d="M11 16.6C8.1 13.1 8.4 9.1 11.3 5.9c3 3.3 3.1 7.1-.3 10.7Z" />
-          <path className="laurel-leaf" d="M16.8 49.9c-4.3 2.5-8.5 1.5-11.3-2.2 4.1-2.6 8.1-2 11.3 2.2Z" />
-          <path className="laurel-leaf" d="M22.7 54.3c-3.5 3.4-7.8 3.3-11.2.5 3.4-3.3 7.3-3.7 11.2-.5Z" />
-          <path className="laurel-leaf" d="M29.4 56.8c-2.6 3.8-6.7 4.5-10.5 2.5 2.4-3.8 6.1-4.8 10.5-2.5Z" />
-          <path className="laurel-leaf laurel-inner-leaf" d="M13.2 41.1c4.8.1 8-2.6 8.9-7.1-4.8-.3-8.1 2-8.9 7.1Z" />
-          <path className="laurel-leaf laurel-inner-leaf" d="M10.8 33.6c4.6-.9 7.2-4 7.2-8.4-4.6.7-7.4 3.4-7.2 8.4Z" />
-          <path className="laurel-leaf laurel-inner-leaf" d="M11.2 25.4c4-1.9 5.8-5.5 4.8-9.7-4.1 1.7-6.1 4.9-4.8 9.7Z" />
-        </g>
-        <path className="laurel-cross" d="M27.8 54.1c3.2 2.4 5.9 3.7 8.2 4.2 2.3-.5 5-1.8 8.2-4.2M30.8 57.8h10.4" />
-      </svg>
-    </span>
-  );
-}
-
-function ArrowIcon({ direction = "right" }: { direction?: "right" | "down" }) {
-  return direction === "down" ? (
     <svg className="arrow-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M10 2.75v13.5M4.8 11.2 10 16.4l5.2-5.2" />
-    </svg>
-  ) : (
-    <svg className="arrow-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M2.75 10h13.5M11.2 4.8l5.2 5.2-5.2 5.2" />
+      {external ? <path d="M6 14 14 6M7.2 6H14v6.8" /> : <path d="M2.75 10h13.5M11.2 4.8l5.2 5.2-5.2 5.2" />}
     </svg>
   );
 }
 
-function LeafIcon() {
-  return (
-    <svg className="leaf-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path className="leaf-outline" d="M11.15 20.15a7 7 0 0 1-1.3-13.95c5.58-2.35 10.78-1.67 10.98-1.58.08.21.77 5.38-1.67 9.95a7 7 0 0 1-8.01 5.58Z" />
-      <path className="leaf-vein" d="M3 21c.15-3.02 2.03-5.37 5.18-6.9 2.75-1.35 6.2-1.76 10.35-1.25" />
-    </svg>
-  );
-}
-
-function UtilityIcon({ kind }: { kind: "down" | "external" }) {
-  return kind === "down" ? <ArrowIcon direction="down" /> : (
-    <svg className="arrow-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M6 14 14 6M7.2 6H14v6.8" />
-    </svg>
-  );
-}
-
-const pipeline = [
-  ["01", "Map", "Competitors, complaints, workarounds, shifts", "map"],
-  ["02", "Find", "Structural holes and underserved workflows", "find"],
-  ["03", "Challenge", "Defaults, assumptions, and constraints", "challenge"],
-  ["04", "Generate", "Candidates with a traceable lineage", "generate"],
-  ["05", "Falsify", "Demand, economics, trust, and feasibility", "falsify"],
-  ["06", "Return", "Survivors with a measurable first test", "return"],
+const steps = [
+  ["01", "You ask a question", "For example: “What problems are small roofing companies still solving with spreadsheets?”"],
+  ["02", "Claude finds current public evidence", "It searches company websites, public discussions, reviews, documentation, regulations, job postings, and other relevant sources."],
+  ["03", "Novelty Engine challenges the idea", "It checks competitors, customer pain, workarounds, weak evidence, hidden costs, and reasons the opportunity may not work."],
+  ["04", "You receive the strongest result", "You get the evidence, the opportunity, the biggest risk, and a practical test to run next."],
 ] as const;
 
-function EvidenceArtifact({ kind }: { kind: (typeof pipeline)[number][3] }) {
-  return (
-    <span className={`evidence-artifact evidence-artifact-${kind}`} aria-hidden="true">
-      <Image src={`/assets/generated/evidence-${kind}-v3.png`} alt="" width={512} height={512} unoptimized />
-    </span>
-  );
-}
-
-function MethodArtifact({ number }: { number: string }) {
-  return (
-    <span className={`method-artifact method-artifact-${number}`} aria-hidden="true">
-      <Image src={`/assets/generated/method-${number}-v2.png`} alt="" width={500} height={500} unoptimized />
-    </span>
-  );
-}
-
-const phases = [
-  {
-    number: "01",
-    title: "Build the landscape",
-    description: "Map competitors, products, complaints, workarounds, technologies, and rules into an opportunity graph.",
-    detail: "Look for repeated friction, sparse combinations, underserved segments, failed attempts, and early change signals.",
-  },
-  {
-    number: "02",
-    title: "Contradict the category",
-    description: "Extract the assumptions a market treats as fixed, then systematically invert or remove the consequential ones.",
-    detail: "Transfer mechanisms from distant domains without simply borrowing their language or aesthetics.",
-  },
-  {
-    number: "03",
-    title: "Generate with lineage",
-    description: "Create a broad candidate field from evidence-backed holes, then reject ideas that collapse into familiar products.",
-    detail: "Every candidate keeps a compact record of the evidence, contradiction, and mutation that produced it.",
-  },
-  {
-    number: "04",
-    title: "Try to kill the ideas",
-    description: "Pressure-test demand, economics, distribution, feasibility, behavior, trust, regulation, and defensibility.",
-    detail: "Promising failures get at most one bounded mutation and retest. Survivors leave with a 24–72 hour validation test.",
-  },
+const checks = [
+  "Customer problems", "Existing competitors", "Manual workarounds", "Pricing and spending signals",
+  "Underserved customers", "Reasons the opportunity may fail", "Source quality", "Missing evidence",
 ];
+
+const deliverables = [
+  "Market overview", "Customer pain signals", "Competitor map", "Potential gaps", "Rejected ideas and why they failed",
+  "Strongest surviving opportunities", "Sources", "Biggest unresolved risk", "A 24 to 72 hour validation test", "One recommended next action",
+];
+
+const exampleRows = [
+  ["Original question", "Find opportunities for small field-service teams that still move job data between tools."],
+  ["Market examined", "Small field-service teams using several scheduling, estimating, and customer-management tools."],
+  ["Representative sources", "Fixture product pages, public-discussion excerpts, pricing snippets, and a documented failed attempt."],
+  ["Customer struggle", "Workers repeatedly copy job details between tools that do not stay in sync."],
+  ["Existing alternatives", "All-in-one field-service platforms, another dashboard, spreadsheets, email, and text messages."],
+  ["Potential gap", "A narrow handoff layer that resolves mismatches without replacing each existing system."],
+  ["Surviving hypothesis", "An exception bridge that asks for human review only when authoritative systems disagree."],
+  ["Supporting evidence", "Repeated manual re-entry, spreadsheet workarounds, integration requests, and pricing objections in the fixture evidence package."],
+  ["Counterevidence", "Established platforms already offer integrations, and maintaining many connectors may be expensive."],
+  ["Decisive risk", "The concept fails if exceptions are too rare, connector maintenance is uneconomic, or teams will not grant system access."],
+  ["Validation test", "Manually bridge ten jobs for three teams within 72 hours; continue only if errors fall by half and one team commits to a paid pilot."],
+  ["Still unknown", "Actual exception frequency, sustainable support cost, access willingness, and paid demand."],
+] as const;
 
 export default function Home() {
   return (
     <main id="top">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteStructuredData).replace(/</g, "\\u003c") }}
-      />
-      <section className="hero-stage" id="overview" aria-labelledby="hero-title">
-        <div className="hero-backdrop" aria-hidden="true">
-          <Image
-            className="hero-image"
-            src="/hero-mediterranean.png"
-            alt=""
-            fill
-            preload
-            unoptimized
-            sizes="100vw"
-          />
-        </div>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteStructuredData).replace(/</g, "\\u003c") }} />
+
+      <section className="hero-stage" aria-labelledby="hero-title">
+        <div className="hero-backdrop" aria-hidden="true"><Image className="hero-image" src="/hero-mediterranean.png" alt="" fill preload unoptimized sizes="100vw" /></div>
         <div className="hero-tonal-layer" aria-hidden="true" />
         <header className="site-header-wrap">
           <div className="site-header page-width">
-            <a className="brand" href="#top" aria-label="Novelty Engine home">
-              <HeroMark />
-              <span>Novelty Engine</span>
-            </a>
+            <a className="brand" href="#top" aria-label="Novelty Engine home"><BrandMark /><span>Novelty Engine</span></a>
             <span className="beta-label">Public Beta</span>
-            <nav aria-label="Main navigation">
-              <a href="#overview">Overview</a>
-              <a href="#method">How it works</a>
-              <a href="#commands">Commands</a>
-              <a href="#feedback">Feedback</a>
-              <a href={`${githubUrl}#readme`} target="_blank" rel="noreferrer">Docs</a>
-            </nav>
-            <a className="header-github glass-control liquid-glass" href="#install">
-              Get started <ArrowIcon />
-            </a>
+            <nav className="desktop-nav" aria-label="Main navigation"><a href="#overview">Overview</a><a href="#how-it-works">How it works</a><a href="#example">Example</a><a href="#commands">Commands</a><a href="#install">Install</a></nav>
+            <details className="mobile-menu"><summary>Menu</summary><nav aria-label="Mobile navigation"><a href="#overview">Overview</a><a href="#how-it-works">How it works</a><a href="#example">Example</a><a href="#commands">Commands</a><a href="#install">Install</a><Link href="/privacy">Privacy</Link></nav></details>
+            <a className="header-github glass-control liquid-glass" href="#install">Get started <Arrow /></a>
           </div>
         </header>
 
         <div className="hero page-width">
           <div className="hero-copy">
-            <p className="eyebrow">Find what others miss</p>
-            <h1 id="hero-title"><span>Discover the gaps.</span><span>Build what’s next.</span></h1>
-            <p className="hero-lede">
-              Claude gathers public sources with your web access. Novelty Engine then normalizes evidence, maps competitors and gaps, challenges weak opportunities, preserves the run, and reports only the opportunities that survive its checks.
-            </p>
-            <p className="beta-disclaimer">Evidence-driven research may be incomplete and does not guarantee that an opportunity will succeed.</p>
-            <div className="hero-actions">
-              <a className="button glass-control glass-primary liquid-glass" href="#install">
-                <LeafIcon /> Install skill
-              </a>
-              <a className="button glass-control liquid-glass" href="#comparison">
-                Learn more <ArrowIcon />
-              </a>
-            </div>
+            <p className="eyebrow">Stop guessing what to build</p>
+            <h1 id="hero-title">Find business opportunities backed by real evidence.</h1>
+            <p className="hero-lede">Novelty Engine researches customer complaints, competitors, workarounds, and reasons an idea could fail. Then it gives you the strongest supported results, sources, and a test you can run this week.</p>
+            <div className="hero-actions"><a className="button glass-control glass-primary liquid-glass" href="#install">Install for Claude</a><a className="button glass-control liquid-glass" href="#example">See an example <Arrow /></a></div>
+            <p className="beta-disclaimer">Research can reduce uncertainty, but it cannot guarantee that a business idea will succeed.</p>
           </div>
-
           <HeroInstallPanel />
-
-          <a className="scroll-cue" href="#principles" aria-label="Scroll to explore">
-            <span className="liquid-glass" aria-hidden="true"><ArrowIcon direction="down" /></span>
-            <small>Scroll to explore</small>
-          </a>
         </div>
       </section>
+
+      <section className="plain-section overview-section page-width" id="overview" aria-labelledby="overview-title">
+        <p className="eyebrow">What Novelty Engine does</p>
+        <div className="plain-intro-grid"><h2 id="overview-title">Research an idea before you waste time building it.</h2><div><p>Tell Novelty Engine a market, customer problem, company, or business idea. Claude finds current public evidence. Novelty Engine organizes that evidence, checks competitors, looks for repeated problems, searches for reasons the idea may fail, and returns the strongest supported results.</p><p>In the normal supplied-source workflow, Claude—or you—provides bounded public evidence and Novelty Engine analyzes it without calling Tavily or Brave. Hosted provider search is optional, disabled by default, and runs only when the deployment enables it and a user explicitly requests it.</p><p>You may provide bounded excerpts or public thread content from Reddit and other public research sources. Novelty Engine does not directly scrape, crawl, or mine Reddit.</p></div></div>
+      </section>
+
+      <section className="plain-section steps-section" id="how-it-works" aria-labelledby="steps-title"><div className="page-width"><p className="eyebrow">How it works</p><h2 id="steps-title">Four steps from question to test.</h2><ol className="plain-card-grid step-grid">{steps.map(([number, title, description]) => <li key={number}><span>{number}</span><h3>{title}</h3><p>{description}</p></li>)}</ol></div></section>
+
+      <section className="plain-section checks-section page-width" aria-labelledby="checks-title">
+        <div className="split-heading"><div><p className="eyebrow">What it checks</p><h2 id="checks-title">A stronger case needs more than an exciting idea.</h2></div><p>Every important claim is linked to a source or left as unknown. Repeated pages from the same publisher do not become independent proof.</p></div>
+        <ul className="plain-card-grid check-grid">{checks.map((item, index) => <li key={item}><span>{String(index + 1).padStart(2, "0")}</span><h3>{item}</h3></li>)}</ul>
+      </section>
+
+      <section className="plain-section receive-section" aria-labelledby="receive-title"><div className="page-width receive-layout"><div><p className="eyebrow">What you receive</p><h2 id="receive-title">A research record you can inspect and revisit.</h2><p>Sources, uncertainty, counterevidence, and the next test stay attached to the result. Saved runs can be compared later.</p></div><ol>{deliverables.map((item, index) => <li key={item}><span>{String(index + 1).padStart(2, "0")}</span>{item}</li>)}</ol></div></section>
+
+      <section className="plain-section example-section" id="example" aria-labelledby="example-title">
+        <Image className="comparison-column" src="/assets/generated/worked-column-urn-foliage-v3.png" alt="" width={990} height={1536} unoptimized aria-hidden="true" />
+        <div className="page-width"><div className="example-heading"><div><p className="eyebrow">Illustrative demo</p><h2 id="example-title">From repeated re-entry to a testable opportunity.</h2></div><p className="fixture-note">Fixture-backed pipeline walkthrough—not live market research. It demonstrates output structure without pretending test data proves a market.</p></div><dl className="example-detail-grid">{exampleRows.map(([term, detail]) => <div key={term}><dt>{term}</dt><dd>{detail}</dd></div>)}</dl></div>
+      </section>
+
+      <section className="plain-section changes-section page-width" aria-labelledby="changes-title"><p className="eyebrow">User-triggered comparisons</p><div className="plain-intro-grid"><h2 id="changes-title">See how the market changes.</h2><div><p>Run the same research again later and compare what changed. Novelty Engine can show new competitors, changing complaints, pricing updates, stronger evidence, and new reasons an opportunity may no longer be attractive.</p><p>Reruns happen only when you request them. Novelty Engine does not claim automatic month-to-month monitoring.</p></div></div></section>
+
+      <section className="plain-section commands-section" id="commands" aria-labelledby="commands-title"><div className="page-width"><div className="split-heading"><div><p className="eyebrow">Useful commands</p><h2 id="commands-title">Six shortcuts for common research jobs.</h2></div><p>These are Skill intents. Type them as normal messages; they may not appear in Claude’s native slash-command autocomplete. The complete catalog is in the <a href={`${githubUrl}#claude-command-map`} target="_blank" rel="noreferrer">documentation</a>.</p></div><ul className="command-catalog">{homepageCommands.map((entry) => <li key={entry.command}><code>{entry.command}</code><p>{entry.description}</p></li>)}</ul></div></section>
 
       <InstallTransition />
 
-      <section className="pipeline-section page-width" aria-labelledby="pipeline-title">
-        <Image className="pipeline-laurel pipeline-laurel-left" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
-        <Image className="pipeline-laurel pipeline-laurel-right" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
-        <div className="section-heading pipeline-heading">
-          <p className="eyebrow">The evidence loop</p>
-          <div>
-            <h2 id="pipeline-title">A research method, not a longer prompt.</h2>
-            <p>The engine makes the evidence process inspectable from Claude’s first supplied source to the final experiment.</p>
-          </div>
-          <Image className="pipeline-halo" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized />
-        </div>
-        <ol className="pipeline-list">
-          {pipeline.map(([number, title, description, icon]) => (
-            <li key={number}>
-              <span>{number}</span>
-              <i aria-hidden="true" />
-              <EvidenceArtifact kind={icon} />
-              <strong>{title}</strong>
-              <p>{description}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="commands-section" id="commands" aria-labelledby="commands-title">
-        <div className="page-width">
-          <div className="section-heading commands-heading">
-            <p className="eyebrow">Command discovery</p>
-            <div>
-              <h2 id="commands-title">A clear vocabulary for every research move.</h2>
-              <p>Type these as plain-text Skill intents with Novelty Engine enabled. They route to Novelty research or MCP tools and do not appear in Claude’s native prompt-bar slash autocomplete unless Claude itself supports that interface.</p>
-            </div>
-          </div>
-          <ul className="command-catalog">
-            {NOVELTY_COMMAND_CATALOG.map((entry) => (
-              <li key={entry.command}>
-                <code>{entry.command}</code>
-                <p>{entry.description}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="command-alias-note"><strong>Safe aliases:</strong> <code>/gaps</code> → <code>/find-gaps</code> and <code>/competitors</code> → <code>/inspect-competitors</code>. Use <code>/help &lt;command&gt;</code> for usage and an example.</p>
-        </div>
-      </section>
-
-      <section className="comparison-section" id="comparison">
-        <div className="page-width">
-          <div className="section-heading comparison-heading">
-            <p className="eyebrow">A worked example</p>
-            <div>
-              <h2>From a common prompt to a specific opening.</h2>
-              <p>V2.2 records how an idea was derived, what resembles it, what could kill it, and the cheapest test that should come next.</p>
-            </div>
-          </div>
-
-          <div className="example-showcase">
-            <blockquote className="example-prompt">
-              <span>Prompt</span>
-              <p>“Find opportunities for small field-service teams that still move job data between tools.”</p>
-            </blockquote>
-            <div className="comparison-grid">
-            <article className="baseline-card">
-              <header><p className="card-label">First-pass brainstorming</p><h3>Familiar answers</h3></header>
-              <ol>
-                <li><span>01</span><div><strong>All-in-one CRM</strong><p>Replace every current tool with one larger system.</p></div></li>
-                <li><span>02</span><div><strong>AI dispatcher</strong><p>Add a chat assistant on top of the existing workflow.</p></div></li>
-                <li><span>03</span><div><strong>Scheduling dashboard</strong><p>Show another view of data workers already maintain.</p></div></li>
-              </ol>
-              <p className="card-note">The subject changed. The underlying mechanisms did not.</p>
-            </article>
-
-            <article className="survivor-card">
-              <header>
-                <div><p className="card-label">With Novelty Engine</p><h3>Exception Bridge</h3></div>
-                <span className="survivor-badge">Survivor</span>
-              </header>
-              <p className="idea-summary">A local-first event bridge keeps existing systems authoritative and asks a worker to intervene only when their records disagree—without introducing another CRM.</p>
-              <dl>
-                <div><dt>Evidence lineage</dt><dd>Duplicate entry → spreadsheets and messages → small-team pricing mismatch → remove the central database → local event capability.</dd></div>
-                <div><dt>Decisive risk</dt><dd>It fails if connectors are expensive to maintain, exceptions are too rare, or teams will not grant source-system access.</dd></div>
-                <div><dt>Validate first</dt><dd>Manually bridge ten real jobs for three teams in 72 hours. Continue only if errors fall by half and one team commits to a paid pilot.</dd></div>
-              </dl>
-              <p className="fixture-note">Illustrative, fixture-backed pipeline walkthrough—not a claim about a live market.</p>
-            </article>
-            </div>
-          </div>
-        </div>
-        <Image className="comparison-column" src="/assets/generated/worked-column-urn-foliage-v3.png" alt="" width={990} height={1536} unoptimized />
-        <Image className="comparison-laurel" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
-      </section>
-
-      <section className="method-section" id="method">
-        <Image className="method-scenery" src="/assets/method-mediterranean-terrace.png" alt="" fill unoptimized loading="eager" sizes="100vw" />
-        <div className="method-wash" aria-hidden="true" />
-        <div className="page-width">
-          <div className="section-heading method-heading">
-            <p className="eyebrow">The method</p>
-            <div>
-              <h2>Research. Structure. Contradict. Falsify.</h2>
-              <p>Compact provenance and visible tradeoffs replace vague claims of uniqueness.</p>
-            </div>
-          </div>
-          <ol className="method-grid">
-            {phases.map((phase) => (
-              <li key={phase.number}>
-                <div className="phase-top"><span>{phase.number}</span><MethodArtifact number={phase.number} /></div>
-                <h3>{phase.title}</h3>
-                <p>{phase.description}</p>
-                <p className="phase-detail">{phase.detail}</p>
-              </li>
-            ))}
-          </ol>
-          <div className="research-positioning">
-            <div className="positioning-wreath" aria-hidden="true">
-              <Image src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized />
-            </div>
-            <div>
-              <p className="eyebrow">Built for honest research</p>
-              <h3>No competitor found does not mean a good opportunity was found.</h3>
-            </div>
-            <div>
-              <p>By default, Claude searches competitors, reviews, forums, GitHub, directories, regulations, failed attempts, and counterevidence, then passes those sources to Novelty’s full evidence pipeline with zero Tavily/Brave calls.</p>
-              <p>Deployment owners can optionally enable hosted Tavily/Brave retrieval for advanced or deep runs.</p>
-              <p>Missing evidence stays unknown. Novel proposals are hypotheses until a real market test says otherwise.</p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <section className="plain-section trust-section page-width" id="trust" aria-labelledby="trust-title"><div className="split-heading"><div><p className="eyebrow">Trust and limitations</p><h2 id="trust-title">Useful research, with the uncertainty left in.</h2></div><p>Novelty Engine is an independent public beta. Public sources can be incomplete or wrong, and market opportunities remain hypotheses until tested.</p></div><ul className="trust-list"><li>Missing evidence remains unknown; an inference is not presented as a verified fact.</li><li>Do not submit private, confidential, personal, medical, financial, or proprietary information.</li><li>Publicly indexed discussions are limited samples, not complete forum or Reddit coverage.</li><li>Novelty Engine does not guarantee novelty, patentability, demand, revenue, or success.</li></ul></section>
 
       <BetaFeedback />
 
-      <section className="final-cta">
-        <Image className="cta-laurel cta-laurel-left" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
-        <Image className="cta-laurel cta-laurel-right" src="/assets/generated/mediterranean-laurel-branch-v3.png" alt="" width={822} height={1745} unoptimized />
-        <div className="page-width final-cta-inner">
-          <div>
-            <p className="eyebrow">Novelty Engine V2.2 · Public Beta</p>
-            <h2>Make the next idea earn its place.</h2>
-          </div>
-          <div className="final-actions">
-            <a className="button button-light" href="#install">Install locally <UtilityIcon kind="down" /></a>
-            <a className="text-link-light" href={githubUrl} target="_blank" rel="noreferrer">View on GitHub <UtilityIcon kind="external" /></a>
-          </div>
-        </div>
-      </section>
+      <section className="about-teaser"><div className="page-width"><BrandMark /><div><p className="eyebrow">About</p><h2>Independent, open, and built to challenge easy answers.</h2><p>Novelty Engine is an independent open-source research project.</p></div><Link className="button button-light" href="/about">Read about the project <Arrow /></Link></div></section>
 
-      <footer className="site-footer">
-        <div className="page-width footer-inner">
-          <a className="brand" href="#top"><Image className="footer-wreath" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized /><span>Novelty Engine</span></a>
-          <p>V2.2 Public Beta · MIT licensed. Supplied-source mode uses zero Tavily/Brave calls; hosting or Redis may still cost above free tiers.</p>
-          <a href={githubUrl} target="_blank" rel="noreferrer">GitHub <UtilityIcon kind="external" /></a>
-        </div>
-      </footer>
+      <footer className="site-footer"><div className="page-width footer-main"><a className="brand" href="#top"><BrandMark /><span>Novelty Engine</span></a><nav aria-label="Footer navigation"><Link href="/about">About</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><a href={`${githubUrl}#readme`} target="_blank" rel="noreferrer">Documentation</a><a href={githubUrl} target="_blank" rel="noreferrer">GitHub</a><a href="#feedback">Feedback</a></nav></div><div className="page-width footer-legal"><p>V2.2 Public Beta · Open source under the MIT License.</p><p>Research can reduce uncertainty; it cannot guarantee success.</p></div></footer>
     </main>
   );
 }

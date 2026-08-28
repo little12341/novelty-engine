@@ -14,10 +14,13 @@ for (const phrase of ["Research-first operating mode", "Remote MCP (preferred)",
 for (const command of ["/research-market", "/find-gaps", "/inspect-competitors", "/falsify", "/validate-idea", "/research-company", "/find-business", "/compare", "/market-size", "/pricing", "/customer-pain", "/trend-check", "/source-check", "/evidence", "/summarize-run", "/rerun", "/export", "/commands", "/help"]) {
   if (!text.includes(`| \`${command}\` |`)) throw new Error(`SKILL.md command catalog is missing ${command}`);
 }
-for (const endpoint of ["https://www.novelty-engine.com/api/mcp", "https://www.novelty-engine.com/api/mcp/health", "https://www.novelty-engine.com/api/research"]) {
+for (const phrase of ["Find and analyze publicly indexed customer discussions and complaints", "bounded samples rather than complete coverage", "CONTRADICTED"]) {
+  if (!text.includes(phrase)) throw new Error(`SKILL.md is missing required accuracy language: ${phrase}`);
+}
+for (const endpoint of ["https://novelty-engine.com/api/mcp", "https://novelty-engine.com/api/mcp/health", "https://novelty-engine.com/api/research"]) {
   if (!text.includes(endpoint)) throw new Error(`SKILL.md is missing canonical production endpoint: ${endpoint}`);
 }
-if (text.includes("novelty-engine.vercel.app") || text.includes("https://novelty-engine.com")) throw new Error("SKILL.md contains a redirected or legacy production hostname");
+if (text.includes("novelty-engine.vercel.app") || text.includes("https://www.novelty-engine.com")) throw new Error("SKILL.md contains a non-canonical production hostname");
 if (/TODO|PLACEHOLDER|\[Fill in/i.test(text)) throw new Error("Skill contains unfinished scaffold text");
 await access(path.join(root, "scripts", "research.mjs"));
 await access(path.join(root, "references", "mcp-interfaces.md"));

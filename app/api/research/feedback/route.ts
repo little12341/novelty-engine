@@ -7,7 +7,8 @@ import { acquireProtection } from "@/lib/research/protection";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  let body: { runId?: unknown; kind?: unknown; targetId?: unknown; note?: unknown };
+  if (request.headers.get("sec-fetch-site") === "cross-site") return NextResponse.json({ error: "Cross-site feedback submissions are not accepted." }, { status: 403 });
+  let body: { runId?: unknown; kind?: unknown; targetId?: unknown; note?: unknown; companyWebsite?: unknown };
   try {
     body = await readBoundedJson<typeof body>(request, 2_048);
   } catch (error) {
@@ -15,6 +16,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: bounded.message, code: bounded.code }, { status: bounded.status });
   }
   if (typeof body.kind !== "string" || typeof body.note !== "string") return NextResponse.json({ error: "kind and note are required." }, { status: 400 });
+  if (typeof body.companyWebsite === "string" && body.companyWebsite.trim()) return NextResponse.json({ accepted: true }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   const permit = await acquireProtection(`${clientNetworkIdentity(request)}:feedback`, false);
   if (!permit.allowed) {
     operationalLog("warn", "feedback_rate_limited", { reason: permit.reason, backend: permit.backend });

@@ -23,12 +23,12 @@
   {
     "url": "https://community.trades.example/discussions/mobile-sync",
     "title": "Mobile sync issues on site",
-    "snippet": "Field workers have to manually re-enter notes because the mobile app sync fails and there is no API for our inventory system."
+    "snippet": "Our field workers have to manually re-enter notes because the mobile app sync fails and there is no API for our inventory system."
   },
   {
     "url": "https://github.com/example/contractor-bridge/issues/41",
     "title": "Feature request: FieldFlow webhook integration",
-    "snippet": "Missing integration forces copy and paste between the CRM and accounting workflow."
+    "snippet": "We use FieldFlow, and the missing integration forces us to copy and paste between the CRM and accounting workflow."
   },
   {
     "url": "https://fieldflow.example/features/scheduling",

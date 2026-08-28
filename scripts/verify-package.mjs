@@ -50,6 +50,7 @@ for (let index = 0; index < count; index += 1) {
   const localOffset = archive.readUInt32LE(cursor + 42);
   const name = archive.subarray(cursor + 46, cursor + 46 + nameLength).toString("utf8");
   if (!name.startsWith("novelty-engine/") || name.includes("..") || name.includes("\\") || name.startsWith("/")) throw new Error(`Unsafe ZIP entry path: ${name}`);
+  if (/(?:^|\/)\.(?:env|git)(?:\.|\/|$)|(?:^|\/)(?:runs?|watchlists?|cache|node_modules)(?:\/|$)/i.test(name)) throw new Error(`Local, secret-bearing, or unnecessary ZIP entry: ${name}`);
   names.push(name);
 
   const localNameLength = archive.readUInt16LE(localOffset + 26);
@@ -60,6 +61,10 @@ for (let index = 0; index < count; index += 1) {
   if (!data) throw new Error(`Unsupported ZIP compression method ${compression} for ${name}`);
   if (data.length !== uncompressedSize || crc32(data) !== expectedCrc) throw new Error(`ZIP integrity check failed for ${name}`);
   extracted.set(name, data);
+  if (/\.(?:md|mjs|js|json|txt|yaml|yml)$/i.test(name)) {
+    const text = data.toString("utf8");
+    if (/(?:sk-ant-|tvly-[A-Za-z0-9_-]{12,}|BSA[A-Za-z0-9_-]{20,}|BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY)/.test(text)) throw new Error(`Possible secret material in packaged file: ${name}`);
+  }
 
   if (name === "novelty-engine/SKILL.md") {
     const text = data.toString("utf8");
@@ -91,9 +96,9 @@ for (let index = 0; index < count; index += 1) {
       "does not register these in Claude's native slash-command UI",
       "Unknown Novelty command",
       "NOVELTY_RESEARCH_API_URL",
-      "https://www.novelty-engine.com/api/mcp",
-      "https://www.novelty-engine.com/api/mcp/health",
-      "https://www.novelty-engine.com/api/research",
+      "https://novelty-engine.com/api/mcp",
+      "https://novelty-engine.com/api/mcp/health",
+      "https://novelty-engine.com/api/research",
       "**Exact market gap:**",
       "**evidence-backed market gap**",
       "ideationContext.finalOutput",
@@ -112,7 +117,7 @@ for (let index = 0; index < count; index += 1) {
     for (const command of ["/research-market", "/find-gaps", "/inspect-competitors", "/falsify", "/validate-idea", "/research-company", "/find-business", "/compare", "/market-size", "/pricing", "/customer-pain", "/trend-check", "/source-check", "/evidence", "/summarize-run", "/rerun", "/export", "/commands", "/help"]) {
       if (!text.includes(`| \`${command}\` |`)) throw new Error(`Packaged SKILL.md command catalog is missing ${command}`);
     }
-    if (text.includes("novelty-engine.vercel.app") || text.includes("https://novelty-engine.com")) throw new Error("Packaged SKILL.md contains a redirected or legacy production hostname");
+    if (text.includes("novelty-engine.vercel.app") || text.includes("https://www.novelty-engine.com")) throw new Error("Packaged SKILL.md contains a non-canonical production hostname");
   }
   if (name === "novelty-engine/references/mcp-interfaces.md") {
     const text = data.toString("utf8");
@@ -122,9 +127,9 @@ for (let index = 0; index < count; index += 1) {
   }
   if (name === "novelty-engine/scripts/research.mjs") {
     const text = data.toString("utf8");
-    if (!text.includes('"https://www.novelty-engine.com/api/research"')) throw new Error("Packaged helper does not default to the canonical research endpoint");
+    if (!text.includes('"https://novelty-engine.com/api/research"')) throw new Error("Packaged helper does not default to the canonical research endpoint");
     if (!text.includes("NOVELTY_RESEARCH_SOURCES_FILE") || !text.includes("NOVELTY_ALLOW_HOSTED_SEARCH")) throw new Error("Packaged helper does not enforce supplied-source default and explicit hosted opt-in");
-    if (text.includes("novelty-engine.vercel.app") || text.includes("https://novelty-engine.com")) throw new Error("Packaged helper contains a redirected or legacy production hostname");
+    if (text.includes("novelty-engine.vercel.app") || text.includes("https://www.novelty-engine.com")) throw new Error("Packaged helper contains a non-canonical production hostname");
   }
   cursor += 46 + nameLength + extraLength + commentLength;
 }

@@ -1,22 +1,64 @@
 import { classifyClaim } from "./quality.ts";
 import type { ChangeDetectionResult, ClaimStatus, MaterialChange, ResearchResult } from "./types.ts";
 
-const names = (run: ResearchResult) => new Set(run.competitors.map((item) => item.name.value?.toLowerCase()).filter((item): item is string => Boolean(item)));
 const evidenceFor = (run: ResearchResult, pattern: RegExp) => run.sources.filter((item) => pattern.test(`${item.title} ${item.summary}`));
 const status = (run: ResearchResult, ids: string[]): ClaimStatus => classifyClaim(ids, run.sources);
+const competitorKey = (item: ResearchResult["competitors"][number]) => item.entityFingerprint || item.canonicalOrganizationId || item.canonicalDomain || item.name.value?.toLowerCase() || item.id;
+const normalizedClaim = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const complaintKey = (item: ResearchResult["complaintClusters"][number]) => normalizedClaim(item.complaintCategory || item.normalizedProblem || item.label);
 
 export function compareResearchRuns(before: ResearchResult, after: ResearchResult, now = new Date()): ChangeDetectionResult {
   const materialChanges: MaterialChange[] = [];
   let ignoredTrivialChanges = 0;
   const add = (change: MaterialChange) => materialChanges.push(change);
-  const beforeCompetitors = names(before); const afterCompetitors = names(after);
-  const appeared = [...afterCompetitors].filter((item) => !beforeCompetitors.has(item));
-  const disappeared = [...beforeCompetitors].filter((item) => !afterCompetitors.has(item));
+  const beforeCompetitors = new Map(before.competitors.map((item) => [competitorKey(item), item]));
+  const afterCompetitors = new Map(after.competitors.map((item) => [competitorKey(item), item]));
+  const appeared = [...afterCompetitors.keys()].filter((item) => !beforeCompetitors.has(item));
+  const disappeared = [...beforeCompetitors.keys()].filter((item) => !afterCompetitors.has(item));
+  const pricingChangedCompetitorIds = [...afterCompetitors.entries()].filter(([key, right]) => {
+    const left = beforeCompetitors.get(key);
+    return Boolean(left && left.pricing.value !== right.pricing.value && (left.pricing.value !== null || right.pricing.value !== null));
+  }).map(([, item]) => item.id);
   if (appeared.length || disappeared.length) add({
     category: "competitors", severity: appeared.length >= 3 ? "high" : "medium",
-    summary: `${appeared.length} supported competitor(s) appeared${appeared.length ? `: ${appeared.join(", ")}` : ""}; ${disappeared.length} were no longer supported by the new snapshot. This describes retrieval change, not certain market entry or exit.`,
+    summary: `${appeared.length} supported competitor(s) were newly found${appeared.length ? `: ${appeared.map((key) => afterCompetitors.get(key)?.name.value ?? key).join(", ")}` : ""}; ${disappeared.length} were no longer found in the new snapshot. This describes an evidence-snapshot change, not certain market entry or exit.`,
     beforeEvidenceIds: before.competitors.flatMap((item) => item.evidenceIds), afterEvidenceIds: after.competitors.flatMap((item) => item.evidenceIds),
     statusBefore: status(before, before.competitors.flatMap((item) => item.evidenceIds)), statusAfter: status(after, after.competitors.flatMap((item) => item.evidenceIds)),
+  });
+  if (pricingChangedCompetitorIds.length) add({
+    category: "pricing", severity: pricingChangedCompetitorIds.length >= 3 ? "high" : "medium",
+    summary: `Public pricing changed for ${pricingChangedCompetitorIds.length} entity-matched competitor(s); only exact supported prices were compared.`,
+    beforeEvidenceIds: [...beforeCompetitors.entries()].filter(([key]) => pricingChangedCompetitorIds.some((id) => afterCompetitors.get(key)?.id === id)).flatMap(([, item]) => item.pricing.evidenceIds),
+    afterEvidenceIds: after.competitors.filter((item) => pricingChangedCompetitorIds.includes(item.id)).flatMap((item) => item.pricing.evidenceIds),
+    statusBefore: status(before, before.competitors.flatMap((item) => item.pricing.evidenceIds)),
+    statusAfter: status(after, after.competitors.filter((item) => pricingChangedCompetitorIds.includes(item.id)).flatMap((item) => item.pricing.evidenceIds)),
+  });
+
+  const beforeComplaints = new Map(before.complaintClusters.map((item) => [complaintKey(item), item]));
+  const afterComplaints = new Map(after.complaintClusters.map((item) => [complaintKey(item), item]));
+  const newComplaintKeys = [...afterComplaints.keys()].filter((key) => !beforeComplaints.has(key));
+  const removedComplaintKeys = [...beforeComplaints.keys()].filter((key) => !afterComplaints.has(key));
+  const moreIndependentComplaintKeys = [...afterComplaints.entries()].filter(([key, item]) => (beforeComplaints.get(key)?.independentSourceCount ?? item.independentSourceCount) < item.independentSourceCount).map(([key]) => key);
+  const weakerComplaintKeys = [...afterComplaints.entries()].filter(([key, item]) => {
+    const left = beforeComplaints.get(key);
+    return Boolean(left && (item.independentSourceCount < left.independentSourceCount || item.confidence < left.confidence));
+  }).map(([key]) => key);
+
+  const beforeClaims = new Map(before.claimLineage.map((item) => [`${item.claimType}:${normalizedClaim(item.claim)}`, item]));
+  const afterClaims = new Map(after.claimLineage.map((item) => [`${item.claimType}:${normalizedClaim(item.claim)}`, item]));
+  const claimTransitions = [...afterClaims.entries()].flatMap(([key, right]) => {
+    const left = beforeClaims.get(key);
+    return left && left.status !== right.status ? [{
+      claimType: right.claimType, claim: right.claim, before: left.status, after: right.status,
+      beforeEvidenceIds: left.supportingEvidenceIds, afterEvidenceIds: right.supportingEvidenceIds,
+    }] : [];
+  });
+  if (claimTransitions.length) add({
+    category: "coverage", severity: claimTransitions.some((item) => item.after === "CONTRADICTED") ? "high" : "medium",
+    summary: `${claimTransitions.length} stable claim(s) changed evidence state; repeated or syndicated pages did not count as independent upgrades.`,
+    beforeEvidenceIds: claimTransitions.flatMap((item) => item.beforeEvidenceIds), afterEvidenceIds: claimTransitions.flatMap((item) => item.afterEvidenceIds),
+    statusBefore: claimTransitions.some((item) => item.before === "VERIFIED") ? "VERIFIED" : "INFERRED",
+    statusAfter: claimTransitions.some((item) => item.after === "CONTRADICTED") ? "CONTRADICTED" : claimTransitions.some((item) => item.after === "VERIFIED") ? "VERIFIED" : "INFERRED",
   });
 
   const patterns: Array<[MaterialChange["category"], RegExp, string]> = [
@@ -66,5 +108,17 @@ export function compareResearchRuns(before: ResearchResult, after: ResearchResul
     ignoredTrivialChanges,
     summary: materialChanges.length ? `${materialChanges.length} material change(s) surfaced; ${ignoredTrivialChanges} trivial or syndicated differences were suppressed.` : "No material change was supported by the two snapshots; this is not proof that the market was unchanged.",
     opportunityEvolution,
+    competitorChanges: {
+      newCompetitorIds: appeared.map((key) => afterCompetitors.get(key)!.id),
+      noLongerFoundCompetitorIds: disappeared.map((key) => beforeCompetitors.get(key)!.id),
+      pricingChangedCompetitorIds,
+    },
+    complaintChanges: {
+      newCategories: newComplaintKeys,
+      categoriesNoLongerFound: removedComplaintKeys,
+      categoriesWithMoreIndependentEvidence: moreIndependentComplaintKeys,
+      categoriesWithWeakerEvidence: weakerComplaintKeys,
+    },
+    claimTransitions,
   };
 }

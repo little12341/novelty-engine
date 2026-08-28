@@ -72,6 +72,13 @@ try {
   assert.equal(malformedPayload.code, "INVALID_JSON");
   assert.doesNotMatch(JSON.stringify(malformedPayload), /SyntaxError|Unexpected token|stack/i);
 
+  const sourceLessDefault = await fetch(new URL("/api/research", origin), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: "Research a sufficiently specific market without supplied sources" }),
+  });
+  assert.equal(sourceLessDefault.status, 400);
+  assert.equal((await sourceLessDefault.json()).code, "SUPPLIED_SOURCES_REQUIRED");
+
   const oversizedResearch = await fetch(new URL("/api/research", origin), {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: "x".repeat(140_000) }),
   });

@@ -4,18 +4,19 @@ import { productionOrigin } from "@/lib/site";
 import "./globals.css";
 import "./landing-refinement.css";
 import "./install-transition.css";
+import "./product-correction.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(productionOrigin),
-  title: "Novelty Engine — Discover the gaps. Build what’s next.",
+  title: "Novelty Engine — Find opportunities backed by evidence",
   description:
-    "Evidence-driven market-gap research that maps markets, finds structural gaps, falsifies candidates, and returns opportunities worth building.",
+    "Research customer problems, competitors, workarounds, counterevidence, and practical validation tests with Claude.",
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Novelty Engine — Discover the gaps. Build what’s next.",
-    description: "Evidence-driven market-gap research for opportunities worth building.",
+    title: "Novelty Engine — Find opportunities backed by evidence",
+    description: "Research customer problems, competitors, workarounds, and reasons an idea could fail.",
     type: "website",
     url: "/",
     siteName: "Novelty Engine",
@@ -23,13 +24,13 @@ export const metadata: Metadata = {
       url: "/og.png",
       width: 1731,
       height: 909,
-      alt: "Novelty Engine — Discover the gaps. Build what’s next.",
+      alt: "Novelty Engine — evidence-backed business opportunity research",
     }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Novelty Engine — Discover the gaps. Build what’s next.",
-    description: "Evidence-driven market-gap research for opportunities worth building.",
+    title: "Novelty Engine — Find opportunities backed by evidence",
+    description: "Research customer problems, competitors, workarounds, and reasons an idea could fail.",
     images: ["/og.png"],
   },
   robots: {

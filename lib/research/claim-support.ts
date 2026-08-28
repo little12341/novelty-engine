@@ -14,7 +14,7 @@ const STOP_WORDS = new Set([
 const DOMAIN_CONCEPTS: Array<[string, RegExp]> = [
   ["coi_subcontractor", /certificate(?:s)? of insurance|\bcoi\b|subcontractor insurance|insurance certificate/i],
   ["contracting", /general contractor|specialty trad|subcontractor|construction compan|field service|home service/i],
-  ["field_service", /contractors?|field[- ](?:service|workers?|teams?)|home[- ]service|mobile trad|dispatch|technicians?|scheduling|job (?:data|records?)/i],
+  ["field_service", /contractors?|field[- ](?:service|workers?|teams?)|home[- ]service|mobile trad|dispatch|technicians?|job (?:data|records?)/i],
   ["commercial_cleaning", /commercial clean|local clean|cleaning (?:compan|team|crew|service)|cleaners?|janitorial|proof of service/i],
   ["restaurant_pos", /restaurant|point.of.sale|\bpos\b|food service|hospitality/i],
   ["aquaculture_ozone", /aquaculture|ozone|fish farm|water treatment|oxidation/i],
@@ -91,6 +91,81 @@ function relevance(claim: string, marketContext: string, evidence: Evidence) {
   };
 }
 
+function claimCoverage(claim: string, evidence: Evidence) {
+  const expected = terms(claim);
+  const sourceTerms = new Set(terms(`${evidence.title} ${evidence.summary}`));
+  const matched = expected.filter((item) => sourceTerms.has(item));
+  const missing = expected.filter((item) => !sourceTerms.has(item));
+  return {
+    score: expected.length ? Math.round(matched.length / expected.length * 100) / 100 : 0,
+    matched,
+    missing,
+  };
+}
+
+function entityMatchesClaim(claim: string, evidence: Evidence): boolean {
+  const normalizedClaim = claim.toLowerCase();
+  const entity = evidence.pageIdentity.discussedEntity;
+  return Boolean(entity && (normalizedClaim.includes(entity.name.toLowerCase())
+    || evidence.pageIdentity.explicitEntityNames.some((name) => normalizedClaim.includes(name.toLowerCase()))));
+}
+
+function claimSpecificGate(claimType: ResearchClaimType, claim: string, marketContext: string, evidence: Evidence, coverage: number): { passed: boolean; reason: string } {
+  const text = `${evidence.title} ${evidence.summary}`;
+  if (claimType === "company_existence") {
+    const direct = evidence.pageIdentity.entityEligible && ["company_product", "company_pricing", "company_documentation"].includes(evidence.pageIdentity.pageKind)
+      && evidence.sourceAssessment.provenance === "company_controlled";
+    const independentProfile = evidence.pageIdentity.entityEligible && evidence.pageIdentity.pageKind === "product_profile";
+    return { passed: entityMatchesClaim(claim, evidence) && (direct || independentProfile), reason: "Company identity requires an explicit matching entity on an official page or a structured product profile." };
+  }
+  if (["vendor_feature", "vendor_positioning", "vendor_integration", "vendor_pricing", "competitor_weakness"].includes(claimType)
+    && !entityMatchesClaim(`${claim} ${marketContext}`, evidence) && coverage < .45) {
+    return { passed: false, reason: "The source does not identify the company or product associated with the claim." };
+  }
+  if (claimType === "vendor_pricing") {
+    const exactAmounts = claim.match(/(?:\$|€|£)\s?\d+(?:[.,]\d+)?/g) ?? [];
+    const exact = exactAmounts.every((amount) => text.replace(/\s/g, "").includes(amount.replace(/\s/g, "")));
+    const pricingPage = evidence.pageIdentity.pageKind === "company_pricing" && evidence.sourceAssessment.provenance === "company_controlled";
+    const datedIndependent = evidence.publicationDate !== null && evidence.sourceAssessment.provenance === "independent_secondary";
+    return { passed: (pricingPage || datedIndependent) && exact && /\b(?:price|pricing|plan|cost|free|contact sales|per month|per year)\b|[$€£]\s?\d/i.test(text), reason: "Pricing requires an official pricing page or a clearly dated independent public price that matches the claimed amount." };
+  }
+  if (claimType === "customer_pain" || claimType === "pain_frequency" || claimType === "customer_workaround" || claimType === "competitor_weakness") {
+    return { passed: /\b(?:complain\w*|frustrat\w*|manual\w*|workaround|missing|fail\w*|broken|slow|difficult|hard to use|expensive|unreliable|cancel\w*|switch\w*|stopped using|stopped tracking|went back|paper|spreadsheet|problem|burden)\b/i.test(text), reason: "Pain and weakness claims require explicit complaint, failure, workaround, or switching language." };
+  }
+  if (claimType === "competitor_relationship") {
+    const adequateResolution = /\b(?:adequately solves?|fully solves?|complete solution|same job for the same (?:user|customer)|meets? (?:all|the) (?:needs|requirements)|no meaningful (?:gap|complaint)|eliminates? (?:the )?(?:problem|workaround))\b/i.test(text);
+    const namedProductRelationship = entityMatchesClaim(`${claim} ${marketContext}`, evidence)
+      && /\b(?:offers?|provides?|built for|designed for|serves?|software|platform|product|service|solution|substitute|alternative)\b/i.test(text);
+    return { passed: adequateResolution || namedProductRelationship, reason: "Competitive relationships require either a named product-to-market relationship or explicit same-user, same-job resolution evidence." };
+  }
+  if (claimType === "unmet_demand" || claimType === "market_gap") {
+    return { passed: /\b(?:missing|doesn.?t integrate|does not integrate|no api|manual|workaround|re-enter|copy and paste|unreliable|too expensive|hard to use|not available|enterprise only|no better option|still use|went back|stopped using|burden|delays?)\b/i.test(text), reason: "Unmet-demand claims require an explicit unresolved failure, workaround, exclusion, switching event, or tolerated bad solution." };
+  }
+  if (claimType === "underserved_status") {
+    return { passed: /\b(?:small|independent|regional|rural|remote|specialty|local|three-person|two-person|owner-operator|smb|not available|enterprise only|minimum seats?|underserved|overlooked)\b/i.test(text), reason: "Underserved-segment claims require an explicit affected segment or exclusion condition." };
+  }
+  if (claimType === "willingness_to_pay") {
+    return { passed: /\b(?:would pay|paid|paying|budget|procurement|purchase order|contract value|hiring|consultant|invoice)\b|[$€£]\s?\d/i.test(text), reason: "Willingness-to-pay requires observable spending, procurement, hiring, or an explicit payment statement; engagement and a listed vendor price are insufficient." };
+  }
+  if (claimType === "market_spend") {
+    return { passed: /\b(?:paid|paying|budget|procurement|purchase order|contract value|hiring|consultant|invoice|spend(?:ing)?)\b|[$€£]\s?\d/i.test(text), reason: "Spend claims require observable buyer-side spending, procurement, hiring, or a dated monetary amount." };
+  }
+  if (claimType === "market_timing") {
+    return { passed: Boolean(evidence.publicationDate) && /\b(?:launch|released|effective|mandate|adoption|changed?|increase|decrease|new regulation|new api|202[0-9])\b/i.test(text), reason: "Trend and timing claims require dated change evidence, not search frequency or one undated article." };
+  }
+  if (claimType === "regulation") return { passed: evidence.sourceAssessment.provenance === "government", reason: "Regulatory claims require a primary government or regulator source." };
+  return { passed: coverage >= .35, reason: "The excerpt must support enough of the claim's specific language rather than only its broad market context." };
+}
+
+function contradictsClaim(claimType: ResearchClaimType, claim: string, evidence: Evidence, coverage: number): boolean {
+  if (coverage < .3) return false;
+  const text = `${evidence.title} ${evidence.summary}`;
+  if (["customer_pain", "pain_frequency", "customer_workaround"].includes(claimType)) return /\b(?:no recurring complaints?|not a problem|rarely occurs?|users? (?:do not|don't) report)\b/i.test(text);
+  if (claimType === "company_existence") return /\b(?:shut down|closed|dissolved|no longer operates?|ceased operations?)\b/i.test(text);
+  return /\b(?:does not|doesn't|no longer|never|discontinued|removed|contradicts?|declined|not available|unavailable)\b/i.test(text)
+    && !/\b(?:complain|frustrat|missing|fail|broken|problem)\b/i.test(claim);
+}
+
 export function assessEvidenceForClaim(
   claimType: ResearchClaimType,
   claim: string,
@@ -101,22 +176,32 @@ export function assessEvidenceForClaim(
   const roleCompatible = ALLOWED_ROLES[claimType].has(supportRole)
     && !(evidence.sourceAssessment.discoveryOnly && !["company_existence", "vendor_positioning"].includes(claimType));
   const semantic = relevance(claim, marketContext, evidence);
+  const exact = claimCoverage(claim, evidence);
   const identityClaim = ["company_existence", "vendor_feature", "vendor_positioning", "vendor_integration", "vendor_pricing", "competitor_relationship"].includes(claimType);
   const excerptSufficient = identityClaim || terms(evidence.summary).length >= 3;
-  const relevant = excerptSufficient && (identityClaim
+  const broadRelevant = excerptSufficient && (identityClaim
     ? semantic.relevant || evidence.pageIdentity.explicitEntityNames.some((name) => claim.toLowerCase().includes(name.toLowerCase()))
     : semantic.relevant);
-  const accepted = roleCompatible && relevant;
+  const specific = claimSpecificGate(claimType, claim, marketContext, evidence, exact.score);
+  const relevant = broadRelevant && specific.passed;
+  const contradicts = roleCompatible && broadRelevant && contradictsClaim(claimType, claim, evidence, exact.score);
+  const partialSupport = roleCompatible && broadRelevant && !specific.passed && exact.score > 0;
+  const accepted = roleCompatible && relevant && !contradicts;
   const reason = !roleCompatible
     ? `${supportRole} sources are not allowed to establish ${claimType.replaceAll("_", " ")}${evidence.sourceAssessment.discoveryOnly ? "; discovery-only/listicle evidence cannot independently prove this claim" : ""}.`
     : !excerptSufficient
       ? `Rejected by the evidence sufficiency gate; the supplied excerpt is too thin to establish ${claimType.replaceAll("_", " ")}.`
-      : !relevant
+      : contradicts
+        ? "The excerpt materially contradicts the associated claim."
+      : !broadRelevant
       ? `Rejected by the market relevance gate; matched ${semantic.matchedTerms.join(", ") || "no specific buyer/job/workflow/topic terms"}${semantic.missingAnchors.length ? ` and missed ${semantic.missingAnchors.join(", ")}` : ""}.`
+      : !specific.passed
+        ? `Only partial or claim-inexact support was found. ${specific.reason}`
       : `Accepted as ${supportRole} support with explicit buyer/job/workflow/topic overlap (${semantic.matchedTerms.join(", ") || "identity signal"}).`;
   return {
-    evidenceId: evidence.id, accepted, roleCompatible, relevant, supportRole,
-    relevanceScore: semantic.score, matchedTerms: semantic.matchedTerms, reason,
+    evidenceId: evidence.id, accepted, roleCompatible, relevant, partialSupport, contradicts, supportRole,
+    relevanceScore: semantic.score, claimCoverage: exact.score,
+    matchedTerms: [...new Set([...semantic.matchedTerms, ...exact.matched])], missingClaimTerms: exact.missing, reason,
   };
 }
 
@@ -134,7 +219,7 @@ export function auditClaim(input: {
   const evidenceDecisions = requestedEvidenceIds.map((evidenceId): ClaimEvidenceDecision => {
     const record = evidenceById.get(evidenceId);
     return record ? assessEvidenceForClaim(input.claimType, input.claim, record, input.marketContext)
-      : { evidenceId, accepted: false, roleCompatible: false, relevant: false, supportRole: "unknown", relevanceScore: 0, matchedTerms: [], reason: "The cited evidence ID does not exist in the immutable evidence snapshot." };
+      : { evidenceId, accepted: false, roleCompatible: false, relevant: false, partialSupport: false, contradicts: false, supportRole: "unknown", relevanceScore: 0, claimCoverage: 0, matchedTerms: [], missingClaimTerms: terms(input.claim), reason: "The cited evidence ID does not exist in the immutable evidence snapshot." };
   });
   const supportingEvidenceIds = evidenceDecisions.filter((item) => item.accepted).map((item) => item.evidenceId);
   const rejectedEvidenceIds = evidenceDecisions.filter((item) => !item.accepted).map((item) => item.evidenceId);
@@ -144,12 +229,15 @@ export function auditClaim(input: {
     const role = evidenceSupportRole(item);
     return role === "government_official" || role === "vendor_controlled" && ["company_existence", "vendor_feature", "vendor_positioning", "vendor_integration", "vendor_pricing", "automation_capability"].includes(input.claimType);
   });
-  const status: ClaimStatus = supportingEvidenceIds.length === 0 ? "UNKNOWN" : independent >= 2 || authoritative ? "VERIFIED" : "INFERRED";
+  const contradicted = evidenceDecisions.some((item) => item.contradicts);
+  const status: ClaimStatus = contradicted ? "CONTRADICTED" : supportingEvidenceIds.length === 0 ? "UNKNOWN" : independent >= 2 || authoritative ? "VERIFIED" : "INFERRED";
   return {
     id: stableId("claim", input.idSeed ?? `${input.claimType}:${input.claim}:${requestedEvidenceIds.join(":")}`),
     claim: input.claim, claimType: input.claimType, major: input.major !== false, status,
     requestedEvidenceIds, supportingEvidenceIds, rejectedEvidenceIds, evidenceDecisions,
-    rationale: supportingEvidenceIds.length
+    rationale: contradicted
+      ? "At least one role-compatible, relevant evidence record materially contradicts the claim; the claim was not upgraded by repeated support."
+      : supportingEvidenceIds.length
       ? `${supportingEvidenceIds.length}/${requestedEvidenceIds.length} cited evidence record(s) passed both support-role and relevance gates.`
       : requestedEvidenceIds.length ? "Citations existed, but none were eligible to prove this claim." : "No evidence was attached to this claim.",
   };
@@ -178,12 +266,13 @@ export function buildResearchClaimLineage(result: Pick<ResearchResult,
     rows.push(auditClaim({ claim, claimType, evidenceIds, evidence: result.sources, marketContext: context, major, idSeed }));
   };
   for (const competitor of result.competitors) {
-    add(competitor.name.value ? `${competitor.name.value} exists as a market entity.` : null, "company_existence", competitor.name.evidenceIds, `${competitor.id}:existence`);
-    add(competitor.classification === "direct_competitor" ? `${competitor.name.value} directly serves the researched buyer/job.` : `${competitor.name.value} is a substitute for the researched workflow.`, "competitor_relationship", competitor.relationship?.evidenceIds ?? [], `${competitor.id}:relationship`);
-    add(competitor.positioning.value, "vendor_positioning", competitor.positioning.evidenceIds, `${competitor.id}:positioning`, false);
-    add(competitor.pricing.value, "vendor_pricing", competitor.pricing.evidenceIds, `${competitor.id}:pricing`, false);
-    add(competitor.keyFeatures.value?.join(", "), "vendor_feature", competitor.keyFeatures.evidenceIds, `${competitor.id}:features`, false);
-    add(competitor.likelyWeaknesses.value?.join("; "), "competitor_weakness", competitor.likelyWeaknesses.evidenceIds, `${competitor.id}:weaknesses`);
+    const competitorContext = `${result.query} ${competitor.name.value}`;
+    add(competitor.name.value ? `${competitor.name.value} exists as a market entity.` : null, "company_existence", competitor.name.evidenceIds, `${competitor.id}:existence`, true, competitorContext);
+    add(competitor.classification === "direct_competitor" ? `${competitor.name.value} directly serves the researched buyer/job.` : `${competitor.name.value} is a substitute for the researched workflow.`, "competitor_relationship", competitor.relationship?.evidenceIds ?? [], `${competitor.id}:relationship`, true, competitorContext);
+    add(competitor.positioning.value, "vendor_positioning", competitor.positioning.evidenceIds, `${competitor.id}:positioning`, false, competitorContext);
+    add(competitor.pricing.value, "vendor_pricing", competitor.pricing.evidenceIds, `${competitor.id}:pricing`, false, competitorContext);
+    add(competitor.keyFeatures.value?.join(", "), "vendor_feature", competitor.keyFeatures.evidenceIds, `${competitor.id}:features`, false, competitorContext);
+    add(competitor.likelyWeaknesses.value?.join("; "), "competitor_weakness", competitor.likelyWeaknesses.evidenceIds, `${competitor.id}:weaknesses`, true, competitorContext);
   }
   for (const gap of result.gaps) {
     add(gap.problemStatement, "customer_pain", gap.supportingEvidenceIds, `${gap.id}:problem`);
@@ -219,12 +308,15 @@ export function buildResearchClaimLineage(result: Pick<ResearchResult,
 
 export function citationCoverageAudit(claims: ClaimLineageRecord[]): CitationCoverageAudit {
   const major = claims.filter((item) => item.major);
-  const supported = major.filter((item) => item.supportingEvidenceIds.length > 0);
+  const supported = major.filter((item) => item.status !== "CONTRADICTED" && item.supportingEvidenceIds.length > 0);
   return {
     supportedMajorClaims: supported.length,
     totalMajorClaims: major.length,
     roleMismatchedMajorClaims: major.filter((item) => item.evidenceDecisions.some((decision) => !decision.roleCompatible)).length,
     relevanceRejectedMajorClaims: major.filter((item) => item.evidenceDecisions.some((decision) => decision.roleCompatible && !decision.relevant)).length,
+    missingEvidenceIdClaims: major.filter((item) => item.evidenceDecisions.some((decision) => /does not exist/i.test(decision.reason))).length,
+    partialSupportClaims: major.filter((item) => item.evidenceDecisions.some((decision) => decision.partialSupport)).length,
+    contradictedClaims: major.filter((item) => item.status === "CONTRADICTED").length,
     coverageRatio: major.length ? Math.round(supported.length / major.length * 1000) / 1000 : 0,
   };
 }

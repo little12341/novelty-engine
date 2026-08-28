@@ -58,12 +58,19 @@ function batchesFor(market, mode) {
   }];
   const rows = new Map([
     [plan.primaryAngles[0].id, [result(market, market.referenceDirect[0], 0), result(market, market.referenceDirect[1], 1)]],
-    [plan.primaryAngles[1].id, [result(market, market.referenceDirect[2], 2, "g2"), result(market, "Generic Market Guide", 90)]],
+    [plan.primaryAngles[1].id, [
+      result(market, market.referenceDirect[2], 2),
+      { ...result(market, market.referenceDirect[2], 20, "g2"), snippet: `Independent product profile for ${market.referenceDirect[2]} serving ${market.buyer} with ${market.job}.` },
+      result(market, "Generic Market Guide", 90),
+    ]],
     [plan.crossCheckAngles[0].id, [result(market, market.referenceDirect[3], 3), {
       url: `https://${slug(market.referenceSubstitutes[0])}.example/product`, title: market.referenceSubstitutes[0],
       snippet: `Manual substitute used by ${market.buyer}: ${market.referenceSubstitutes[0]}. The work is handled by people and documents.`, publishedAt: "2026-05-01",
     }]],
-    [plan.crossCheckAngles[1].id, [result(market, market.referenceDirect[4], 4, "producthunt")]],
+    [plan.crossCheckAngles[1].id, [
+      result(market, market.referenceDirect[4], 4),
+      { ...result(market, market.referenceDirect[4], 40, "producthunt"), snippet: `Launch profile for ${market.referenceDirect[4]} addressing ${market.job} for ${market.buyer}.` },
+    ]],
     ...plan.escalationAngles.map((angle) => [angle.id, []]),
   ]);
   return [...plan.primaryAngles, ...plan.crossCheckAngles, ...plan.escalationAngles].map((angle) => ({ angle, results: rows.get(angle.id) ?? [] }));
