@@ -54,9 +54,7 @@ function useCopyFeedback() {
   return { copyState, copyText, label };
 }
 
-export function HeroInstallPanel() {
-  const { copyState, copyText, label } = useCopyFeedback();
-
+function useHeroEffects() {
   useEffect(() => {
     const stage = document.querySelector<HTMLElement>(".hero-stage");
     const cover = document.querySelector<HTMLElement>(".principle-strip");
@@ -137,6 +135,42 @@ export function HeroInstallPanel() {
       stage.removeEventListener("pointerleave", resetGlass);
     };
   }, []);
+}
+
+export function HomeResearchPanel() {
+  useHeroEffects();
+
+  return (
+    <aside className="hero-install-panel home-summary-panel liquid-glass" aria-label="What Novelty Engine returns">
+      <section className="hero-install-row hero-skill-row">
+        <span className="terminal-glyph liquid-glass" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" focusable="false">
+            <path d="M5 19V9l7-4 7 4v10M8 19v-6h8v6M3 21h18" />
+          </svg>
+        </span>
+        <div className="hero-install-content">
+          <h2>Evidence before conclusions</h2>
+          <p>Claims stay attached to sources, counterevidence, and visible uncertainty.</p>
+        </div>
+      </section>
+      <section className="hero-install-row hero-mcp-row">
+        <span className="terminal-glyph liquid-glass" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" focusable="false">
+            <path d="M12 20V8M12 13c-3.6-.1-5.8-2-6.3-5.5 3.5-.2 5.8 1.7 6.3 5.5ZM12 10.7c3.5-.1 5.7-2 6.2-5.4-3.5-.2-5.7 1.6-6.2 5.4Z" />
+          </svg>
+        </span>
+        <div className="hero-install-content">
+          <h2>A decision you can test</h2>
+          <p>Get the strongest surviving hypothesis, its decisive risk, and a practical next step.</p>
+        </div>
+      </section>
+    </aside>
+  );
+}
+
+export function HeroInstallPanel() {
+  const { copyState, copyText, label } = useCopyFeedback();
+  useHeroEffects();
 
   return (
     <aside className="hero-install-panel liquid-glass" aria-label="Install Novelty Engine">

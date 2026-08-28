@@ -57,7 +57,7 @@
   text-transform: uppercase;
 }
 
-.install-section-heading h2 {
+.install-section-heading h1 {
   margin: 8px 0 12px;
   font-family: Baskerville, "Iowan Old Style", Georgia, serif;
   font-size: clamp(44px, 5vw, 66px);
@@ -475,7 +475,7 @@
     height: 38px;
   }
 
-  .install-section-heading h2 {
+  .install-section-heading h1 {
     font-size: clamp(40px, 11vw, 52px);
   }
 

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { InstallPanel } from "./install-panel";
+import { HeroInstallPanel, InstallPanel } from "./install-panel";
 
 type OutcomeKind = "structure" | "evidence" | "outcome";
 
@@ -25,9 +25,8 @@ function OutcomeCard({ kind, title, children }: { kind: OutcomeKind; title: stri
   );
 }
 
-export function InstallTransition() {
+export function InstallSection() {
   return (
-    <>
       <section className="install-section" id="install" aria-labelledby="install-title">
         <Image
           className="install-laurel install-laurel-left"
@@ -35,6 +34,7 @@ export function InstallTransition() {
           alt=""
           width={822}
           height={1745}
+          loading="eager"
           unoptimized
           aria-hidden="true"
         />
@@ -44,6 +44,7 @@ export function InstallTransition() {
           alt=""
           width={822}
           height={1745}
+          loading="eager"
           unoptimized
           aria-hidden="true"
         />
@@ -53,15 +54,24 @@ export function InstallTransition() {
             <Image className="install-crown" src="/assets/generated/open-laurel-wreath-v3.png" alt="" width={1247} height={1050} unoptimized aria-hidden="true" />
             <div>
               <p className="eyebrow">Install</p>
-              <h2 id="install-title">Install Novelty Engine.</h2>
+              <h1 id="install-title">Install Novelty Engine.</h1>
               <p>Start with the Claude Skill. Add the connector when you want Claude to send public evidence to the hosted research engine.</p>
             </div>
           </header>
 
+          <div className="install-quick-links" aria-label="Copy installation links">
+            <p className="option-kicker">Quick links</p>
+            <HeroInstallPanel />
+          </div>
+
           <InstallPanel />
         </div>
       </section>
+  );
+}
 
+export function ResearchReveal() {
+  return (
       <section className="research-reveal-section" aria-labelledby="research-reveal-title">
         <div className="research-reveal-backdrop" aria-hidden="true">
           <Image src="/greek-reveal.png" alt="" fill unoptimized loading="eager" sizes="100vw" />
@@ -80,6 +90,14 @@ export function InstallTransition() {
           </div>
         </div>
       </section>
+  );
+}
+
+export function InstallTransition() {
+  return (
+    <>
+      <InstallSection />
+      <ResearchReveal />
     </>
   );
 }
